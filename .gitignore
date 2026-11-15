@@ -1,0 +1,16 @@
+node_modules/
+dist/
+dist-electron/
+build/
+.turbo/
+out/
+.next/
+coverage/
+*.tsbuildinfo
+*.local
+.env
+.env.local
+apps/*/data/*.db
+apps/*/data/*.db-journal
+.DS_Store
+Thumbs.db

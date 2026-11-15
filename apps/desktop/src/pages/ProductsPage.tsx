@@ -1,9 +1,9 @@
 import { productSchema, type ProductInput } from '@analytiq/validation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Badge } from '../components/ui/badge';
+import { Sparkles, Trash2, Upload } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
 import { Input } from '../components/ui/input';
@@ -13,13 +13,16 @@ import { Modal } from '../components/ui/modal';
 import { RequirePermission } from '../components/RequirePermission';
 import { ipc } from '../lib/ipc';
 import { formatKobo, parseNairaToKobo } from '../lib/money';
-import type { Category, ProductRow } from '../types/global';
+import { IMAGE_ACCEPT, ProductThumb, generateEan13, readImageFile } from '../lib/product-media';
+import type { Category, ProductRow, TaxCategory } from '../types/global';
 
 interface ProductFormValues {
   name: string;
   sku: string;
   barcode: string;
   categoryId: string;
+  taxCategoryId: string;
+  imagePath: string;
   unit: string;
   costPrice: string;
   sellingPrice: string;
@@ -33,12 +36,20 @@ function toForm(p?: ProductRow): ProductFormValues {
     sku: p?.sku ?? '',
     barcode: p?.barcode ?? '',
     categoryId: p?.categoryId ?? '',
+    taxCategoryId: p?.taxCategoryId ?? '',
+    imagePath: p?.imagePath ?? '',
     unit: p?.unit ?? 'pcs',
     costPrice: p ? (p.costPriceKobo / 100).toFixed(2) : '0.00',
     sellingPrice: p ? (p.sellingPriceKobo / 100).toFixed(2) : '0.00',
     reorderLevel: p?.reorderLevel ?? 0,
     openingStock: 0,
   };
+}
+
+/** 7.5% (750 bps) → "7.5%". Whole rates lose the decimal point. */
+function formatRate(rateBps: number): string {
+  const pct = rateBps / 100;
+  return `${Number.isInteger(pct) ? pct.toFixed(0) : pct.toFixed(2).replace(/0$/, '')}%`;
 }
 
 export function ProductsPage(): JSX.Element {
@@ -50,6 +61,9 @@ export function ProductsPage(): JSX.Element {
   const [page, setPage] = useState(1);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<ProductRow | null>(null);
+  const [imageBusy, setImageBusy] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -83,13 +97,32 @@ export function ProductsPage(): JSX.Element {
     },
   });
 
+  // Named tax categories (Food 7.5%, Alcohol 10%, Exempt 0% for a restaurant).
+  const taxQuery = useQuery({
+    queryKey: ['tax-categories'],
+    queryFn: async () => {
+      const res = await ipc.taxCategories();
+      if (!res.ok) throw new Error(res.error ?? 'Could not load tax categories');
+      return (res.items ?? []) as TaxCategory[];
+    },
+  });
+
   const form = useForm<ProductFormValues>({
     defaultValues: toForm(),
   });
 
   const validateForm = (values: ProductFormValues): string | null => {
     const core = productSchema
-      .omit({ sku: true, barcode: true, categoryId: true, costPriceKobo: true, sellingPriceKobo: true, openingStock: true })
+      .omit({
+        sku: true,
+        barcode: true,
+        categoryId: true,
+        taxCategoryId: true,
+        imagePath: true,
+        costPriceKobo: true,
+        sellingPriceKobo: true,
+        openingStock: true,
+      })
       .safeParse({
         name: values.name,
         unit: values.unit.trim() || 'pcs',
@@ -106,6 +139,7 @@ export function ProductsPage(): JSX.Element {
 
   useEffect(() => {
     form.reset(toForm(editing ?? undefined));
+    setImageError(null);
   }, [editing, modalOpen, form]);
 
   const invalidate = (): Promise<unknown> =>
@@ -114,6 +148,7 @@ export function ProductsPage(): JSX.Element {
       queryClient.invalidateQueries({ queryKey: ['categories'] }),
       queryClient.invalidateQueries({ queryKey: ['levels'] }),
       queryClient.invalidateQueries({ queryKey: ['movements'] }),
+      queryClient.invalidateQueries({ queryKey: ['pos-products'] }),
     ]);
 
   const saveMutation = useMutation({
@@ -127,6 +162,8 @@ export function ProductsPage(): JSX.Element {
         sku: values.sku.trim() === '' ? null : values.sku.trim(),
         barcode: values.barcode.trim() === '' ? null : values.barcode.trim(),
         categoryId: values.categoryId === '' ? null : values.categoryId,
+        taxCategoryId: values.taxCategoryId === '' ? null : values.taxCategoryId,
+        imagePath: values.imagePath,
         unit: values.unit.trim() || 'pcs',
         costPriceKobo: cost,
         sellingPriceKobo: sell,
@@ -158,19 +195,40 @@ export function ProductsPage(): JSX.Element {
     onSuccess: () => void invalidate(),
   });
 
+  async function onPickImage(file: File | undefined): Promise<void> {
+    if (!file) return;
+    setImageError(null);
+    setImageBusy(true);
+    try {
+      const dataUrl = await readImageFile(file);
+      form.setValue('imagePath', dataUrl, { shouldDirty: true });
+    } catch (e) {
+      setImageError(e instanceof Error ? e.message : 'Could not process that image');
+    } finally {
+      setImageBusy(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }
+
   const items = productsQuery.data?.items ?? [];
   const total = productsQuery.data?.total ?? 0;
   const pages = Math.max(1, Math.ceil(total / 25));
+  const taxCategories = taxQuery.data ?? [];
+  const defaultTaxId = taxCategories.find((t) => t.isDefault)?.id ?? '';
+  const imagePath = form.watch('imagePath');
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <h1 className="text-xl font-semibold">Products</h1>
-          <Badge>{total} total</Badge>
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Products</h1>
+          <p className="mt-0.5 text-sm text-slate-500">
+            <span className="font-semibold text-brand-600 dark:text-brand-300">{total}</span> in catalogue
+          </p>
         </div>
         <RequirePermission permission="products.manage">
           <Button
+            size="lg"
             onClick={() => {
               setEditing(null);
               form.reset(toForm());
@@ -246,9 +304,10 @@ export function ProductsPage(): JSX.Element {
             <Table>
               <THead>
                 <TRow>
-                  <TH>Name</TH>
-                  <TH>SKU</TH>
+                  <TH>Product</TH>
+                  <TH>SKU / Barcode</TH>
                   <TH>Price</TH>
+                  <TH>Tax</TH>
                   <TH>Stock</TH>
                   <TH>Status</TH>
                   <TH>Actions</TH>
@@ -258,18 +317,59 @@ export function ProductsPage(): JSX.Element {
                 {items.map((p) => (
                   <TRow key={p.id}>
                     <TD>
-                      <Link to={`/products/${p.id}`} className="font-medium text-slate-900 underline-offset-2 hover:underline dark:text-white">
-                        {p.name}
-                      </Link>
-                      {p.categoryName ? <span className="ml-2 text-xs text-slate-500">{p.categoryName}</span> : null}
+                      <div className="flex items-center gap-3">
+                        <ProductThumb imagePath={p.imagePath} name={p.name} />
+                        <div className="min-w-0">
+                          <Link
+                            to={`/products/${p.id}`}
+                            className="font-medium text-slate-900 underline-offset-2 hover:underline dark:text-white"
+                          >
+                            {p.name}
+                          </Link>
+                          {p.categoryName ? <p className="text-xs text-slate-500">{p.categoryName}</p> : null}
+                        </div>
+                      </div>
                     </TD>
-                    <TD>{p.sku ?? '—'}</TD>
+                    <TD>
+                      <p className="text-sm">{p.sku ?? '—'}</p>
+                      {p.barcode ? <p className="font-mono text-[11px] text-slate-500">{p.barcode}</p> : null}
+                    </TD>
                     <TD>{formatKobo(p.sellingPriceKobo)}</TD>
                     <TD>
-                      {p.onHand} {p.unit}
-                      {p.lowStock ? <Badge className="ml-2">Low</Badge> : null}
+                      {(() => {
+                        const cat = taxCategories.find((t) => t.id === p.taxCategoryId);
+                        if (cat) {
+                          return (
+                            <span className="text-sm">
+                              {cat.name}{' '}
+                              <span className="text-xs text-slate-500">({formatRate(cat.rateBps)})</span>
+                            </span>
+                          );
+                        }
+                        return <span className="text-xs text-slate-500">Default</span>;
+                      })()}
                     </TD>
-                    <TD>{p.isActive === 1 ? 'Active' : 'Archived'}</TD>
+                    <TD>
+                      <span className="font-semibold tabular-nums">
+                        {p.onHand} {p.unit}
+                      </span>
+                      {p.lowStock ? (
+                        <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                          Low stock
+                        </span>
+                      ) : null}
+                    </TD>
+                    <TD>
+                      {p.isActive === 1 ? (
+                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                          Active
+                        </span>
+                      ) : (
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                          Archived
+                        </span>
+                      )}
+                    </TD>
                     <TD>
                       <div className="flex gap-2">
                         <RequirePermission permission="products.manage">
@@ -335,11 +435,68 @@ export function ProductsPage(): JSX.Element {
           })}
           className="space-y-3"
         >
-          <Input label="Name" {...form.register('name')} error={form.formState.errors.name?.message} />
+          {/* Photo + identity */}
+          <div className="flex items-start gap-3">
+            <div className="flex flex-col items-center gap-1.5">
+              <ProductThumb imagePath={imagePath} name={form.watch('name') || 'Product'} size="lg" />
+              {imagePath ? (
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 text-[11px] font-medium text-red-600 hover:underline"
+                  onClick={() => form.setValue('imagePath', '', { shouldDirty: true })}
+                >
+                  <Trash2 className="h-3 w-3" /> Remove
+                </button>
+              ) : null}
+            </div>
+            <div className="flex-1">
+              <Input label="Name" {...form.register('name')} error={form.formState.errors.name?.message} />
+              <div className="mt-2 flex items-center gap-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept={IMAGE_ACCEPT}
+                  className="hidden"
+                  onChange={(e) => void onPickImage(e.target.files?.[0])}
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  disabled={imageBusy}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Upload className="h-4 w-4" />
+                  {imageBusy ? 'Processing…' : imagePath ? 'Replace photo' : 'Upload photo'}
+                </Button>
+                <span className="text-[11px] text-slate-500">Stored offline on this device</span>
+              </div>
+              {imageError ? <p className="mt-1 text-xs font-medium text-red-600">{imageError}</p> : null}
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <Input label="SKU (optional)" {...form.register('sku')} />
-            <Input label="Barcode (optional)" {...form.register('barcode')} />
+            <div>
+              <label className="mb-1 block text-xs font-medium" htmlFor="product-barcode">
+                Barcode (optional)
+              </label>
+              <div className="flex gap-2">
+                <Input id="product-barcode" className="flex-1" {...form.register('barcode')} />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  title="Generate an EAN-13 barcode"
+                  onClick={() => form.setValue('barcode', generateEan13(), { shouldDirty: true })}
+                >
+                  <Sparkles className="h-4 w-4" />
+                  Generate
+                </Button>
+              </div>
+            </div>
           </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="mb-1 block text-xs font-medium" htmlFor="product-unit">
@@ -365,6 +522,31 @@ export function ProductsPage(): JSX.Element {
               </select>
             </div>
           </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium" htmlFor="product-tax">
+              Tax category
+            </label>
+            <select
+              id="product-tax"
+              className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-900"
+              {...form.register('taxCategoryId')}
+            >
+              <option value="">
+                Business default{defaultTaxId ? '' : ' (tax)'}
+              </option>
+              {taxCategories.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name} — {formatRate(t.rateBps)}
+                  {t.isDefault ? ' (default)' : ''}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-[11px] text-slate-500">
+              Used to compute tax on each sale line. Exempt items should use a 0% category.
+            </p>
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <Input label="Cost price (₦)" placeholder="0.00" {...form.register('costPrice')} />
             <Input label="Selling price (₦)" placeholder="0.00" {...form.register('sellingPrice')} />
@@ -387,9 +569,7 @@ export function ProductsPage(): JSX.Element {
               />
             )}
           </div>
-          {saveMutation.isError ? (
-            <ErrorState message={(saveMutation.error as Error).message} />
-          ) : null}
+          {saveMutation.isError ? <ErrorState message={(saveMutation.error as Error).message} /> : null}
           <div className="flex justify-end gap-2">
             <Button
               type="button"

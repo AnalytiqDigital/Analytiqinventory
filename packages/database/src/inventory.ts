@@ -21,7 +21,7 @@ import { newId } from './auth';
 import type { LocalDb } from './connection';
 import { requirePermission } from './permissions';
 import { writeAuditSync } from './service';
-import { categories, locations, products, stockMovements } from './schema';
+import { categories, locations, products, stockMovements, taxCategories } from './schema';
 
 export const STOCK_KINDS = ['opening', 'adjust', 'count', 'sale', 'purchase', 'return'] as const;
 export type StockKind = (typeof STOCK_KINDS)[number];
@@ -151,6 +151,8 @@ export interface ProductWithStock {
   costPriceKobo: number;
   sellingPriceKobo: number;
   reorderLevel: number;
+  imagePath: string;
+  taxCategoryId: string | null;
   isActive: number;
   onHand: number;
   lowStock: boolean;
@@ -219,6 +221,8 @@ export async function listProducts(
       costPriceKobo: products.costPriceKobo,
       sellingPriceKobo: products.sellingPriceKobo,
       reorderLevel: products.reorderLevel,
+      imagePath: products.imagePath,
+      taxCategoryId: products.taxCategoryId,
       isActive: products.isActive,
     })
     .from(products)
@@ -254,6 +258,8 @@ async function getProductRow(local: LocalDb, businessId: string, productId: stri
       costPriceKobo: products.costPriceKobo,
       sellingPriceKobo: products.sellingPriceKobo,
       reorderLevel: products.reorderLevel,
+      imagePath: products.imagePath,
+      taxCategoryId: products.taxCategoryId,
       isActive: products.isActive,
     })
     .from(products)
@@ -312,6 +318,20 @@ async function assertUniqueCode(
   }
 }
 
+async function assertTaxCategoryInBusiness(
+  local: LocalDb,
+  businessId: string,
+  taxCategoryId: string | null | undefined,
+): Promise<void> {
+  if (taxCategoryId == null) return;
+  const [row] = await local.db
+    .select({ id: taxCategories.id })
+    .from(taxCategories)
+    .where(and(eq(taxCategories.id, taxCategoryId), eq(taxCategories.businessId, businessId)))
+    .limit(1);
+  if (!row) throw codedError('Tax category not found', 'TAX_CATEGORY_NOT_FOUND');
+}
+
 async function assertCategoryInBusiness(
   local: LocalDb,
   businessId: string,
@@ -336,6 +356,7 @@ export async function createProduct(
   requirePermission(new Set(grants), 'products.manage');
   const input = productCreateSchema.parse(raw);
   await assertCategoryInBusiness(local, businessId, input.categoryId);
+  await assertTaxCategoryInBusiness(local, businessId, input.taxCategoryId);
   await assertUniqueCode(local, businessId, 'sku', input.sku);
   await assertUniqueCode(local, businessId, 'barcode', input.barcode);
   const locationId = await resolveLocationId(local, businessId, input.locationId);
@@ -354,6 +375,8 @@ export async function createProduct(
       costPriceKobo: input.costPriceKobo,
       sellingPriceKobo: input.sellingPriceKobo,
       reorderLevel: input.reorderLevel,
+      imagePath: input.imagePath,
+      taxCategoryId: input.taxCategoryId ?? null,
       isActive: 1,
       version: 1,
       createdAt: timestamp,
@@ -402,6 +425,9 @@ export async function updateProduct(
   if (input.categoryId !== undefined) {
     await assertCategoryInBusiness(local, businessId, input.categoryId);
   }
+  if (input.taxCategoryId !== undefined) {
+    await assertTaxCategoryInBusiness(local, businessId, input.taxCategoryId);
+  }
   if (input.sku !== undefined) await assertUniqueCode(local, businessId, 'sku', input.sku, productId);
   if (input.barcode !== undefined) {
     await assertUniqueCode(local, businessId, 'barcode', input.barcode, productId);
@@ -417,6 +443,8 @@ export async function updateProduct(
     ...(input.costPriceKobo !== undefined ? { costPriceKobo: input.costPriceKobo } : {}),
     ...(input.sellingPriceKobo !== undefined ? { sellingPriceKobo: input.sellingPriceKobo } : {}),
     ...(input.reorderLevel !== undefined ? { reorderLevel: input.reorderLevel } : {}),
+    ...(input.imagePath !== undefined ? { imagePath: input.imagePath } : {}),
+    ...(input.taxCategoryId !== undefined ? { taxCategoryId: input.taxCategoryId ?? null } : {}),
   };
 
   const apply = local.raw.transaction(() => {
