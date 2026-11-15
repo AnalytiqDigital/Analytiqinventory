@@ -4,6 +4,8 @@ export interface SessionUser {
   name: string;
   email: string;
   permissions: string[];
+ /** `businesses.type` - drives which modules the app shows. */
+ businessType: string;
 }
 
 export interface AnalytiqApi {

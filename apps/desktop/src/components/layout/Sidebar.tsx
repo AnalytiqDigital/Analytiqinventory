@@ -2,11 +2,12 @@ import { NavLink } from 'react-router-dom';
 import { WifiOff } from 'lucide-react';
 import { useSession } from '../../stores/session';
 import { cn } from '../../lib/cn';
-import { NAV_ITEMS, NAV_SECTIONS } from './nav';
+import { NAV_SECTIONS, visibleNavItems } from './nav';
 
 export function Sidebar(): JSX.Element {
  const can = useSession((s) => s.can);
- const visible = NAV_ITEMS.filter((item) => !item.permission || can(item.permission));
+ const businessType = useSession((s) => s.user?.businessType);
+ const visible = visibleNavItems(businessType, can);
 
  return (
  <aside className="hidden w-60 shrink-0 flex-col border-r border-slate-200/80 bg-white dark:border-slate-800 dark:bg-slate-900 md:flex">

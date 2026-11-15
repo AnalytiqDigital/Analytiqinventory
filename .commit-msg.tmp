@@ -1,4 +1,4 @@
-feat(restaurant): restaurant pack, full-page Nigerian login slideshow
+feat(restaurant): restaurant pack, business-type module gating, Nigerian login
 
 Restaurant pack (Batch 5):
 - tax_categories and dining_tables tables; products.image_path,
@@ -7,6 +7,14 @@ Restaurant pack (Batch 5):
 - table lifecycle: free -> occupied on sale, released after commit
 - Tables and Tax Categories pages; table selector in POS
 - product images (downscaled local data URLs) and EAN-13 barcode generation
+
+Business-type module gating:
+- CORE_MODULES / OPTIONAL_MODULES with per-type DEFAULT_MODULES and a
+  resolveModules(type, overrides) resolver in @analytiq/validation
+- AuthenticatedUser carries businessType; exposed on SessionUser
+- NavItem gains `module`; Sidebar and AppShell filter via visibleNavItems
+- RequireModule route guard redirects to the dashboard when a module is off
+- only `restaurant` gets Tables; `services` drops Suppliers
 
 Login:
 - full-viewport slideshow with four Nigerian-context images
