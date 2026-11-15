@@ -32,6 +32,8 @@ export interface AuthenticatedUser {
   name: string;
   email: string;
   permissions: string[];
+ /** `businesses.type` - drives which modules the app shows. */
+ businessType: string;
 }
 
 export interface LoginResult {
@@ -58,6 +60,15 @@ export function writeAuditSync(
     details: JSON.stringify(entry.details ?? {}),
     createdAt: now(),
   }).run();
+}
+
+async function businessTypeOf(local: LocalDb, businessId: string): Promise<string> {
+ const [row] = await local.db
+ .select({ type: businesses.type })
+ .from(businesses)
+ .where(eq(businesses.id, businessId))
+ .limit(1);
+ return row?.type ?? 'other';
 }
 
 async function userPermissions(local: LocalDb, userId: string, businessId: string): Promise<string[]> {
@@ -258,7 +269,14 @@ export async function login(local: LocalDb, raw: unknown): Promise<LoginResult> 
   return {
     token,
     expiresAt,
-    user: { id: user.id, businessId: user.businessId, name: user.name, email: user.email, permissions: grants },
+    user: {
+ id: user.id,
+ businessId: user.businessId,
+ name: user.name,
+ email: user.email,
+ permissions: grants,
+ businessType: await businessTypeOf(local, user.businessId),
+ },
   };
 }
 
@@ -279,5 +297,12 @@ export async function authenticate(local: LocalDb, token: string): Promise<Authe
   const [user] = await local.db.select().from(users).where(eq(users.id, session.userId)).limit(1);
   if (!user || user.isActive !== 1) return null;
   const grants = await userPermissions(local, user.id, user.businessId);
-  return { id: user.id, businessId: user.businessId, name: user.name, email: user.email, permissions: grants };
+  return {
+ id: user.id,
+ businessId: user.businessId,
+ name: user.name,
+ email: user.email,
+ permissions: grants,
+ businessType: await businessTypeOf(local, user.businessId),
+ };
 }

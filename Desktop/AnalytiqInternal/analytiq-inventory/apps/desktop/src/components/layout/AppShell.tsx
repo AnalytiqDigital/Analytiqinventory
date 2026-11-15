@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { NAV_ITEMS, NAV_SECTIONS } from './nav';
+import { NAV_SECTIONS, visibleNavItems } from './nav';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 import { useSession } from '../../stores/session';
@@ -9,7 +9,8 @@ import { cn } from '../../lib/cn';
 export function AppShell(): JSX.Element {
  const [mobileOpen, setMobileOpen] = useState(false);
  const can = useSession((s) => s.can);
- const visible = NAV_ITEMS.filter((item) => !item.permission || can(item.permission));
+ const businessType = useSession((s) => s.user?.businessType);
+ const visible = visibleNavItems(businessType, can);
 
  return (
  <div className="flex min-h-screen bg-orange-50/50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">

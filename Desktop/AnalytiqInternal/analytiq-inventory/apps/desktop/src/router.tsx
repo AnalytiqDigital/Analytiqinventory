@@ -1,6 +1,7 @@
 import { createHashRouter, Navigate } from 'react-router-dom';
 import { AppShell } from './components/layout/AppShell';
 import { RequireAuth } from './components/RequireAuth';
+import { RequireModule } from './components/RequireModule';
 import { DashboardPage } from './pages/DashboardPage';
 import { InventoryPage } from './pages/InventoryPage';
 import { LoginPage } from './pages/LoginPage';
@@ -25,8 +26,8 @@ export const router: ReturnType<typeof createHashRouter> = createHashRouter([
         children: [
           { index: true, element: <DashboardPage /> },
           { path: 'pos', element: <PosPage /> },
-          { path: 'tables', element: <TablesPage /> },
-          { path: 'tax-categories', element: <TaxCategoriesPage /> },
+          { element: <RequireModule module="tables" />, children: [{ path: 'tables', element: <TablesPage /> }] },
+          { element: <RequireModule module="taxCategories" />, children: [{ path: 'tax-categories', element: <TaxCategoriesPage /> }] },
           { path: 'products', element: <ProductsPage /> },
           { path: 'products/:id', element: <ProductDetailPage /> },
           { path: 'inventory', element: <InventoryPage /> },

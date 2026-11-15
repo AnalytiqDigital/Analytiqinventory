@@ -284,3 +284,59 @@ status: z.enum(TABLE_STATUSES).nullish(),
 });
 
 export type TablesQuery = z.infer<typeof tablesQuerySchema>;
+
+// --- Business-type module gating -----------------------------------------
+// One engine, per-vertical presets. Every business gets the core modules; the
+// type only decides which optional ones appear by default.
+
+export type BusinessType = z.infer<typeof businessTypeSchema>;
+
+/** Core modules every business needs, regardless of type. */
+export const CORE_MODULES = ['pos', 'products', 'inventory', 'reports'] as const;
+
+/** Optional modules that a business type can switch on. */
+export const OPTIONAL_MODULES = [
+ 'tables',
+ 'taxCategories',
+ 'purchases',
+ 'suppliers',
+ 'customers',
+ 'finance',
+] as const;
+
+export type OptionalModule = (typeof OPTIONAL_MODULES)[number];
+export type AppModule = (typeof CORE_MODULES)[number] | OptionalModule;
+
+/** What `businesses.type` grants out of the box. */
+const DEFAULT_MODULES: Record<BusinessType, OptionalModule[]> = {
+ retail: ['taxCategories', 'purchases', 'suppliers', 'customers', 'finance'],
+ supermarket: ['taxCategories', 'purchases', 'suppliers', 'customers', 'finance'],
+ wholesale: ['taxCategories', 'purchases', 'suppliers', 'customers', 'finance'],
+ restaurant: ['tables', 'taxCategories', 'purchases', 'suppliers', 'customers', 'finance'],
+ pharmacy: ['taxCategories', 'purchases', 'suppliers', 'customers', 'finance'],
+ services: ['taxCategories', 'purchases', 'customers', 'finance'],
+ other: ['taxCategories', 'purchases', 'suppliers', 'customers', 'finance'],
+};
+
+/**
+ * Resolve the modules a business has.
+ * `overrides` are per-business switches stored in settings; an entry set to
+ * `false` turns a default module off, `true` turns a non-default one on.
+ */
+export function resolveModules(
+ type: string,
+ overrides: Partial<Record<string, boolean>> = {},
+): Set<AppModule> {
+ const defaults = DEFAULT_MODULES[(type as BusinessType)] ?? DEFAULT_MODULES.other;
+ const active = new Set<string>([...CORE_MODULES, ...defaults]);
+ for (const [key, on] of Object.entries(overrides)) {
+ if (on === true) active.add(key);
+ if (on === false) active.delete(key);
+ }
+ return active as Set<AppModule>;
+}
+
+/** Does this business type use the restaurant pack (tables, etc.)? */
+export function isRestaurant(type: string): boolean {
+ return type === 'restaurant';
+}
