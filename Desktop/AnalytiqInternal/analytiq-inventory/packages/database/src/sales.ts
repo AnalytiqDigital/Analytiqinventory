@@ -26,7 +26,6 @@ import { newId } from './auth';
 import type { LocalDb } from './connection';
 import { requirePermission } from './permissions';
 import { getDefaultLocationId } from './inventory';
-import { ensureDefaultTaxCategory } from './taxCategories';
 import { writeAuditSync } from './service';
 import {
   businesses,
@@ -37,7 +36,7 @@ import {
   saleReversals,
   sales,
   diningTables,
-  taxCategories,
+  customers,
   stockMovements,
   users,
 } from './schema';
@@ -49,6 +48,26 @@ function codedError(message: string, code: string): Error {
   const err = new Error(message);
   (err as NodeJS.ErrnoException).code = code;
   return err;
+}
+
+/** What a customer currently owes: credit tenders minus money received. */
+function creditOutstanding(local: LocalDb, businessId: string, customerId: string): number {
+  const owed = local.raw
+    .prepare(
+      `SELECT COALESCE(SUM(sp.amount_kobo), 0) AS v
+ FROM sale_payments sp
+ JOIN sales s ON s.id = sp.sale_id
+ WHERE s.business_id = ? AND s.customer_id = ? AND s.status = 'completed'
+ AND sp.method = 'credit'`
+    )
+    .get(businessId, customerId) as { v: number } | undefined;
+  const paid = local.raw
+    .prepare(
+      `SELECT COALESCE(SUM(p.amount_kobo), 0) AS v FROM customer_payments p
+ WHERE p.business_id = ? AND p.customer_id = ?`
+    )
+    .get(businessId, customerId) as { v: number } | undefined;
+  return (owed?.v ?? 0) - (paid?.v ?? 0);
 }
 
 function escLike(s: string): string {
@@ -90,6 +109,8 @@ export interface SaleView {
   changeKobo: number;
   tableId: string | null;
   tableName: string | null;
+  customerId: string | null;
+  customerName: string | null;
   createdAt: string;
   items: SaleItemView[];
   payments: SalePaymentView[];
@@ -105,6 +126,7 @@ export interface SaleSummary {
   totalKobo: number;
   amountPaidKobo: number;
   tableName: string | null;
+  customerName: string | null;
   createdAt: string;
   itemCount: number;
 }
@@ -112,7 +134,7 @@ export interface SaleSummary {
 async function resolveLocationId(
   local: LocalDb,
   businessId: string,
-  requested: string | null | undefined,
+  requested: string | null | undefined
 ): Promise<string> {
   if (requested) {
     const [row] = await local.db
@@ -143,7 +165,7 @@ export async function createSale(
   businessId: string,
   userId: string,
   grants: string[],
-  raw: unknown,
+  raw: unknown
 ): Promise<{ id: string; receiptNo: string; totalKobo: number; changeKobo: number }> {
   requirePermission(new Set(grants), 'sales.create');
   const input = saleCreateSchema.parse(raw);
@@ -162,7 +184,7 @@ export async function createSale(
   const placeholders = productIds.map(() => '?').join(',');
   const prodRows = local.raw
     .prepare(
-      `SELECT id, name, selling_price_kobo AS sellingPriceKobo, is_active AS isActive, tax_category_id AS taxCategoryId FROM products WHERE business_id = ? AND id IN (${placeholders})`,
+      `SELECT id, name, selling_price_kobo AS sellingPriceKobo, is_active AS isActive, tax_category_id AS taxCategoryId FROM products WHERE business_id = ? AND id IN (${placeholders})`
     )
     .all(businessId, ...productIds) as Array<{
     id: string;
@@ -189,7 +211,13 @@ export async function createSale(
     const lineTotal = gross - lineDiscount;
     subtotal += gross;
     lineDiscountTotal += lineDiscount;
-    return { productId: item.productId, qty: item.qty, unitPriceKobo: unitPrice, lineDiscountKobo: lineDiscount, lineTotalKobo: lineTotal };
+    return {
+      productId: item.productId,
+      qty: item.qty,
+      unitPriceKobo: unitPrice,
+      lineDiscountKobo: lineDiscount,
+      lineTotalKobo: lineTotal,
+    };
   });
 
   const netAfterLines = subtotal - lineDiscountTotal;
@@ -200,11 +228,17 @@ export async function createSale(
   let perLineTax = 0;
   const lineTaxable: number[] = [];
   if (taxable > 0 && netAfterLines > 0) {
-    const catIds = [...new Set(prodRows.map((r) => r.taxCategoryId).filter((v: string | null): v is string => v != null))];
+    const catIds = [
+      ...new Set(
+        prodRows.map((r) => r.taxCategoryId).filter((v: string | null): v is string => v != null)
+      ),
+    ];
     const rateMap = new Map<string, number>();
     if (catIds.length > 0) {
       const catRows = local.raw
-        .prepare(`SELECT id, rate_bps AS rateBps FROM tax_categories WHERE business_id = ? AND id IN (${catIds.map(() => '?').join(',')})`)
+        .prepare(
+          `SELECT id, rate_bps AS rateBps FROM tax_categories WHERE business_id = ? AND id IN (${catIds.map(() => '?').join(',')})`
+        )
         .all(businessId, ...catIds) as Array<{ id: string; rateBps: number }>;
       for (const c of catRows) rateMap.set(c.id, c.rateBps);
     }
@@ -213,37 +247,90 @@ export async function createSale(
       const share = (line.lineTotalKobo / netAfterLines) * headerDiscount;
       const base = Math.max(0, Math.round(line.lineTotalKobo - share));
       lineTaxable.push(base);
-      const rate = prod.taxCategoryId != null ? (rateMap.get(prod.taxCategoryId) ?? biz.taxRateBps) : biz.taxRateBps;
+      const rate =
+        prod.taxCategoryId != null
+          ? (rateMap.get(prod.taxCategoryId) ?? biz.taxRateBps)
+          : biz.taxRateBps;
       perLineTax += Math.round((base * rate) / 10000);
     }
   } else {
-    for (const line of lines) lineTaxable.push(0);
+    lineTaxable.push(...lines.map(() => 0));
   }
   void lineTaxable;
   const taxKobo = input.taxKobo ?? perLineTax;
   const total = taxable + taxKobo;
 
   const amountPaid = input.payments.reduce((s, p) => s + p.amountKobo, 0);
-  if (amountPaid < total) throw codedError(`Insufficient payment: paid ${amountPaid}, total ${total}`, 'INSUFFICIENT_PAYMENT');
+  if (amountPaid < total)
+    throw codedError(
+      `Insufficient payment: paid ${amountPaid}, total ${total}`,
+      'INSUFFICIENT_PAYMENT'
+    );
 
   // Credit must be exact (no change on account sales); cash/transfer/pos may overpay.
   const hasCredit = input.payments.some((p) => p.method === 'credit');
+  // Amount actually put on the customer's account (not the tender total).
+  const creditAmount = input.payments
+    .filter((p) => p.method === 'credit')
+    .reduce((s, p) => s + p.amountKobo, 0);
   const change = amountPaid - total;
   if (hasCredit && change !== 0)
-    throw codedError('Credit sales must be paid exactly (no change, no shortfall)', 'CREDIT_MUST_MATCH');
+    throw codedError(
+      'Credit sales must be paid exactly (no change, no shortfall)',
+      'CREDIT_MUST_MATCH'
+    );
 
   // Optional table tag: must be free, same business + location.
   let tableId: string | null = null;
   if (input.tableId != null) {
     const [tbl] = await local.db
-      .select({ id: diningTables.id, locationId: diningTables.locationId, status: diningTables.status, name: diningTables.name })
+      .select({
+        id: diningTables.id,
+        locationId: diningTables.locationId,
+        status: diningTables.status,
+        name: diningTables.name,
+      })
       .from(diningTables)
       .where(and(eq(diningTables.id, input.tableId), eq(diningTables.businessId, businessId)))
       .limit(1);
     if (!tbl) throw codedError('Table not found', 'TABLE_NOT_FOUND');
-    if (tbl.locationId !== locationId) throw codedError(`Table ${tbl.name} belongs to a different location`, 'TABLE_WRONG_LOCATION');
-    if (tbl.status !== 'free') throw codedError(`Table ${tbl.name} is already occupied`, 'TABLE_OCCUPIED');
+    if (tbl.locationId !== locationId)
+      throw codedError(`Table ${tbl.name} belongs to a different location`, 'TABLE_WRONG_LOCATION');
+    if (tbl.status !== 'free')
+      throw codedError(`Table ${tbl.name} is already occupied`, 'TABLE_OCCUPIED');
     tableId = tbl.id;
+  }
+
+  // Optional customer (Batch 6). Walk-in sales leave this null. A credit
+  // payment requires a customer to owe against, and must respect their limit.
+  let customerId: string | null = null;
+  if (input.customerId != null) {
+    const [cust] = await local.db
+      .select({
+        id: customers.id,
+        name: customers.name,
+        creditLimitKobo: customers.creditLimitKobo,
+        isActive: customers.isActive,
+      })
+      .from(customers)
+      .where(and(eq(customers.id, input.customerId), eq(customers.businessId, businessId)))
+      .limit(1);
+    if (!cust) throw codedError('Customer not found', 'CUSTOMER_NOT_FOUND');
+    if (cust.isActive !== 1)
+      throw codedError(`Customer ${cust.name} is archived`, 'CUSTOMER_ARCHIVED');
+    customerId = cust.id;
+
+    if (cust.creditLimitKobo > 0) {
+      const owedSoFar = creditOutstanding(local, businessId, cust.id);
+      if (owedSoFar + creditAmount > cust.creditLimitKobo) {
+        throw codedError(
+          `Credit limit exceeded for ${cust.name}: limit ${(cust.creditLimitKobo / 100).toFixed(2)}, owed ${(owedSoFar / 100).toFixed(2)}, this sale ${(creditAmount / 100).toFixed(2)}`,
+          'CREDIT_LIMIT_EXCEEDED'
+        );
+      }
+    }
+  } else if (hasCredit) {
+    throw codedError('Select a customer to sell on credit', 'CREDIT_REQUIRES_CUSTOMER');
   }
 
   const timestamp = new Date();
@@ -266,6 +353,7 @@ export async function createSale(
         taxKobo,
         totalKobo: total,
         tableId,
+        customerId,
         amountPaidKobo: amountPaid,
         changeKobo: change,
         version: 1,
@@ -306,13 +394,16 @@ export async function createSale(
     for (const line of lines) {
       const cur = local.raw
         .prepare(
-          'SELECT COALESCE(SUM(qty_delta), 0) AS qty FROM stock_movements WHERE business_id = ? AND product_id = ? AND location_id = ?',
+          'SELECT COALESCE(SUM(qty_delta), 0) AS qty FROM stock_movements WHERE business_id = ? AND product_id = ? AND location_id = ?'
         )
         .get(businessId, line.productId, locationId) as { qty: number };
       const after = cur.qty - line.qty;
       if (after < 0) {
         const p = prodMap.get(line.productId)!;
-        throw codedError(`Insufficient stock for ${p.name} (have ${cur.qty}, need ${line.qty})`, 'NEGATIVE_STOCK');
+        throw codedError(
+          `Insufficient stock for ${p.name} (have ${cur.qty}, need ${line.qty})`,
+          'NEGATIVE_STOCK'
+        );
       }
       local.db
         .insert(stockMovements)
@@ -364,7 +455,7 @@ export async function getSale(
   local: LocalDb,
   businessId: string,
   grants: string[],
-  saleId: string,
+  saleId: string
 ): Promise<SaleView> {
   requirePermission(new Set(grants), 'sales.view');
   const [head] = await local.db
@@ -380,10 +471,25 @@ export async function getSale(
     .where(eq(locations.id, head.locationId))
     .limit(1);
   const [cashier] = head.cashierId
-    ? await local.db.select({ name: users.name }).from(users).where(eq(users.id, head.cashierId)).limit(1)
+    ? await local.db
+        .select({ name: users.name })
+        .from(users)
+        .where(eq(users.id, head.cashierId))
+        .limit(1)
     : [undefined];
   const [tbl] = head.tableId
-    ? await local.db.select({ name: diningTables.name }).from(diningTables).where(eq(diningTables.id, head.tableId)).limit(1)
+    ? await local.db
+        .select({ name: diningTables.name })
+        .from(diningTables)
+        .where(eq(diningTables.id, head.tableId))
+        .limit(1)
+    : [undefined];
+  const [cust] = head.customerId
+    ? await local.db
+        .select({ name: customers.name })
+        .from(customers)
+        .where(eq(customers.id, head.customerId))
+        .limit(1)
     : [undefined];
 
   const itemRows = await local.db
@@ -401,10 +507,7 @@ export async function getSale(
     .leftJoin(products, eq(saleItems.productId, products.id))
     .where(eq(saleItems.saleId, saleId));
 
-  const payRows = await local.db
-    .select()
-    .from(salePayments)
-    .where(eq(salePayments.saleId, saleId));
+  const payRows = await local.db.select().from(salePayments).where(eq(salePayments.saleId, saleId));
 
   const [rev] = await local.db
     .select()
@@ -414,7 +517,11 @@ export async function getSale(
   let reversal: SaleView['reversal'] = null;
   if (rev) {
     const [by] = rev.reversedBy
-      ? await local.db.select({ name: users.name }).from(users).where(eq(users.id, rev.reversedBy)).limit(1)
+      ? await local.db
+          .select({ name: users.name })
+          .from(users)
+          .where(eq(users.id, rev.reversedBy))
+          .limit(1)
       : [undefined];
     reversal = {
       reason: rev.reason,
@@ -440,6 +547,8 @@ export async function getSale(
     changeKobo: head.changeKobo,
     tableId: head.tableId,
     tableName: tbl?.name ?? null,
+    customerId: head.customerId,
+    customerName: cust?.name ?? null,
     createdAt: (head.createdAt as Date).toISOString(),
     items: itemRows.map((r) => ({
       id: r.id,
@@ -465,7 +574,7 @@ export async function listSales(
   local: LocalDb,
   businessId: string,
   grants: string[],
-  rawQuery: unknown,
+  rawQuery: unknown
 ): Promise<{ items: SaleSummary[]; total: number }> {
   requirePermission(new Set(grants), 'sales.view');
   const q = salesQuerySchema.parse(rawQuery);
@@ -483,11 +592,13 @@ export async function listSales(
     where += ` AND s.receipt_no LIKE ? ESCAPE '\\'`;
     params.push(`%${escLike(q.search)}%`);
   }
-  const from = `FROM sales s JOIN locations l ON l.id = s.location_id LEFT JOIN users u ON u.id = s.cashier_id LEFT JOIN dining_tables t ON t.id = s.table_id WHERE ${where}`;
-  const totalRow = local.raw.prepare(`SELECT COUNT(*) AS n ${from}`).get(...params) as { n: number };
+  const from = `FROM sales s JOIN locations l ON l.id = s.location_id LEFT JOIN users u ON u.id = s.cashier_id LEFT JOIN dining_tables t ON t.id = s.table_id LEFT JOIN customers c ON c.id = s.customer_id WHERE ${where}`;
+  const totalRow = local.raw.prepare(`SELECT COUNT(*) AS n ${from}`).get(...params) as {
+    n: number;
+  };
   const rows = local.raw
     .prepare(
-      `SELECT s.id AS id, s.receipt_no AS receiptNo, s.status AS status, s.total_kobo AS totalKobo, s.amount_paid_kobo AS amountPaidKobo, s.created_at AS createdAtMs, l.name AS locationName, u.name AS cashierName, t.name AS tableName, (SELECT COUNT(*) FROM sale_items si WHERE si.sale_id = s.id) AS itemCount ${from} ORDER BY s.created_at DESC, s.rowid DESC LIMIT ? OFFSET ?`,
+      `SELECT s.id AS id, s.receipt_no AS receiptNo, s.status AS status, s.total_kobo AS totalKobo, s.amount_paid_kobo AS amountPaidKobo, s.created_at AS createdAtMs, l.name AS locationName, u.name AS cashierName, t.name AS tableName, c.name AS customerName, (SELECT COUNT(*) FROM sale_items si WHERE si.sale_id = s.id) AS itemCount ${from} ORDER BY s.created_at DESC, s.rowid DESC LIMIT ? OFFSET ?`
     )
     .all(...params, q.pageSize, (q.page - 1) * q.pageSize) as Array<{
     id: string;
@@ -499,6 +610,7 @@ export async function listSales(
     locationName: string;
     cashierName: string | null;
     tableName: string | null;
+    customerName: string | null;
     itemCount: number;
   }>;
   return {
@@ -511,6 +623,7 @@ export async function listSales(
       totalKobo: r.totalKobo,
       amountPaidKobo: r.amountPaidKobo,
       tableName: r.tableName,
+      customerName: r.customerName,
       createdAt: new Date(r.createdAtMs).toISOString(),
       itemCount: r.itemCount,
     })),
@@ -524,7 +637,7 @@ export async function refundSale(
   userId: string,
   grants: string[],
   saleId: string,
-  raw: unknown,
+  raw: unknown
 ): Promise<{ ok: true }> {
   requirePermission(new Set(grants), 'sales.refund');
   const input = saleRefundSchema.parse(raw);
@@ -537,10 +650,7 @@ export async function refundSale(
   if (!head) throw codedError('Sale not found', 'SALE_NOT_FOUND');
   if (head.status !== 'completed') throw codedError('Sale is already reversed', 'ALREADY_REVERSED');
 
-  const itemRows = await local.db
-    .select()
-    .from(saleItems)
-    .where(eq(saleItems.saleId, saleId));
+  const itemRows = await local.db.select().from(saleItems).where(eq(saleItems.saleId, saleId));
 
   const timestamp = new Date();
   const reversalId = newId('rev');
@@ -549,7 +659,7 @@ export async function refundSale(
     for (const line of itemRows) {
       const cur = local.raw
         .prepare(
-          'SELECT COALESCE(SUM(qty_delta), 0) AS qty FROM stock_movements WHERE business_id = ? AND product_id = ? AND location_id = ?',
+          'SELECT COALESCE(SUM(qty_delta), 0) AS qty FROM stock_movements WHERE business_id = ? AND product_id = ? AND location_id = ?'
         )
         .get(businessId, line.productId, head.locationId) as { qty: number };
       local.db
@@ -603,7 +713,7 @@ export async function voidSale(
   userId: string,
   grants: string[],
   saleId: string,
-  raw: unknown,
+  raw: unknown
 ): Promise<{ ok: true }> {
   requirePermission(new Set(grants), 'sales.refund');
   const input = saleRefundSchema.parse(raw);
@@ -626,7 +736,7 @@ export async function voidSale(
     for (const line of itemRows) {
       const cur = local.raw
         .prepare(
-          'SELECT COALESCE(SUM(qty_delta), 0) AS qty FROM stock_movements WHERE business_id = ? AND product_id = ? AND location_id = ?',
+          'SELECT COALESCE(SUM(qty_delta), 0) AS qty FROM stock_movements WHERE business_id = ? AND product_id = ? AND location_id = ?'
         )
         .get(businessId, line.productId, head.locationId) as { qty: number };
       local.db

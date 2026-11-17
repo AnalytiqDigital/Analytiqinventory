@@ -12,29 +12,65 @@ function fallbackApi(): AnalytiqApi {
     authMe: () => Promise.resolve({ user: null }),
     categories: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
     categoryCreate: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
-    products: () => Promise.resolve({ ok: false, items: [], total: 0, error: 'Unavailable in browser preview' }),
+    products: () =>
+      Promise.resolve({ ok: false, items: [], total: 0, error: 'Unavailable in browser preview' }),
     productGet: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
     productCreate: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
     productUpdate: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
     productArchive: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
     productRestore: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
-    stockLevels: () => Promise.resolve({ ok: false, items: [], total: 0, error: 'Unavailable in browser preview' }),
+    stockLevels: () =>
+      Promise.resolve({ ok: false, items: [], total: 0, error: 'Unavailable in browser preview' }),
     stockAdjust: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
     stockCount: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
-    stockMovements: () => Promise.resolve({ ok: false, items: [], total: 0, error: 'Unavailable in browser preview' }),
-  saleCreate: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
-  sales: () => Promise.resolve({ ok: false, items: [], total: 0, error: 'Unavailable in browser preview' }),
-  saleGet: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
-  saleRefund: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
-  saleVoid: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
-  taxCategories: () => Promise.resolve({ ok: false, items: [], error: 'Unavailable in browser preview' }),
-  taxCategoryCreate: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
-  taxCategoryUpdate: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
-  tables: () => Promise.resolve({ ok: false, items: [], error: 'Unavailable in browser preview' }),
-  tableCreate: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
-  tableUpdate: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
-  tableSetStatus: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
-  tableDelete: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    stockMovements: () =>
+      Promise.resolve({ ok: false, items: [], total: 0, error: 'Unavailable in browser preview' }),
+    saleCreate: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    sales: () =>
+      Promise.resolve({ ok: false, items: [], total: 0, error: 'Unavailable in browser preview' }),
+    saleGet: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    saleRefund: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    saleVoid: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    taxCategories: () =>
+      Promise.resolve({ ok: false, items: [], error: 'Unavailable in browser preview' }),
+    taxCategoryCreate: () =>
+      Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    taxCategoryUpdate: () =>
+      Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    tables: () =>
+      Promise.resolve({ ok: false, items: [], error: 'Unavailable in browser preview' }),
+    tableCreate: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    tableUpdate: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    tableSetStatus: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    tableDelete: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+
+    customers: () =>
+      Promise.resolve({
+        ok: false,
+        items: [],
+        total: 0,
+        outstandingKobo: 0,
+        error: 'Unavailable in browser preview',
+      }),
+    customersGet: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    customersCreate: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    customersUpdate: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    customersArchive: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    customersPayments: () =>
+      Promise.resolve({ ok: false, items: [], error: 'Unavailable in browser preview' }),
+    customersPayment: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+
+    suppliers: () =>
+      Promise.resolve({ ok: false, items: [], total: 0, error: 'Unavailable in browser preview' }),
+    suppliersCreate: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    suppliersUpdate: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    suppliersArchive: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+
+    purchases: () =>
+      Promise.resolve({ ok: false, items: [], total: 0, error: 'Unavailable in browser preview' }),
+    purchasesCreate: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    purchasesReceive: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    purchasesCancel: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
   };
 }
 

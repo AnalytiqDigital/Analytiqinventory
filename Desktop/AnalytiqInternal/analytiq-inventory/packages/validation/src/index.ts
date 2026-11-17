@@ -50,8 +50,17 @@ function withLgaCheck<T extends z.ZodRawShape>(shape: T) {
     const rec = val as Record<string, unknown>;
     const state = rec.state as string | undefined;
     const lga = rec.lga as string | undefined;
-    if (typeof state === 'string' && typeof lga === 'string' && lga.length > 0 && !isValidLga(state, lga)) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['lga'], message: 'That LGA is not in the selected state' });
+    if (
+      typeof state === 'string' &&
+      typeof lga === 'string' &&
+      lga.length > 0 &&
+      !isValidLga(state, lga)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['lga'],
+        message: 'That LGA is not in the selected state',
+      });
     }
   });
 }
@@ -126,11 +135,11 @@ export const productSchema = z.object({
   sellingPriceKobo: koboAmountSchema.max(MAX_KOBO).default(0),
   reorderLevel: z.coerce.number().int().min(0).max(1_000_000_000).default(0),
   openingStock: z.coerce.number().int().min(0).max(1_000_000_000).default(0),
- // Holds either a short path or an inline data: URL of a downscaled photo
-// (renderer caps the source at 8 MB, and the stored JPEG is far smaller), so no
-// character cap is applied — SQLite TEXT is unbounded and this stays offline.
-imagePath: z.string().trim().max(4_000_000).default(''),
- taxCategoryId: z.string().trim().min(1).nullish(),
+  // Holds either a short path or an inline data: URL of a downscaled photo
+  // (renderer caps the source at 8 MB, and the stored JPEG is far smaller), so no
+  // character cap is applied — SQLite TEXT is unbounded and this stays offline.
+  imagePath: z.string().trim().max(4_000_000).default(''),
+  taxCategoryId: z.string().trim().min(1).nullish(),
 });
 
 export type ProductInput = z.infer<typeof productSchema>;
@@ -220,7 +229,8 @@ export const saleCreateSchema = z.object({
   headerDiscountKobo: koboAmountSchema.max(MAX_KOBO).default(0),
   taxKobo: koboAmountSchema.max(MAX_KOBO).nullish(),
   payments: z.array(salePaymentInputSchema).min(1, 'Add at least one payment').max(10),
- tableId: z.string().trim().min(1).nullish(),
+  tableId: z.string().trim().min(1).nullish(),
+  customerId: z.string().trim().min(1).nullish(),
 });
 
 export type SaleCreateInput = z.infer<typeof saleCreateSchema>;
@@ -244,9 +254,9 @@ export type SalesQuery = z.infer<typeof salesQuerySchema>;
 // --- Restaurant pack: tax categories, dining tables, product images -----------
 
 export const taxCategorySchema = z.object({
-name: z.string().trim().min(1, 'Tax category name is required').max(60),
-rateBps: z.coerce.number().int().min(0).max(10000),
-isDefault: z.coerce.boolean().default(false),
+  name: z.string().trim().min(1, 'Tax category name is required').max(60),
+  rateBps: z.coerce.number().int().min(0).max(10000),
+  isDefault: z.coerce.boolean().default(false),
 });
 
 export type TaxCategoryInput = z.infer<typeof taxCategorySchema>;
@@ -259,10 +269,10 @@ export const TABLE_STATUSES = ['free', 'occupied'] as const;
 export type TableStatus = (typeof TABLE_STATUSES)[number];
 
 export const tableSchema = z.object({
-locationId: z.string().trim().min(1).nullish(),
-name: z.string().trim().min(1, 'Table name is required').max(20),
-seats: z.coerce.number().int().min(1).max(50).default(4),
-note: z.string().trim().max(500).default(''),
+  locationId: z.string().trim().min(1).nullish(),
+  name: z.string().trim().min(1, 'Table name is required').max(20),
+  seats: z.coerce.number().int().min(1).max(50).default(4),
+  note: z.string().trim().max(500).default(''),
 });
 
 export type TableInput = z.infer<typeof tableSchema>;
@@ -272,15 +282,15 @@ export const tableUpdateSchema = tableSchema.partial();
 export type TableUpdateInput = z.infer<typeof tableUpdateSchema>;
 
 export const tableStatusSchema = z.object({
-status: z.enum(TABLE_STATUSES),
-note: z.string().trim().max(500).default(''),
+  status: z.enum(TABLE_STATUSES),
+  note: z.string().trim().max(500).default(''),
 });
 
 export type TableStatusInput = z.infer<typeof tableStatusSchema>;
 
 export const tablesQuerySchema = z.object({
-locationId: z.string().trim().min(1).nullish(),
-status: z.enum(TABLE_STATUSES).nullish(),
+  locationId: z.string().trim().min(1).nullish(),
+  status: z.enum(TABLE_STATUSES).nullish(),
 });
 
 export type TablesQuery = z.infer<typeof tablesQuerySchema>;
@@ -296,12 +306,12 @@ export const CORE_MODULES = ['pos', 'products', 'inventory', 'reports'] as const
 
 /** Optional modules that a business type can switch on. */
 export const OPTIONAL_MODULES = [
- 'tables',
- 'taxCategories',
- 'purchases',
- 'suppliers',
- 'customers',
- 'finance',
+  'tables',
+  'taxCategories',
+  'purchases',
+  'suppliers',
+  'customers',
+  'finance',
 ] as const;
 
 export type OptionalModule = (typeof OPTIONAL_MODULES)[number];
@@ -309,13 +319,13 @@ export type AppModule = (typeof CORE_MODULES)[number] | OptionalModule;
 
 /** What `businesses.type` grants out of the box. */
 const DEFAULT_MODULES: Record<BusinessType, OptionalModule[]> = {
- retail: ['taxCategories', 'purchases', 'suppliers', 'customers', 'finance'],
- supermarket: ['taxCategories', 'purchases', 'suppliers', 'customers', 'finance'],
- wholesale: ['taxCategories', 'purchases', 'suppliers', 'customers', 'finance'],
- restaurant: ['tables', 'taxCategories', 'purchases', 'suppliers', 'customers', 'finance'],
- pharmacy: ['taxCategories', 'purchases', 'suppliers', 'customers', 'finance'],
- services: ['taxCategories', 'purchases', 'customers', 'finance'],
- other: ['taxCategories', 'purchases', 'suppliers', 'customers', 'finance'],
+  retail: ['taxCategories', 'purchases', 'suppliers', 'customers', 'finance'],
+  supermarket: ['taxCategories', 'purchases', 'suppliers', 'customers', 'finance'],
+  wholesale: ['taxCategories', 'purchases', 'suppliers', 'customers', 'finance'],
+  restaurant: ['tables', 'taxCategories', 'purchases', 'suppliers', 'customers', 'finance'],
+  pharmacy: ['taxCategories', 'purchases', 'suppliers', 'customers', 'finance'],
+  services: ['taxCategories', 'purchases', 'customers', 'finance'],
+  other: ['taxCategories', 'purchases', 'suppliers', 'customers', 'finance'],
 };
 
 /**
@@ -324,19 +334,129 @@ const DEFAULT_MODULES: Record<BusinessType, OptionalModule[]> = {
  * `false` turns a default module off, `true` turns a non-default one on.
  */
 export function resolveModules(
- type: string,
- overrides: Partial<Record<string, boolean>> = {},
+  type: string,
+  overrides: Partial<Record<string, boolean>> = {}
 ): Set<AppModule> {
- const defaults = DEFAULT_MODULES[(type as BusinessType)] ?? DEFAULT_MODULES.other;
- const active = new Set<string>([...CORE_MODULES, ...defaults]);
- for (const [key, on] of Object.entries(overrides)) {
- if (on === true) active.add(key);
- if (on === false) active.delete(key);
- }
- return active as Set<AppModule>;
+  const defaults = DEFAULT_MODULES[type as BusinessType] ?? DEFAULT_MODULES.other;
+  const active = new Set<string>([...CORE_MODULES, ...defaults]);
+  for (const [key, on] of Object.entries(overrides)) {
+    if (on === true) active.add(key);
+    if (on === false) active.delete(key);
+  }
+  return active as Set<AppModule>;
 }
 
 /** Does this business type use the restaurant pack (tables, etc.)? */
 export function isRestaurant(type: string): boolean {
- return type === 'restaurant';
+  return type === 'restaurant';
 }
+
+// --- Batch 6: customers, suppliers, purchasing ------------------------------
+
+const optionalEmail = z
+  .string()
+  .trim()
+  .max(254)
+  .default('')
+  .refine((v) => v === '' || /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v), 'Enter a valid email address');
+
+const optionalPhone = z
+  .string()
+  .trim()
+  .max(20)
+  .default('')
+  .refine((v) => v === '' || /^[0-9+\-\s()]+$/.test(v), 'Phone number contains invalid characters');
+
+export const customerSchema = z.object({
+  name: z.string().trim().min(1, 'Customer name is required').max(120),
+  phone: optionalPhone,
+  email: optionalEmail,
+  address: z.string().trim().max(500).default(''),
+  note: z.string().trim().max(500).default(''),
+  creditLimitKobo: z.number().int().min(0).max(1_000_000_000_00).default(0),
+});
+
+export type CustomerInput = z.infer<typeof customerSchema>;
+
+export const customerUpdateSchema = customerSchema.partial().extend({
+  isActive: z.boolean().optional(),
+});
+
+export type CustomerUpdateInput = z.infer<typeof customerUpdateSchema>;
+
+export const customersQuerySchema = z.object({
+  search: z.string().trim().max(120).default(''),
+  includeInactive: z.boolean().default(false),
+  limit: z.number().int().min(1).max(200).default(50),
+  offset: z.number().int().min(0).default(0),
+});
+
+export type CustomersQuery = z.infer<typeof customersQuerySchema>;
+
+export const supplierSchema = z.object({
+  name: z.string().trim().min(1, 'Supplier name is required').max(120),
+  contactName: z.string().trim().max(120).default(''),
+  phone: optionalPhone,
+  email: optionalEmail,
+  address: z.string().trim().max(500).default(''),
+  note: z.string().trim().max(500).default(''),
+});
+
+export type SupplierInput = z.infer<typeof supplierSchema>;
+
+export const supplierUpdateSchema = supplierSchema.partial().extend({
+  isActive: z.boolean().optional(),
+});
+
+export type SupplierUpdateInput = z.infer<typeof supplierUpdateSchema>;
+
+export const suppliersQuerySchema = z.object({
+  search: z.string().trim().max(120).default(''),
+  includeInactive: z.boolean().default(false),
+  limit: z.number().int().min(1).max(200).default(50),
+  offset: z.number().int().min(0).default(0),
+});
+
+export type SuppliersQuery = z.infer<typeof suppliersQuerySchema>;
+
+export const PURCHASE_STATUSES = ['draft', 'received', 'cancelled'] as const;
+
+export const purchaseItemSchema = z.object({
+  productId: z.string().trim().min(1),
+  qty: z.number().int().min(1, 'Quantity must be at least 1').max(1_000_000),
+  unitCostKobo: z.number().int().min(0).max(1_000_000_000_00),
+});
+
+export type PurchaseItemInput = z.infer<typeof purchaseItemSchema>;
+
+export const purchaseCreateSchema = z.object({
+  supplierId: z.string().trim().min(1).nullish(),
+  locationId: z.string().trim().min(1).nullish(),
+  reference: z.string().trim().max(60).default(''),
+  note: z.string().trim().max(500).default(''),
+  taxKobo: z.number().int().min(0).max(1_000_000_000_00).default(0),
+  amountPaidKobo: z.number().int().min(0).max(1_000_000_000_00).default(0),
+  items: z.array(purchaseItemSchema).min(1, 'Add at least one item'),
+});
+
+export type PurchaseCreateInput = z.infer<typeof purchaseCreateSchema>;
+
+export const purchasesQuerySchema = z.object({
+  status: z.enum(PURCHASE_STATUSES).nullish(),
+  supplierId: z.string().trim().min(1).nullish(),
+  search: z.string().trim().max(120).default(''),
+  limit: z.number().int().min(1).max(200).default(50),
+  offset: z.number().int().min(0).default(0),
+});
+
+export type PurchasesQuery = z.infer<typeof purchasesQuerySchema>;
+
+export const customerPaymentSchema = z.object({
+  customerId: z.string().trim().min(1),
+  saleId: z.string().trim().min(1).nullish(),
+  amountKobo: z.number().int().min(1, 'Amount must be greater than zero').max(1_000_000_000_00),
+  method: z.enum(['cash', 'transfer', 'pos']).default('cash'),
+  reference: z.string().trim().max(120).default(''),
+});
+
+export type CustomerPaymentInput = z.infer<typeof customerPaymentSchema>;

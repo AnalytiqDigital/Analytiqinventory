@@ -1,5 +1,22 @@
 # Known Issues
 
+## Batch 6
+
+- `better-sqlite3` is compiled for Electron's ABI (125), so `vitest` under the
+  local Node 24 (ABI 137) fails with `NODE_MODULE_VERSION` on every database
+  test. Run the suite under Electron's Node
+  (`ELECTRON_RUN_AS_NODE=1 node_modules/electron/dist/electron.exe <vitest>`)
+  or rebuild the module for Node before testing, then rebuild for Electron
+  before packaging.
+- Purchase receiving only supports adding stock at the business default
+  location; there is no per-location purchase UI yet.
+- Customer payments cannot be allocated to a specific sale from the UI (the
+  service accepts an optional `saleId`); they settle the account balance as a
+  whole.
+- Stock purchased at a cost does not update a product's `cost_price_kobo`;
+  weighted-average costing arrives with reporting (Batch 9).
+- No partial receipt of a purchase: a draft is received in full or cancelled.
+
 ## Batch 4
 
 - Builds/tests unverified: shell execution blocked, so `bash

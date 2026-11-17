@@ -7,4 +7,7 @@ export * from './inventory';
 export * from './sales';
 export * from './taxCategories';
 export * from './tables';
+export * from './customers';
+export * from './suppliers';
+export * from './purchases';
 export * from './migrate';
