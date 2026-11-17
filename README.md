@@ -1,12 +1,14 @@
 # AnalytIQ Inventory & POS — Monorepo
 
 Inventory and Point of Sale application for Nigerian SMEs. Offline-first
-standalone desktop today; LAN and cloud services arrive in later batches.
+standalone desktop with a LAN server for multi-register shops; cloud services
+arrive in later batches.
 
-> Batch 6: products and stock ledger, POS (cash/transfer/POS/credit, split
-> tender), restaurant pack, customers and credit, suppliers, and purchasing.
-> Reporting, staff management, settings, backup, LAN, cloud sync and licensing
-> are scheduled in later batches — see `docs/DEVELOPMENT_ROADMAP.md`.
+> Batch 7: one primary computer hosts the SQLite database behind a Fastify +
+> Socket.IO LAN server; other computers run the same desktop app in client mode
+> and never open SQLite. Reporting, staff management, settings, cloud sync,
+> licensing, AI and release tooling remain in later batches — see
+> `docs/DEVELOPMENT_ROADMAP.md` and `docs/LAN_SETUP.md`.
 
 ## Structure
 
@@ -63,11 +65,15 @@ pnpm --filter @analytiq/website dev
 ### Testing note
 
 `better-sqlite3` is built for Electron's ABI in this workspace, so the database
-suite must run under Electron's Node:
+and LAN-server suites must run under Electron's Node:
 
 ```bash
 cd packages/database
 ELECTRON_RUN_AS_NODE=1 ../../apps/desktop/node_modules/electron/dist/electron.exe \
+  node_modules/vitest/vitest.mjs run
+
+cd apps/local-server
+ELECTRON_RUN_AS_NODE=1 ../desktop/node_modules/electron/dist/electron.exe \
   node_modules/vitest/vitest.mjs run
 ```
 

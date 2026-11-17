@@ -8,10 +8,18 @@ export interface SessionUser {
   businessType: string;
 }
 
+export interface RealtimeEvent {
+  type: string;
+  payload: unknown;
+}
+
 export interface AnalytiqApi {
   ping: () => Promise<string>;
   getVersion: () => Promise<string>;
   log: (level: 'info' | 'warn' | 'error', message: string) => Promise<void>;
+  /** LAN mode: subscribe to server pushes; no-op in primary mode. */
+  realtimeSubscribe: (callback: (event: RealtimeEvent) => void) => void;
+  realtimeUnsubscribe: () => void;
   authStatus: () => Promise<{ setupComplete: boolean; error?: string }>;
   authSetup: (input: unknown) => Promise<{ ok: boolean; error?: string; code?: string }>;
   authLogin: (input: unknown) => Promise<{

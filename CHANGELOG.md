@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.8.0 — Batch 7: LAN server and multi-computer
+
+- New LAN mode: the primary computer owns SQLite and runs the Fastify server;
+  other computers run the desktop app in client mode, where every IPC channel
+  is proxied to HTTP and SQLite is never opened. Mode is selected with
+  `ANALYTIQ_SERVER_URL` or a `server.json` beside the executable/userData.
+- REST surface mirroring IPC: setup and session (`/api/status`, `/api/setup`,
+  `/api/auth/*`), products and categories, stock levels/movements/adjust/count,
+  sales and refunds/voids, tax categories, tables, customers and credit
+  payments, suppliers, and purchasing. Same `{ ok, … }` envelopes and coded
+  errors; bearer sessions with server-side permission checks.
+- Socket.IO realtime scoped per business: `inventory.changed`, `sale.created`,
+  `sale.updated`, `customer.updated`, `table.updated`. Desktop clients
+  subscribe automatically (token in the handshake) and refetch mounted queries,
+  so a sale on one register updates the next.
+- Client sessions persist through Electron `safeStorage`; logout removes them.
+  Optional TLS via `ANALYTIQ_TLS_CERT`/`ANALYTIQ_TLS_KEY`.
+- Server build is CJS (`dist/index.js`) and links `@analytiq/database`; the
+  database and LAN suites run under Electron's Node ABI.
+- Tests: `server.test.ts` (8 tests) — setup/status idempotency, login/me/logout,
+  bad credentials, unauthenticated reads, product/stock/sale flow, credit
+  tender accounting, permission denial (cashier), coded 404s, health probe.
+  Docs: `docs/LAN_SETUP.md`.
+
 ## 0.7.0 — Batch 6: customers, suppliers, purchasing
 
 - Customers with credit limits and a derived balance: a sale marked *Credit

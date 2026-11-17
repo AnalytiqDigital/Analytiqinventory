@@ -5,6 +5,8 @@ function fallbackApi(): AnalytiqApi {
     ping: () => Promise.resolve('pong (browser fallback)'),
     getVersion: () => Promise.resolve('0.1.0-dev'),
     log: () => Promise.resolve(),
+    realtimeSubscribe: () => undefined,
+    realtimeUnsubscribe: () => undefined,
     authStatus: () => Promise.resolve({ setupComplete: true }),
     authSetup: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
     authLogin: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),

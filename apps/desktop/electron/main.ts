@@ -49,7 +49,9 @@ import {
   type LocalDb,
 } from '@analytiq/database';
 import path from 'node:path';
+import { readFileSync } from 'node:fs';
 import log from 'electron-log';
+import { registerLanClient } from './lanClient';
 
 log.initialize();
 log.transports.file.level = 'info';
@@ -124,62 +126,64 @@ ipcMain.handle('app:log', (_event, level: unknown, message: unknown) => {
   else log.info(`[renderer] ${message}`);
 });
 
-ipcMain.handle('auth:status', async () => {
-  try {
-    const db = await ensureDb();
-    return { setupComplete: !(await isFirstRun(db)) };
-  } catch (err: unknown) {
-    return { ...safeError(err), setupComplete: false };
-  }
-});
-
-ipcMain.handle('auth:setup', async (_event, input: unknown) => {
-  try {
-    const db = await ensureDb();
-    const result = await runSetup(db, input);
-    log.info(`First-run setup completed for business ${result.businessId}`);
-    return { ok: true, ...result };
-  } catch (err: unknown) {
-    return { ok: false, ...safeError(err) };
-  }
-});
-
-ipcMain.handle('auth:login', async (_event, input: unknown) => {
-  try {
-    const db = await ensureDb();
-    const result = await login(db, input);
-    currentToken = result.token;
-    return { ok: true, user: result.user, expiresAt: result.expiresAt.toISOString() };
-  } catch (err: unknown) {
-    return { ok: false, ...safeError(err) };
-  }
-});
-
-ipcMain.handle('auth:logout', async () => {
-  try {
-    if (currentToken) {
+function localAuthHandlers(): void {
+  ipcMain.handle('auth:status', async () => {
+    try {
       const db = await ensureDb();
-      await logout(db, currentToken);
-      currentToken = null;
+      return { setupComplete: !(await isFirstRun(db)) };
+    } catch (err: unknown) {
+      return { ...safeError(err), setupComplete: false };
     }
-    return { ok: true };
-  } catch (err: unknown) {
-    return { ok: false, ...safeError(err) };
-  }
-});
+  });
 
-ipcMain.handle('auth:me', async () => {
-  try {
-    if (!currentToken) return { user: null };
-    const db = await ensureDb();
-    const user = await authenticate(db, currentToken);
-    return { user };
-  } catch (err: unknown) {
-    return { ...safeError(err), user: null };
-  }
-});
+  ipcMain.handle('auth:setup', async (_event, input: unknown) => {
+    try {
+      const db = await ensureDb();
+      const result = await runSetup(db, input);
+      log.info(`First-run setup completed for business ${result.businessId}`);
+      return { ok: true, ...result };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
 
-ipcMain.handle('auth:can-safestore', () => safeStorage.isEncryptionAvailable());
+  ipcMain.handle('auth:login', async (_event, input: unknown) => {
+    try {
+      const db = await ensureDb();
+      const result = await login(db, input);
+      currentToken = result.token;
+      return { ok: true, user: result.user, expiresAt: result.expiresAt.toISOString() };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
+
+  ipcMain.handle('auth:logout', async () => {
+    try {
+      if (currentToken) {
+        const db = await ensureDb();
+        await logout(db, currentToken);
+        currentToken = null;
+      }
+      return { ok: true };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
+
+  ipcMain.handle('auth:me', async () => {
+    try {
+      if (!currentToken) return { user: null };
+      const db = await ensureDb();
+      const user = await authenticate(db, currentToken);
+      return { user };
+    } catch (err: unknown) {
+      return { ...safeError(err), user: null };
+    }
+  });
+
+  ipcMain.handle('auth:can-safestore', () => safeStorage.isEncryptionAvailable());
+}
 
 // --- Batch 4: products + inventory. Every write is validated with Zod in the
 // service layer and requires the caller's session permissions; reads need an
@@ -648,13 +652,43 @@ function inventoryHandlers(): void {
   });
 }
 
-inventoryHandlers();
+// Client mode is configured per install: ANALYTIQ_SERVER_URL wins, then
+// `server.json` ({ "serverUrl": "http://192.168.1.10:3001" }) beside the
+// executable or in the userData folder. Without any of these, the app runs as
+// the primary with its embedded SQLite file.
+function resolveLanServerUrl(): string | null {
+  const fromEnv = process.env.ANALYTIQ_SERVER_URL?.trim();
+  if (fromEnv) return fromEnv.replace(/\/+$/, '');
+  const candidates = [
+    path.join(path.dirname(app.getPath('exe')), 'server.json'),
+    path.join(app.getPath('userData'), 'server.json'),
+  ];
+  for (const configPath of candidates) {
+    try {
+      const parsed = JSON.parse(readFileSync(configPath, 'utf8')) as { serverUrl?: unknown };
+      if (typeof parsed.serverUrl === 'string' && parsed.serverUrl.trim().length > 0) {
+        return parsed.serverUrl.trim().replace(/\/+$/, '');
+      }
+    } catch {
+      // Missing or malformed config at this location; try the next one.
+    }
+  }
+  return null;
+}
 
 void app.whenReady().then(async () => {
-  try {
-    await ensureDb();
-  } catch (err: unknown) {
-    log.error(`Database init failed: ${err instanceof Error ? err.message : String(err)}`);
+  const lanServerUrl = resolveLanServerUrl();
+  if (lanServerUrl) {
+    log.info(`LAN client mode: ${lanServerUrl}`);
+    registerLanClient(lanServerUrl);
+  } else {
+    try {
+      await ensureDb();
+    } catch (err: unknown) {
+      log.error(`Database init failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    localAuthHandlers();
+    inventoryHandlers();
   }
   createWindow();
   app.on('activate', () => {
