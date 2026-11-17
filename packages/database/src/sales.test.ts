@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { closeLocalDb, openLocalDb, type LocalDb } from './connection';
+import { createCustomer } from './customers';
 import { createProduct, getProduct } from './inventory';
 import { runMigrations } from './migrate';
 import { createSale, getSale, listSales, refundSale, voidSale } from './sales';
@@ -15,6 +16,7 @@ const GRANTS = [
   'sales.create',
   'sales.refund',
   'sales.view',
+  'customers.manage',
 ];
 
 function setupInput() {
@@ -111,27 +113,34 @@ describe('batch 5 POS + cash register', () => {
       createSale(local, businessId, userId, GRANTS, {
         items: [{ productId, qty: 1 }],
         payments: [{ method: 'cash', amountKobo: 100 }],
-      }),
+      })
     ).rejects.toMatchObject({ code: 'INSUFFICIENT_PAYMENT' });
 
     await expect(
       createSale(local, businessId, userId, GRANTS, {
         items: [{ productId, qty: 1000 }],
         payments: [{ method: 'cash', amountKobo: 999_999_999 }],
-      }),
+      })
     ).rejects.toMatchObject({ code: 'NEGATIVE_STOCK' });
   });
 
   it('requires exact payment for credit sales', async () => {
+    // Batch 6: credit needs a customer to owe the money.
+    const { id: customerId } = await createCustomer(local, businessId, userId, GRANTS, {
+      name: 'Ada Obi',
+    });
+
     await expect(
       createSale(local, businessId, userId, GRANTS, {
         items: [{ productId, qty: 1 }],
+        customerId,
         payments: [{ method: 'credit', amountKobo: 99999 }],
-      }),
+      })
     ).rejects.toMatchObject({ code: 'CREDIT_MUST_MATCH' });
 
     const res = await createSale(local, businessId, userId, GRANTS, {
       items: [{ productId, qty: 1 }],
+      customerId,
       payments: [{ method: 'credit', amountKobo: 48375 }],
     });
     expect(res.changeKobo).toBe(0);
@@ -152,7 +161,7 @@ describe('batch 5 POS + cash register', () => {
     expect(sale.reversal?.reason).toBe('Customer return');
 
     await expect(
-      refundSale(local, businessId, userId, GRANTS, res.id, { reason: 'Again' }),
+      refundSale(local, businessId, userId, GRANTS, res.id, { reason: 'Again' })
     ).rejects.toMatchObject({ code: 'ALREADY_REVERSED' });
   });
 
@@ -175,7 +184,7 @@ describe('batch 5 POS + cash register', () => {
       createSale(local, businessId, userId, [], {
         items: [{ productId, qty: 1 }],
         payments: [{ method: 'cash', amountKobo: 50000 }],
-      }),
+      })
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
 });

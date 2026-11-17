@@ -62,7 +62,7 @@ export const users = sqliteTable(
   },
   (t) => ({
     usersBusinessEmailUnique: uniqueIndex('users_business_email_unique').on(t.businessId, t.email),
-  }),
+  })
 );
 
 export type User = typeof users.$inferSelect;
@@ -171,8 +171,11 @@ export const categories = sqliteTable(
     ...timestamps(),
   },
   (t) => ({
-    categoriesBusinessNameUnique: uniqueIndex('categories_business_name_unique').on(t.businessId, t.name),
-  }),
+    categoriesBusinessNameUnique: uniqueIndex('categories_business_name_unique').on(
+      t.businessId,
+      t.name
+    ),
+  })
 );
 
 export type Category = typeof categories.$inferSelect;
@@ -192,8 +195,8 @@ export const products = sqliteTable(
     costPriceKobo: integer('cost_price_kobo').notNull().default(0),
     sellingPriceKobo: integer('selling_price_kobo').notNull().default(0),
     reorderLevel: integer('reorder_level').notNull().default(0),
-imagePath: text('image_path').notNull().default(''),
-taxCategoryId: text('tax_category_id').references(() => taxCategories.id),
+    imagePath: text('image_path').notNull().default(''),
+    taxCategoryId: text('tax_category_id').references(() => taxCategories.id),
     isActive: integer('is_active').notNull().default(1),
     version: integer('version').notNull().default(1),
     ...timestamps(),
@@ -202,11 +205,11 @@ taxCategoryId: text('tax_category_id').references(() => taxCategories.id),
     productsBusinessSkuUnique: uniqueIndex('products_business_sku_unique').on(t.businessId, t.sku),
     productsBusinessBarcodeUnique: uniqueIndex('products_business_barcode_unique').on(
       t.businessId,
-      t.barcode,
+      t.barcode
     ),
     productsBusinessNameIdx: index('products_business_name_idx').on(t.businessId, t.name),
     productsCategoryIdx: index('products_category_idx').on(t.categoryId),
-  }),
+  })
 );
 
 export type Product = typeof products.$inferSelect;
@@ -217,24 +220,24 @@ export type Product = typeof products.$inferSelect;
 // default rate, so pre-existing products and tests are unaffected.
 
 export const taxCategories = sqliteTable(
- 'tax_categories',
- {
- id: text('id').primaryKey(),
- businessId: text('business_id')
- .notNull()
- .references(() => businesses.id),
- name: text('name').notNull(),
- rateBps: integer('rate_bps').notNull().default(0),
- isDefault: integer('is_default').notNull().default(0),
- version: integer('version').notNull().default(1),
- ...timestamps(),
- },
- (t) => ({
- taxCategoriesBusinessNameUnique: uniqueIndex('tax_categories_business_name_unique').on(
- t.businessId,
- t.name,
- ),
- }),
+  'tax_categories',
+  {
+    id: text('id').primaryKey(),
+    businessId: text('business_id')
+      .notNull()
+      .references(() => businesses.id),
+    name: text('name').notNull(),
+    rateBps: integer('rate_bps').notNull().default(0),
+    isDefault: integer('is_default').notNull().default(0),
+    version: integer('version').notNull().default(1),
+    ...timestamps(),
+  },
+  (t) => ({
+    taxCategoriesBusinessNameUnique: uniqueIndex('tax_categories_business_name_unique').on(
+      t.businessId,
+      t.name
+    ),
+  })
 );
 
 export type TaxCategory = typeof taxCategories.$inferSelect;
@@ -261,10 +264,13 @@ export const stockMovements = sqliteTable(
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
   },
   (t) => ({
-    movementsBusinessProductIdx: index('movements_business_product_idx').on(t.businessId, t.productId),
+    movementsBusinessProductIdx: index('movements_business_product_idx').on(
+      t.businessId,
+      t.productId
+    ),
     movementsLocationIdx: index('movements_location_idx').on(t.locationId),
     movementsCreatedIdx: index('movements_created_idx').on(t.createdAt),
-  }),
+  })
 );
 
 export type StockMovement = typeof stockMovements.$inferSelect;
@@ -280,113 +286,117 @@ export type StockMovement = typeof stockMovements.$inferSelect;
 // flipped in the same transaction as saleCreate, released on completion.
 
 export const diningTables = sqliteTable(
-'dining_tables',
-{
-id: text('id').primaryKey(),
-businessId: text('business_id')
-.notNull()
-.references(() => businesses.id),
-locationId: text('location_id')
-.notNull()
-.references(() => locations.id),
-name: text('name').notNull(),
-seats: integer('seats').notNull().default(4),
-status: text('status').notNull().default('free'),
-note: text('note').notNull().default(''),
-version: integer('version').notNull().default(1),
-...timestamps(),
-},
-(t) => ({
-diningTablesLocationNameUnique: uniqueIndex('dining_tables_location_name_unique').on(
-t.locationId,
-t.name,
-),
-}),
+  'dining_tables',
+  {
+    id: text('id').primaryKey(),
+    businessId: text('business_id')
+      .notNull()
+      .references(() => businesses.id),
+    locationId: text('location_id')
+      .notNull()
+      .references(() => locations.id),
+    name: text('name').notNull(),
+    seats: integer('seats').notNull().default(4),
+    status: text('status').notNull().default('free'),
+    note: text('note').notNull().default(''),
+    version: integer('version').notNull().default(1),
+    ...timestamps(),
+  },
+  (t) => ({
+    diningTablesLocationNameUnique: uniqueIndex('dining_tables_location_name_unique').on(
+      t.locationId,
+      t.name
+    ),
+  })
 );
 
 export type DiningTable = typeof diningTables.$inferSelect;
 
 export const sales = sqliteTable(
- 'sales',
- {
- id: text('id').primaryKey(),
- businessId: text('business_id')
- .notNull()
- .references(() => businesses.id),
- locationId: text('location_id')
- .notNull()
- .references(() => locations.id),
- receiptNo: text('receipt_no').notNull(),
- cashierId: text('cashier_id').references(() => users.id),
- status: text('status').notNull().default('completed'),
- subtotalKobo: integer('subtotal_kobo').notNull().default(0),
- lineDiscountKobo: integer('line_discount_kobo').notNull().default(0),
- headerDiscountKobo: integer('header_discount_kobo').notNull().default(0),
- taxKobo: integer('tax_kobo').notNull().default(0),
- totalKobo: integer('total_kobo').notNull().default(0),
- amountPaidKobo: integer('amount_paid_kobo').notNull().default(0),
- changeKobo: integer('change_kobo').notNull().default(0),
-tableId: text('table_id').references(() => diningTables.id),
- version: integer('version').notNull().default(1),
- ...timestamps(),
- },
- (t) => ({
- salesBusinessReceiptUnique: uniqueIndex('sales_business_receipt_unique').on(t.businessId, t.receiptNo),
- salesBusinessCreatedIdx: index('sales_business_created_idx').on(t.businessId, t.createdAt),
- salesLocationIdx: index('sales_location_idx').on(t.locationId),
- }),
+  'sales',
+  {
+    id: text('id').primaryKey(),
+    businessId: text('business_id')
+      .notNull()
+      .references(() => businesses.id),
+    locationId: text('location_id')
+      .notNull()
+      .references(() => locations.id),
+    receiptNo: text('receipt_no').notNull(),
+    cashierId: text('cashier_id').references(() => users.id),
+    status: text('status').notNull().default('completed'),
+    subtotalKobo: integer('subtotal_kobo').notNull().default(0),
+    lineDiscountKobo: integer('line_discount_kobo').notNull().default(0),
+    headerDiscountKobo: integer('header_discount_kobo').notNull().default(0),
+    taxKobo: integer('tax_kobo').notNull().default(0),
+    totalKobo: integer('total_kobo').notNull().default(0),
+    amountPaidKobo: integer('amount_paid_kobo').notNull().default(0),
+    changeKobo: integer('change_kobo').notNull().default(0),
+    tableId: text('table_id').references(() => diningTables.id),
+    customerId: text('customer_id').references(() => customers.id),
+    version: integer('version').notNull().default(1),
+    ...timestamps(),
+  },
+  (t) => ({
+    salesBusinessReceiptUnique: uniqueIndex('sales_business_receipt_unique').on(
+      t.businessId,
+      t.receiptNo
+    ),
+    salesBusinessCreatedIdx: index('sales_business_created_idx').on(t.businessId, t.createdAt),
+    salesLocationIdx: index('sales_location_idx').on(t.locationId),
+  })
 );
 
 export type Sale = typeof sales.$inferSelect;
 
 export const saleItems = sqliteTable(
- 'sale_items',
- {
- id: text('id').primaryKey(),
- saleId: text('sale_id')
- .notNull()
- .references(() => sales.id),
- productId: text('product_id')
- .notNull()
- .references(() => products.id),
- qty: integer('qty').notNull(),
- unitPriceKobo: integer('unit_price_kobo').notNull(),
- lineDiscountKobo: integer('line_discount_kobo').notNull().default(0),
- lineTotalKobo: integer('line_total_kobo').notNull(),
- },
- (t) => ({
- saleItemsSaleIdx: index('sale_items_sale_idx').on(t.saleId),
- }),
+  'sale_items',
+  {
+    id: text('id').primaryKey(),
+    saleId: text('sale_id')
+      .notNull()
+      .references(() => sales.id),
+    productId: text('product_id')
+      .notNull()
+      .references(() => products.id),
+    qty: integer('qty').notNull(),
+    unitPriceKobo: integer('unit_price_kobo').notNull(),
+    lineDiscountKobo: integer('line_discount_kobo').notNull().default(0),
+    lineTotalKobo: integer('line_total_kobo').notNull(),
+  },
+  (t) => ({
+    saleItemsSaleIdx: index('sale_items_sale_idx').on(t.saleId),
+  })
 );
 
 export type SaleItem = typeof saleItems.$inferSelect;
 
 export const salePayments = sqliteTable(
- 'sale_payments',
- {
- id: text('id').primaryKey(),
- saleId: text('sale_id')
- .notNull()
- .references(() => sales.id),
- method: text('method').notNull(),
- amountKobo: integer('amount_kobo').notNull(),
- reference: text('reference').notNull().default(''),
- },
- (t) => ({
- salePaymentsSaleIdx: index('sale_payments_sale_idx').on(t.saleId),
- }),
+  'sale_payments',
+  {
+    id: text('id').primaryKey(),
+    saleId: text('sale_id')
+      .notNull()
+      .references(() => sales.id),
+    method: text('method').notNull(),
+    amountKobo: integer('amount_kobo').notNull(),
+    reference: text('reference').notNull().default(''),
+  },
+  (t) => ({
+    salePaymentsSaleIdx: index('sale_payments_sale_idx').on(t.saleId),
+  })
 );
 
 export type SalePayment = typeof salePayments.$inferSelect;
 
 export const saleReversals = sqliteTable('sale_reversals', {
- id: text('id').primaryKey(),
- saleId: text('sale_id')
- .notNull()
- .references(() => sales.id),
- reason: text('reason').notNull(),
- reversedBy: text('reversed_by').references(() => users.id),
- createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  id: text('id').primaryKey(),
+  saleId: text('sale_id')
+    .notNull()
+    .references(() => sales.id),
+  reason: text('reason').notNull(),
+  reversedBy: text('reversed_by').references(() => users.id),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
 });
 
 export type SaleReversal = typeof saleReversals.$inferSelect;
@@ -399,6 +409,154 @@ export const appSettings = sqliteTable('app_settings', {
   value: text('value').notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
 });
+
+// --- Batch 6: customers, suppliers, purchasing ------------------------------
+// Customers exist for credit sales and receipts. Walk-in sales stay
+// customer-less (sales.customer_id NULL), so nothing here is required to sell.
+// A customer's balance is DERIVED (credit sales minus payments), never stored,
+// so it can never drift out of sync with the ledger.
+//
+// Purchases are two-phase: created as `draft`, then `received` (which appends
+// `purchase` rows to stock_movements and refreshes product cost price) or
+// `cancelled`. Receiving is idempotent-guarded: only a draft can be received.
+
+export const customers = sqliteTable(
+  'customers',
+  {
+    id: text('id').primaryKey(),
+    businessId: text('business_id')
+      .notNull()
+      .references(() => businesses.id),
+    name: text('name').notNull(),
+    phone: text('phone').notNull().default(''),
+    email: text('email').notNull().default(''),
+    address: text('address').notNull().default(''),
+    note: text('note').notNull().default(''),
+    creditLimitKobo: integer('credit_limit_kobo').notNull().default(0),
+    isActive: integer('is_active').notNull().default(1),
+    version: integer('version').notNull().default(1),
+    ...timestamps(),
+  },
+  (t) => ({
+    customersBusinessNameIdx: index('customers_business_name_idx').on(t.businessId, t.name),
+    customersBusinessPhoneIdx: index('customers_business_phone_idx').on(t.businessId, t.phone),
+  })
+);
+
+export type Customer = typeof customers.$inferSelect;
+
+export const suppliers = sqliteTable(
+  'suppliers',
+  {
+    id: text('id').primaryKey(),
+    businessId: text('business_id')
+      .notNull()
+      .references(() => businesses.id),
+    name: text('name').notNull(),
+    contactName: text('contact_name').notNull().default(''),
+    phone: text('phone').notNull().default(''),
+    email: text('email').notNull().default(''),
+    address: text('address').notNull().default(''),
+    note: text('note').notNull().default(''),
+    isActive: integer('is_active').notNull().default(1),
+    version: integer('version').notNull().default(1),
+    ...timestamps(),
+  },
+  (t) => ({
+    suppliersBusinessNameIdx: index('suppliers_business_name_idx').on(t.businessId, t.name),
+  })
+);
+
+export type Supplier = typeof suppliers.$inferSelect;
+
+export const purchases = sqliteTable(
+  'purchases',
+  {
+    id: text('id').primaryKey(),
+    businessId: text('business_id')
+      .notNull()
+      .references(() => businesses.id),
+    locationId: text('location_id')
+      .notNull()
+      .references(() => locations.id),
+    supplierId: text('supplier_id').references(() => suppliers.id),
+    reference: text('reference').notNull(),
+    status: text('status').notNull().default('draft'),
+    subtotalKobo: integer('subtotal_kobo').notNull().default(0),
+    taxKobo: integer('tax_kobo').notNull().default(0),
+    totalKobo: integer('total_kobo').notNull().default(0),
+    amountPaidKobo: integer('amount_paid_kobo').notNull().default(0),
+    note: text('note').notNull().default(''),
+    receivedBy: text('received_by').references(() => users.id),
+    receivedAt: integer('received_at', { mode: 'timestamp' }),
+    version: integer('version').notNull().default(1),
+    ...timestamps(),
+  },
+  (t) => ({
+    purchasesBusinessRefUnique: uniqueIndex('purchases_business_ref_unique').on(
+      t.businessId,
+      t.reference
+    ),
+    purchasesBusinessCreatedIdx: index('purchases_business_created_idx').on(
+      t.businessId,
+      t.createdAt
+    ),
+    purchasesSupplierIdx: index('purchases_supplier_idx').on(t.supplierId),
+  })
+);
+
+export type Purchase = typeof purchases.$inferSelect;
+
+export const purchaseItems = sqliteTable(
+  'purchase_items',
+  {
+    id: text('id').primaryKey(),
+    purchaseId: text('purchase_id')
+      .notNull()
+      .references(() => purchases.id),
+    productId: text('product_id')
+      .notNull()
+      .references(() => products.id),
+    qty: integer('qty').notNull(),
+    unitCostKobo: integer('unit_cost_kobo').notNull(),
+    lineTotalKobo: integer('line_total_kobo').notNull(),
+  },
+  (t) => ({
+    purchaseItemsPurchaseIdx: index('purchase_items_purchase_idx').on(t.purchaseId),
+  })
+);
+
+export type PurchaseItem = typeof purchaseItems.$inferSelect;
+
+// Money received against a customer's credit. saleId is set when the payment
+// settles a specific sale, NULL for a general account payment.
+export const customerPayments = sqliteTable(
+  'customer_payments',
+  {
+    id: text('id').primaryKey(),
+    businessId: text('business_id')
+      .notNull()
+      .references(() => businesses.id),
+    customerId: text('customer_id')
+      .notNull()
+      .references(() => customers.id),
+    saleId: text('sale_id').references(() => sales.id),
+    amountKobo: integer('amount_kobo').notNull(),
+    method: text('method').notNull().default('cash'),
+    reference: text('reference').notNull().default(''),
+    userId: text('user_id').references(() => users.id),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  },
+  (t) => ({
+    customerPaymentsCustomerIdx: index('customer_payments_customer_idx').on(t.customerId),
+    customerPaymentsBusinessCreatedIdx: index('customer_payments_business_created_idx').on(
+      t.businessId,
+      t.createdAt
+    ),
+  })
+);
+
+export type CustomerPayment = typeof customerPayments.$inferSelect;
 
 export const schemaMeta = sqliteTable('schema_meta', {
   key: text('key').primaryKey(),

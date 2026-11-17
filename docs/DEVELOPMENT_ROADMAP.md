@@ -6,7 +6,7 @@
 - [x] Batch 4: Products + inventory ledger (scaffold, unverified builds).
 - [x] Batch 5: POS + cash register (plus restaurant pack: tables, product
       photos, named tax categories, barcode).
-- [ ] Batch 6: Customers, suppliers, purchasing.
+- [x] Batch 6: Customers, suppliers, purchasing.
 - [ ] Batch 7: LAN server + multi-computer.
 - [ ] Batch 8: Cloud sync + multi-location.
 - [ ] Batch 9: Reporting + BI.

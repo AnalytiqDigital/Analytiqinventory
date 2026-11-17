@@ -1,11 +1,12 @@
 # AnalytIQ Inventory & POS — Monorepo
 
-Commercial-grade inventory and Point of Sale application for Nigerian SMEs.
-Offline-first, standalone + LAN modes, optional cloud services.
+Inventory and Point of Sale application for Nigerian SMEs. Offline-first
+standalone desktop today; LAN and cloud services arrive in later batches.
 
-> Batch 4: Products + inventory ledger implemented (unverified builds — run a
-> verify script locally). Auth/setup (Batch 3) and desktop shell (Batch 2)
-> in place. POS sales flow arrives in Batch 5.
+> Batch 6: products and stock ledger, POS (cash/transfer/POS/credit, split
+> tender), restaurant pack, customers and credit, suppliers, and purchasing.
+> Reporting, staff management, settings, backup, LAN, cloud sync and licensing
+> are scheduled in later batches — see `docs/DEVELOPMENT_ROADMAP.md`.
 
 ## Structure
 
@@ -58,6 +59,19 @@ pnpm --filter @analytiq/local-server dev
 pnpm --filter @analytiq/cloud-api dev
 pnpm --filter @analytiq/website dev
 ```
+
+### Testing note
+
+`better-sqlite3` is built for Electron's ABI in this workspace, so the database
+suite must run under Electron's Node:
+
+```bash
+cd packages/database
+ELECTRON_RUN_AS_NODE=1 ../../apps/desktop/node_modules/electron/dist/electron.exe \
+  node_modules/vitest/vitest.mjs run
+```
+
+The validation and desktop suites run under normal Node with `pnpm test`.
 
 ## Rules (abridged)
 

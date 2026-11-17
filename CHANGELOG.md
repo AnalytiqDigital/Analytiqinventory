@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.7.0 — Batch 6: customers, suppliers, purchasing
+
+- Customers with credit limits and a derived balance: a sale marked *Credit
+  (pay later)* puts the bill on the customer's account, the limit is checked
+  before the sale is written, and part-cash/part-credit works by splitting the
+  tender. Payments recorded against the account reduce the balance; a customer
+  who still owes cannot be archived.
+- Suppliers contact book, and a purchase ledger: purchases are recorded as
+  drafts, and *Receive* is the only thing that moves stock — one movement per
+  line, in a single transaction, refused on a second receive.
+- Desktop: new Customers, Suppliers and Purchases pages (search, filters,
+  expandable purchase lines, multi-line item editor); POS gains a customer
+  selector that unlocks the credit tender and a "put remaining on credit"
+  shortcut; sale views carry the customer name.
+- Upgrades: migration 0007 grants the three new permissions to existing
+  Administrator and Manager roles, and customer balances now count credit
+  tenders only, so a paid sale to a named customer is not treated as debt.
+- Tests: `batch6.test.ts` covering customer CRUD and validation, credit limits
+  and settlement, split tender, the permission backfill, suppliers, and the
+  purchase lifecycle.
+
 ## 0.6.0 — Restaurant pack: tables, product photos, tax categories, barcode
 
 - Named tax categories (Food 7.5%, Alcohol 10%, Exempt 0%) in basis points,

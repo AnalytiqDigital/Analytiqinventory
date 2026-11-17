@@ -1,7 +1,22 @@
 import { app, BrowserWindow, ipcMain, safeStorage } from 'electron';
 import {
   adjustStock,
+  archiveCustomer,
   archiveProduct,
+  archiveSupplier,
+  cancelPurchase,
+  createCustomer,
+  createPurchase,
+  createSupplier,
+  getCustomer,
+  listCustomerPayments,
+  listCustomers,
+  listPurchases,
+  listSuppliers,
+  receivePurchase,
+  recordCustomerPayment,
+  updateCustomer,
+  updateSupplier,
   authenticate,
   countStock,
   createCategory,
@@ -169,11 +184,15 @@ ipcMain.handle('auth:can-safestore', () => safeStorage.isEncryptionAvailable());
 // --- Batch 4: products + inventory. Every write is validated with Zod in the
 // service layer and requires the caller's session permissions; reads need an
 // authenticated session. The renderer never touches the DB file.
-async function requireUser(): Promise<{ db: LocalDb; user: { id: string; businessId: string; permissions: string[] } }> {
+async function requireUser(): Promise<{
+  db: LocalDb;
+  user: { id: string; businessId: string; permissions: string[] };
+}> {
   if (!currentToken) throw Object.assign(new Error('Not signed in'), { code: 'UNAUTHENTICATED' });
   const db = await ensureDb();
   const user = await authenticate(db, currentToken);
-  if (!user) throw Object.assign(new Error('Session expired — sign in again'), { code: 'UNAUTHENTICATED' });
+  if (!user)
+    throw Object.assign(new Error('Session expired — sign in again'), { code: 'UNAUTHENTICATED' });
   return { db, user };
 }
 
@@ -357,94 +376,276 @@ function inventoryHandlers(): void {
       return { ok: false, ...safeError(err) };
     }
   });
- // --- Restaurant pack: tax categories + dining tables. Same session-gated,
- // permission-checked pattern as above.
- ipcMain.handle('inventory:tax-categories', async () => {
- try {
- const { db, user } = await requireUser();
- const seeded = await ensureDefaultTaxCategory(db, user.businessId);
- const items = await listTaxCategories(db, user.businessId);
- return { ok: true, items, defaultId: seeded.id };
- } catch (err: unknown) {
- return { ok: false, ...safeError(err), items: [] };
- }
- });
+  // --- Restaurant pack: tax categories + dining tables. Same session-gated,
+  // permission-checked pattern as above.
+  ipcMain.handle('inventory:tax-categories', async () => {
+    try {
+      const { db, user } = await requireUser();
+      const seeded = await ensureDefaultTaxCategory(db, user.businessId);
+      const items = await listTaxCategories(db, user.businessId);
+      return { ok: true, items, defaultId: seeded.id };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err), items: [] };
+    }
+  });
 
- ipcMain.handle('inventory:tax-category-create', async (_event, input: unknown) => {
- try {
- const { db, user } = await requireUser();
- const category = await createTaxCategory(db, user.businessId, user.id, user.permissions, input);
- return { ok: true, category };
- } catch (err: unknown) {
- return { ok: false, ...safeError(err) };
- }
- });
+  ipcMain.handle('inventory:tax-category-create', async (_event, input: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      const category = await createTaxCategory(
+        db,
+        user.businessId,
+        user.id,
+        user.permissions,
+        input
+      );
+      return { ok: true, category };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
 
- ipcMain.handle('inventory:tax-category-update', async (_event, payload: unknown) => {
- try {
- const { db, user } = await requireUser();
- const { id, patch } = payload as { id: string; patch: unknown };
- if (typeof id !== 'string' || id.length === 0) throw new Error('Tax category id is required');
- const category = await updateTaxCategory(db, user.businessId, user.id, user.permissions, id, patch);
- return { ok: true, category };
- } catch (err: unknown) {
- return { ok: false, ...safeError(err) };
- }
- });
+  ipcMain.handle('inventory:tax-category-update', async (_event, payload: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      const { id, patch } = payload as { id: string; patch: unknown };
+      if (typeof id !== 'string' || id.length === 0) throw new Error('Tax category id is required');
+      const category = await updateTaxCategory(
+        db,
+        user.businessId,
+        user.id,
+        user.permissions,
+        id,
+        patch
+      );
+      return { ok: true, category };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
 
- ipcMain.handle('tables:list', async (_event, query: unknown) => {
- try {
- const { db, user } = await requireUser();
- return { ok: true, items: await listTables(db, user.businessId, query ?? {}) };
- } catch (err: unknown) {
- return { ok: false, ...safeError(err), items: [] };
- }
- });
+  // --- Batch 6: customers, suppliers, purchasing ---
+  ipcMain.handle('customers:list', async (_event, query: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      const result = await listCustomers(db, user.businessId, query ?? {});
+      return { ok: true, ...result };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err), items: [], total: 0 };
+    }
+  });
 
- ipcMain.handle('tables:create', async (_event, input: unknown) => {
- try {
- const { db, user } = await requireUser();
- const table = await createTable(db, user.businessId, user.id, user.permissions, input);
- return { ok: true, table };
- } catch (err: unknown) {
- return { ok: false, ...safeError(err) };
- }
- });
+  ipcMain.handle('customers:get', async (_event, id: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      if (typeof id !== 'string' || id.length === 0) throw new Error('Customer id is required');
+      const customer = await getCustomer(db, user.businessId, id);
+      return { ok: true, customer };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
 
- ipcMain.handle('tables:update', async (_event, payload: unknown) => {
- try {
- const { db, user } = await requireUser();
- const { id, patch } = payload as { id: string; patch: unknown };
- if (typeof id !== 'string' || id.length === 0) throw new Error('Table id is required');
- const table = await updateTable(db, user.businessId, user.id, user.permissions, id, patch);
- return { ok: true, table };
- } catch (err: unknown) {
- return { ok: false, ...safeError(err) };
- }
- });
+  ipcMain.handle('customers:create', async (_event, input: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      const result = await createCustomer(db, user.businessId, user.id, user.permissions, input);
+      return { ok: true, ...result };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
 
- ipcMain.handle('tables:set-status', async (_event, payload: unknown) => {
- try {
- const { db, user } = await requireUser();
- const { id, input } = payload as { id: string; input: unknown };
- if (typeof id !== 'string' || id.length === 0) throw new Error('Table id is required');
- const table = await setTableStatus(db, user.businessId, user.id, user.permissions, id, input);
- return { ok: true, table };
- } catch (err: unknown) {
- return { ok: false, ...safeError(err) };
- }
- });
+  ipcMain.handle('customers:update', async (_event, payload: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      const { id, patch } = payload as { id: string; patch: unknown };
+      if (typeof id !== 'string' || id.length === 0) throw new Error('Customer id is required');
+      await updateCustomer(db, user.businessId, user.id, user.permissions, id, patch);
+      return { ok: true };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
 
- ipcMain.handle('tables:delete', async (_event, id: unknown) => {
- try {
- const { db, user } = await requireUser();
- if (typeof id !== 'string' || id.length === 0) throw new Error('Table id is required');
- await deleteTable(db, user.businessId, user.id, user.permissions, id);
- return { ok: true };
- } catch (err: unknown) {
- return { ok: false, ...safeError(err) };
- }
- });
+  ipcMain.handle('customers:archive', async (_event, id: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      if (typeof id !== 'string' || id.length === 0) throw new Error('Customer id is required');
+      await archiveCustomer(db, user.businessId, user.id, user.permissions, id);
+      return { ok: true };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
+
+  ipcMain.handle('customers:payments', async (_event, id: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      if (typeof id !== 'string' || id.length === 0) throw new Error('Customer id is required');
+      const items = await listCustomerPayments(db, user.businessId, id);
+      return { ok: true, items };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err), items: [] };
+    }
+  });
+
+  ipcMain.handle('customers:payment', async (_event, input: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      const result = await recordCustomerPayment(
+        db,
+        user.businessId,
+        user.id,
+        user.permissions,
+        input
+      );
+      return { ok: true, ...result };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
+
+  // --- suppliers ---
+  ipcMain.handle('suppliers:list', async (_event, query: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      const result = await listSuppliers(db, user.businessId, query ?? {});
+      return { ok: true, ...result };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err), items: [], total: 0 };
+    }
+  });
+
+  ipcMain.handle('suppliers:create', async (_event, input: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      const result = await createSupplier(db, user.businessId, user.id, user.permissions, input);
+      return { ok: true, ...result };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
+
+  ipcMain.handle('suppliers:update', async (_event, payload: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      const { id, patch } = payload as { id: string; patch: unknown };
+      if (typeof id !== 'string' || id.length === 0) throw new Error('Supplier id is required');
+      await updateSupplier(db, user.businessId, user.id, user.permissions, id, patch);
+      return { ok: true };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
+
+  ipcMain.handle('suppliers:archive', async (_event, id: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      if (typeof id !== 'string' || id.length === 0) throw new Error('Supplier id is required');
+      await archiveSupplier(db, user.businessId, user.id, user.permissions, id);
+      return { ok: true };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
+
+  // --- purchasing ---
+  ipcMain.handle('purchases:list', async (_event, query: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      const result = await listPurchases(db, user.businessId, query ?? {});
+      return { ok: true, ...result };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err), items: [], total: 0 };
+    }
+  });
+
+  ipcMain.handle('purchases:create', async (_event, input: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      const result = await createPurchase(db, user.businessId, user.id, user.permissions, input);
+      return { ok: true, ...result };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
+
+  ipcMain.handle('purchases:receive', async (_event, id: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      if (typeof id !== 'string' || id.length === 0) throw new Error('Purchase id is required');
+      const result = await receivePurchase(db, user.businessId, user.id, user.permissions, id);
+      return { ok: true, ...result };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
+
+  ipcMain.handle('purchases:cancel', async (_event, id: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      if (typeof id !== 'string' || id.length === 0) throw new Error('Purchase id is required');
+      await cancelPurchase(db, user.businessId, user.id, user.permissions, id);
+      return { ok: true };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
+
+  ipcMain.handle('tables:list', async (_event, query: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      return { ok: true, items: await listTables(db, user.businessId, query ?? {}) };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err), items: [] };
+    }
+  });
+
+  ipcMain.handle('tables:create', async (_event, input: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      const table = await createTable(db, user.businessId, user.id, user.permissions, input);
+      return { ok: true, table };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
+
+  ipcMain.handle('tables:update', async (_event, payload: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      const { id, patch } = payload as { id: string; patch: unknown };
+      if (typeof id !== 'string' || id.length === 0) throw new Error('Table id is required');
+      const table = await updateTable(db, user.businessId, user.id, user.permissions, id, patch);
+      return { ok: true, table };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
+
+  ipcMain.handle('tables:set-status', async (_event, payload: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      const { id, input } = payload as { id: string; input: unknown };
+      if (typeof id !== 'string' || id.length === 0) throw new Error('Table id is required');
+      const table = await setTableStatus(db, user.businessId, user.id, user.permissions, id, input);
+      return { ok: true, table };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
+
+  ipcMain.handle('tables:delete', async (_event, id: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      if (typeof id !== 'string' || id.length === 0) throw new Error('Table id is required');
+      await deleteTable(db, user.businessId, user.id, user.permissions, id);
+      return { ok: true };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
 }
 
 inventoryHandlers();

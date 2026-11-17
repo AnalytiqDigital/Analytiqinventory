@@ -108,6 +108,46 @@ Implemented:
 - Tests: `restaurant.test.ts` — tax-category CRUD, per-category tax math, product
   image/tax fields, table lifecycle and sale tagging.
 
+## Batch 6 — Customers, Suppliers, Purchasing: DONE
+
+Implemented:
+- Schema: `customers`, `suppliers`, `purchases`, `purchase_items`,
+  `customer_payments`, plus `sales.customer_id`; migration
+  `0006_batch6_contacts_purchasing.sql` with business/name, phone, supplier and
+  created-at indexes, and `0007_backfill_batch6_permissions.sql` which grants
+  the three new permissions to existing Administrator and Manager roles.
+- Service: `customers.ts` (list/get/create/update/archive, derived balance
+  counting credit tenders only, `recordCustomerPayment`, `listCustomerPayments`),
+  `suppliers.ts` (list/create/
+  update/archive with purchase counts), `purchases.ts` (create draft, receive
+  into stock in one transaction, cancel, list with lines), and credit handling
+  in `sales.ts` (`CREDIT_REQUIRES_CUSTOMER`, `CREDIT_LIMIT_EXCEEDED`,
+  `CREDIT_MUST_MATCH`, `CUSTOMER_HAS_BALANCE`).
+- Validation: `customerSchema`, `customerUpdateSchema`, `customersQuerySchema`,
+  `supplierSchema`, `supplierUpdateSchema`, `suppliersQuerySchema`,
+  `purchaseCreateSchema`, `purchaseItemSchema`, `purchasesQuerySchema`,
+  `customerPaymentSchema`, `PURCHASE_STATUSES`; optional email/phone refiners;
+  `customerId` on sale create.
+- Desktop IPC: 16 channels (`customers:*`, `suppliers:*`, `purchases:*`),
+  session-gated and permission-checked, typed through preload into the renderer.
+- UI: new **Customers** (search, credit limit, live balance, record payment,
+  payment history, archive/restore), **Suppliers** and **Purchases** (filters,
+  expandable lines, multi-line item editor, receive/cancel) pages, routed behind
+  their modules; POS gains a customer selector that unlocks the credit tender and
+  a "put remaining on credit" shortcut; sale view models now carry
+  `customerId`/`customerName`.
+- Tests: `batch6.test.ts` (13 tests) — customer CRUD/validation, archive with
+  balance refused, credit sale balance, credit without customer, credit limit,
+  change owing, payment settlement, supplier CRUD, purchase lifecycle. The
+  Batch 5 credit test now creates a customer, matching the new rule.
+- Docs: `docs/CUSTOMERS_PURCHASING.md`.
+
+Verified locally: `pnpm --filter @analytiq/database typecheck`,
+`pnpm --filter @analytiq/desktop typecheck`, `pnpm --filter @analytiq/desktop
+lint`, `pnpm --filter @analytiq/desktop test` (20 tests), and the database suite
+(41 tests) run under Electron's Node because `better-sqlite3` is built for
+Electron's ABI.
+
 ## Next
 
-Batch 6: Customers, suppliers, purchasing.
+Batch 7: LAN server + multi-computer.
