@@ -4,6 +4,7 @@ import { NAV_SECTIONS, visibleNavItems } from './nav';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 import { useSession } from '../../stores/session';
+import { useRealtime } from '../../hooks/useRealtime';
 import { cn } from '../../lib/cn';
 
 export function AppShell(): JSX.Element {
@@ -11,6 +12,7 @@ export function AppShell(): JSX.Element {
  const can = useSession((s) => s.can);
  const businessType = useSession((s) => s.user?.businessType);
  const visible = visibleNavItems(businessType, can);
+ useRealtime();
 
  return (
  <div className="flex min-h-screen bg-orange-50/50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">

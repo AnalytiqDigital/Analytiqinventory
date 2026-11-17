@@ -148,6 +148,39 @@ lint`, `pnpm --filter @analytiq/desktop test` (20 tests), and the database suite
 (41 tests) run under Electron's Node because `better-sqlite3` is built for
 Electron's ABI.
 
+## Batch 7 — LAN Server and Multi-Computer: DONE
+
+Implemented:
+- `apps/local-server/src/server.ts`: Fastify app with OpenAPI at `/docs`,
+  `/health`, and the REST surface mirroring the desktop IPC — `status`,
+  `setup`, `auth/login|logout|me`, products and categories, stock
+  levels/movements/adjust/count, sales + refund/void, tax categories, tables,
+  customers + payments, suppliers, and purchasing. Same `{ ok, … }` envelopes,
+  coded errors mapped to HTTP statuses, bearer-session auth on every domain
+  route, permission checks inside the shared service layer.
+- Socket.IO on the same port: handshake authenticated with the bearer token,
+  sockets joined to a per-business room, events `inventory.changed`,
+  `sale.created`, `sale.updated`, `customer.updated`, `table.updated`.
+  Optional HTTPS through `ANALYTIQ_TLS_CERT`/`ANALYTIQ_TLS_KEY`.
+- Desktop LAN client (`apps/desktop/electron/lanClient.ts`): mode selected by
+  `ANALYTIQ_SERVER_URL` or `server.json` (exe folder or userData). Every IPC
+  channel is proxied to REST; SQLite is never opened. Login tokens live in
+  main-process memory and persist through `safeStorage`; logout clears them.
+  The main process keeps a Socket.IO client and forwards events to the renderer,
+  where `useRealtime` invalidates mounted queries.
+- Build/tooling: local-server is CJS (`dist/index.js`), depends on
+  `@analytiq/database`, and ships `@types/node`; the database package was
+  rebuilt so the server runs against current services.
+- Tests: `apps/local-server/src/server.test.ts` (8 tests) — setup/status
+  idempotency, login/me/logout, bad credentials, unauthenticated reads,
+  product/stock/sale flow, credit-tender-only balances, cashier permission
+  denial, coded 404, health probe. Run under Electron's Node ABI.
+- Docs: `docs/LAN_SETUP.md` (primary setup, firewall, client config, TLS,
+  route table, realtime events, operating rules); README/roadmap updated.
+
+Verified locally: `pnpm --filter @analytiq/local-server typecheck` and build,
+`pnpm --filter @analytiq/desktop typecheck`, plus the suites listed above.
+
 ## Next
 
-Batch 7: LAN server + multi-computer.
+Batch 8: cloud sync + multi-location.

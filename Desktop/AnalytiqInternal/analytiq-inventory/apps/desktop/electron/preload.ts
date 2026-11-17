@@ -1,4 +1,11 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
+
+export interface RealtimeEvent {
+  type: string;
+  payload: unknown;
+}
+
+let realtimeListener: ((event: IpcRendererEvent, data: RealtimeEvent) => void) | null = null;
 
 // Allow-listed, validated IPC surface. Renderer gets no Node access and
 // never sees session tokens: auth state lives in the main process.
@@ -7,6 +14,17 @@ const api = {
   getVersion: (): Promise<string> => ipcRenderer.invoke('app:get-version'),
   log: (level: 'info' | 'warn' | 'error', message: string): Promise<void> =>
     ipcRenderer.invoke('app:log', level, message),
+  realtimeSubscribe: (callback: (event: RealtimeEvent) => void): void => {
+    if (realtimeListener) ipcRenderer.removeListener('realtime:event', realtimeListener);
+    realtimeListener = (_event, data) => callback(data);
+    ipcRenderer.on('realtime:event', realtimeListener);
+  },
+  realtimeUnsubscribe: (): void => {
+    if (realtimeListener) {
+      ipcRenderer.removeListener('realtime:event', realtimeListener);
+      realtimeListener = null;
+    }
+  },
   authStatus: (): Promise<{ setupComplete: boolean }> => ipcRenderer.invoke('auth:status'),
   authSetup: (input: unknown): Promise<{ ok: boolean; error?: string; code?: string }> =>
     ipcRenderer.invoke('auth:setup', input),

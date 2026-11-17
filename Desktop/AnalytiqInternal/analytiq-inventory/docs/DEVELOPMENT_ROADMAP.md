@@ -1,13 +1,13 @@
 # Development Roadmap
 
 - [x] Batch 1: Foundation and architecture (this batch).
-- [ ] Batch 2: Desktop shell + UI system.
-- [ ] Batch 3: Database, auth, first-run setup.
+- [x] Batch 2: Desktop shell + UI system.
+- [x] Batch 3: Database, auth, first-run setup.
 - [x] Batch 4: Products + inventory ledger (scaffold, unverified builds).
 - [x] Batch 5: POS + cash register (plus restaurant pack: tables, product
       photos, named tax categories, barcode).
 - [x] Batch 6: Customers, suppliers, purchasing.
-- [ ] Batch 7: LAN server + multi-computer.
+- [x] Batch 7: LAN server + multi-computer (REST + Socket.IO, client mode).
 - [ ] Batch 8: Cloud sync + multi-location.
 - [ ] Batch 9: Reporting + BI.
 - [ ] Batch 10: Website, portal, licensing, payments.
