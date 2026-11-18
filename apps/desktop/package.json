@@ -1,14 +1,15 @@
 {
   "name": "@analytiq/desktop",
+  "productName": "AnalytIQ Inventory & POS",
   "version": "0.1.0",
   "private": true,
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
     "start": "electron .",
-    "build": "tsc --noEmit -p tsconfig.json && tsc -p electron/tsconfig.json && vite build && electron-builder",
+    "build": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p electron/tsconfig.json && node electron/bundle.mjs && vite build && electron-builder",
     "build:renderer": "vite build",
-    "build:electron": "tsc -p electron/tsconfig.json",
+    "build:electron": "tsc --noEmit -p electron/tsconfig.json && node electron/bundle.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p electron/tsconfig.json",
     "lint": "eslint src electron --ext .ts,.tsx",
     "test": "vitest run",
@@ -20,9 +21,11 @@
     "@analytiq/validation": "workspace:*",
     "@hookform/resolvers": "^3.6.0",
     "@tanstack/react-query": "^5.51.0",
+    "bindings": "^1.5.0",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "electron-log": "^5.1.0",
+    "file-uri-to-path": "^1.0.0",
     "lucide-react": "^0.408.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -44,6 +47,7 @@
     "autoprefixer": "^10.4.19",
     "electron": "^31.0.0",
     "electron-builder": "^24.13.3",
+    "esbuild": "^0.21.5",
     "jsdom": "^24.1.0",
     "postcss": "^8.4.39",
     "tailwindcss": "^3.4.6",
@@ -63,6 +67,10 @@
       "dist/renderer/**/*",
       "package.json"
     ],
+    "asarUnpack": [
+      "**/node_modules/better-sqlite3/**"
+    ],
+    "npmRebuild": false,
     "win": {
       "target": [
         "nsis"

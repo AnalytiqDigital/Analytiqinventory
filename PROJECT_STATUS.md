@@ -181,6 +181,12 @@ Implemented:
 Verified locally: `pnpm --filter @analytiq/local-server typecheck` and build,
 `pnpm --filter @analytiq/desktop typecheck`, plus the suites listed above.
 
+Packaging: the Electron main/preload are esbuild-bundled (pnpm's strict layout
+made electron-builder drop transitive deps), `better-sqlite3` is unpacked from
+the asar, and `apps/desktop/release/AnalytIQ-Inventory-Setup-0.1.0.exe` was
+built and smoke-tested — packaged SQLite loads, all 7 migrations apply, and the
+installed app starts and creates its database.
+
 ## Next
 
 Batch 8: cloud sync + multi-location.

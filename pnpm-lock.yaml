@@ -78,6 +78,9 @@ importers:
       '@tanstack/react-query':
         specifier: ^5.51.0
         version: 5.107.1(@types/react@18.3.31)(react@18.3.1)
+      bindings:
+        specifier: ^1.5.0
+        version: 1.5.0
       class-variance-authority:
         specifier: ^0.7.0
         version: 0.7.1
@@ -87,6 +90,9 @@ importers:
       electron-log:
         specifier: ^5.1.0
         version: 5.4.4
+      file-uri-to-path:
+        specifier: ^1.0.0
+        version: 1.0.0
       lucide-react:
         specifier: ^0.408.0
         version: 0.408.0(react@18.3.1)
@@ -145,6 +151,9 @@ importers:
       electron-builder:
         specifier: ^24.13.3
         version: 24.13.3(electron-builder-squirrel-windows@24.13.3)
+      esbuild:
+        specifier: ^0.21.5
+        version: 0.21.5
       jsdom:
         specifier: ^24.1.0
         version: 24.1.3

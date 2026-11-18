@@ -13,5 +13,7 @@ next-env.d.ts
 .env.local
 apps/*/data/*.db
 apps/*/data/*.db-journal
+apps/desktop/release/
+.ebcache/
 .DS_Store
 Thumbs.db
