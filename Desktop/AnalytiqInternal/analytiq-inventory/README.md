@@ -79,6 +79,28 @@ ELECTRON_RUN_AS_NODE=1 ../desktop/node_modules/electron/dist/electron.exe \
 
 The validation and desktop suites run under normal Node with `pnpm test`.
 
+### Windows installer
+
+```bash
+cd apps/desktop
+pnpm build:electron   # typecheck + esbuild bundle of main/preload
+pnpm build:renderer
+pnpm dist             # electron-builder --win nsis
+```
+
+Output: `apps/desktop/release/AnalytIQ-Inventory-Setup-<version>.exe`
+(`release/` and the `.ebcache/` builder cache are git-ignored).
+
+The main process is bundled with esbuild because electron-builder only copies
+top-level packages from pnpm's strict `node_modules` layout. `electron`,
+`@analytiq/database` and `better-sqlite3` stay external; the native module is
+listed in `asarUnpack` so `better_sqlite3.node` loads from
+`app.asar.unpacked`. Migrations ship inside `@analytiq/database/drizzle`.
+
+If electron-builder cannot extract its code-signing cache (symlink privilege
+required on Windows), pre-extract it once and point
+`ELECTRON_BUILDER_CACHE=<path>` at that directory before running packaging.
+
 ## Rules (abridged)
 
 1. TypeScript strict everywhere. 2. Zod validation client + server.

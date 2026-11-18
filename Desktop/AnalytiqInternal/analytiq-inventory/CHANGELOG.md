@@ -23,6 +23,10 @@
   bad credentials, unauthenticated reads, product/stock/sale flow, credit
   tender accounting, permission denial (cashier), coded 404s, health probe.
   Docs: `docs/LAN_SETUP.md`.
+- Packaging: main/preload are bundled with esbuild (electron-builder dropped
+  transitive deps under pnpm's strict layout), `better-sqlite3` is unpacked
+  from the asar, and the Windows NSIS installer builds and boots with the
+  packaged SQLite and migrations.
 
 ## 0.7.0 — Batch 6: customers, suppliers, purchasing
 
