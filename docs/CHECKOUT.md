@@ -129,3 +129,31 @@ the website's API client (error mapping, network failure, URL encoding).
 4. Set `WEBSITE_URL` and `CORS_ORIGIN` to the real site origin.
 5. Replace the file store with a managed database before running more than one
    API instance.
+
+### Container host (Render, Railway, Fly.io)
+
+`apps/cloud-api/Dockerfile` builds the API from the repository root and
+`render.yaml` describes a Render service: Starter plan (the persistent disk
+needs a paid instance), a 1 GB disk mounted at `/data`, health check `/health`,
+and `ORDER_STORE_PATH=/data/orders.json`.
+
+Render: **Dashboard → New → Blueprint → connect the repository**. Render reads
+`render.yaml` and asks for the two secrets:
+
+- `PAYSTACK_SECRET_KEY` — live key from Paystack → Settings → API Keys & Webhooks.
+- `LICENSE_PRIVATE_KEY` — the PEM on one line with `\n` between the header,
+  body and footer (the API converts the escapes back).
+
+Then:
+
+1. Note the service URL, e.g. `https://analytiq-cloud-api.onrender.com`.
+2. In Vercel → Settings → Environment Variables set
+   `NEXT_PUBLIC_API_URL=https://analytiq-cloud-api.onrender.com` and redeploy.
+3. Paste `https://analytiq-cloud-api.onrender.com/api/payments/paystack/webhook`
+   into Paystack → Settings → API Keys & Webhooks.
+4. Make one live test purchase; the success page should poll and show a key,
+   and the order should be in `/data/orders.json` on the disk.
+
+The API needs a persistent filesystem for `orders.json`. Google Drive, shared
+hosting without Node and serverless platforms with an ephemeral filesystem
+(Vercel Functions included) cannot run it.

@@ -1,0 +1,13 @@
+**/node_modules
+**/dist
+**/dist-electron
+**/.next
+**/.turbo
+**/*.tsbuildinfo
+apps/desktop/release
+apps/desktop/build
+apps/*/data
+apps/cloud-api/data
+.ebcache
+.secrets
+.git

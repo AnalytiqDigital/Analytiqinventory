@@ -1,0 +1,27 @@
+# Render blueprint for the cloud API (plans, Paystack checkout, licence issuing).
+# Deploy: Render Dashboard -> Blueprint -> connect AnalytiqDigital/Analytiqinventory.
+# Secrets (PAYSTACK_SECRET_KEY, LICENSE_PRIVATE_KEY) are entered in the dashboard.
+services:
+  - type: web
+    name: analytiq-cloud-api
+    runtime: docker
+    plan: starter
+    region: frankfurt
+    dockerfilePath: ./apps/cloud-api/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    disk:
+      name: analytiq-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: WEBSITE_URL
+        value: https://analytiq-inventory.vercel.app
+      - key: CORS_ORIGIN
+        value: https://analytiq-inventory.vercel.app
+      - key: ORDER_STORE_PATH
+        value: /data/orders.json
+      - key: PAYSTACK_SECRET_KEY
+        sync: false
+      - key: LICENSE_PRIVATE_KEY
+        sync: false
