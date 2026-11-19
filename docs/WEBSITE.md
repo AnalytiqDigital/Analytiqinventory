@@ -67,6 +67,18 @@ request the installer on WhatsApp — useful while the file is still being hoste
 Checkout cannot complete until the cloud API is deployed and reachable from the
 browser; browsing the landing page and docs works without it.
 
+### Troubleshooting the Vercel build
+
+- **"No Next.js version detected"** — the Root Directory is still the repo root.
+  Set it to `apps/website`.
+- **`@analytiq/validation` cannot be resolved** — turn on *Include files outside
+  of the Root Directory in the Build Step*.
+- **Install fails because it runs inside `apps/website`** — set the Install
+  Command to `cd ../.. && pnpm install --frozen-lockfile`.
+- **Images 404** — assets live in `apps/website/public`; commit them.
+- **Checkout shows a network error** — `NEXT_PUBLIC_API_URL` is missing or the
+  API's `CORS_ORIGIN` does not include the Vercel domain.
+
 ## Verification checklist
 
 - [ ] Landing page loads on the Vercel preview URL; no console errors.

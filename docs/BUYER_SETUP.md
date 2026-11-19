@@ -54,8 +54,7 @@ Tell the buyer to send:
 1. A screenshot of **Help & Support → Diagnostics** (or the copied JSON).
 2. What they did and what happened.
 
-Support contacts: replace these placeholders before selling.
+Support contacts:
 
-- Email: support@analytiq.example
-- WhatsApp: +234 000 000 0000
+- WhatsApp: +234 812 431 4217 (https://wa.me/2348124314217)
 - Hours: Mon–Sat, 9:00–18:00 WAT
