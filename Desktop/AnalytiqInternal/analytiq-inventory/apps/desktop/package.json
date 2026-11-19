@@ -1,7 +1,7 @@
 {
   "name": "@analytiq/desktop",
   "productName": "AnalytIQ Inventory & POS",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "main": "dist-electron/main.js",
   "scripts": {
@@ -14,7 +14,8 @@
     "lint": "eslint src electron --ext .ts,.tsx",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "dist": "electron-builder --win nsis"
+    "dist": "electron-builder --win nsis",
+    "dist:signed": "node scripts/require-signing.mjs && electron-builder --win nsis"
   },
   "dependencies": {
     "@analytiq/database": "workspace:*",

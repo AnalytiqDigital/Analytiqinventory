@@ -334,6 +334,8 @@ export const sales = sqliteTable(
     changeKobo: integer('change_kobo').notNull().default(0),
     tableId: text('table_id').references(() => diningTables.id),
     customerId: text('customer_id').references(() => customers.id),
+    /** Source-system reference for imported sales; null for till sales. */
+    externalRef: text('external_ref'),
     version: integer('version').notNull().default(1),
     ...timestamps(),
   },

@@ -15,4 +15,5 @@ export * from './backups';
 export * from './locations';
 export * from './sync';
 export * from './automation';
+export * from './imports';
 export * from './migrate';

@@ -6,7 +6,8 @@ the website sells signed licence keys that activate offline.
 
 Everything in the commercial roadmap is implemented: POS and stock ledger,
 customers/suppliers/purchasing, reports, LAN mode, branch sync, verified
-backups, WhatsApp/AI alerts, offline licensing, and online checkout.
+backups, WhatsApp/AI alerts, offline licensing, online checkout, bulk CSV
+import, thermal receipt printing (Xprinter 58/80 mm) and barcode scanning.
 
 ## Structure
 
@@ -44,7 +45,10 @@ analytiq-inventory/
 | Offline licence keys   | `docs/LICENSE_KEYS.md`                                                      |
 | Online checkout        | `docs/CHECKOUT.md`                                                          |
 | WhatsApp / AI alerts   | `docs/AUTOMATION.md`                                                        |
+| CSV import             | `docs/IMPORT.md`                                                            |
+| Printers and scanners  | `docs/PRINTERS.md`                                                          |
 | Installer and updates  | `docs/UPDATES.md`                                                           |
+| Release checklist      | `docs/RELEASE_CHECKLIST.md`                                                 |
 | Security rules         | `docs/SECURITY.md`                                                          |
 
 ## Prerequisites

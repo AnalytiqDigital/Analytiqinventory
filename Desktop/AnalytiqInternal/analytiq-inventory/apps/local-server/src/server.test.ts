@@ -403,6 +403,15 @@ describe('LAN server API', () => {
     const allowed = await call('GET', '/api/products', undefined, cashierToken);
     expect(allowed.statusCode).toBe(200);
 
+    const importDenied = await call(
+      'POST',
+      '/api/import/products',
+      { rows: [{ name: 'Blocked import' }] },
+      cashierToken
+    );
+    expect(importDenied.statusCode).toBe(403);
+    expect(importDenied.json()).toMatchObject({ ok: false, code: 'FORBIDDEN' });
+
     const reportDenied = await call('GET', '/api/reports/summary', undefined, cashierToken);
     expect(reportDenied.statusCode).toBe(403);
     expect(reportDenied.json()).toMatchObject({ ok: false, code: 'FORBIDDEN' });
@@ -753,6 +762,124 @@ describe('LAN server API', () => {
     } finally {
       await relay.close();
     }
+  });
+
+  it('serves the business header and exact barcode lookups', async () => {
+    const { token } = await signIn();
+    const productId = await newProduct(token);
+
+    const bySku = await call('GET', '/api/products/by-barcode?code=IND-70', undefined, token);
+    expect(bySku.statusCode).toBe(200);
+    const found = bySku.json() as { product: { id: string; onHand: number } | null };
+    expect(found.product?.id).toBe(productId);
+    expect(found.product?.onHand).toBe(20);
+
+    const missing = await call('GET', '/api/products/by-barcode?code=SKU-NOPE', undefined, token);
+    expect((missing.json() as { product: unknown }).product).toBeNull();
+
+    const empty = await call('GET', '/api/products/by-barcode?code=', undefined, token);
+    expect(empty.statusCode).toBe(400);
+    expect(empty.json()).toMatchObject({ code: 'INVALID_SCAN' });
+
+    const business = await call('GET', '/api/business', undefined, token);
+    expect(business.statusCode).toBe(200);
+    expect(business.json()).toMatchObject({
+      ok: true,
+      business: { name: 'Test Mart', state: 'Lagos', taxLabel: 'VAT', taxRateBps: 750 },
+    });
+  });
+
+  it('imports products, received purchases and historical sales', async () => {
+    const { token } = await signIn();
+
+    const products = await call(
+      'POST',
+      '/api/import/products',
+      {
+        rows: [
+          {
+            name: 'Milo 400g',
+            sku: 'MIL-400',
+            barcode: '6151100099999',
+            category: 'Beverages',
+            sellingPriceKobo: 350000,
+            costPriceKobo: 280000,
+            openingStock: 5,
+          },
+          { name: 'Peak Milk', sku: 'PEAK-1', sellingPriceKobo: 120000, openingStock: 3 },
+        ],
+      },
+      token
+    );
+    expect(products.statusCode).toBe(200);
+    expect(products.json()).toMatchObject({ ok: true, created: 2, failed: 0 });
+
+    const purchases = await call(
+      'POST',
+      '/api/import/purchases',
+      {
+        rows: [
+          {
+            reference: 'PO-1',
+            supplier: 'Peak Foods',
+            sku: 'MIL-400',
+            qty: 10,
+            unitCostKobo: 280000,
+            received: true,
+          },
+        ],
+      },
+      token
+    );
+    expect(purchases.statusCode).toBe(200);
+    expect(purchases.json()).toMatchObject({ ok: true, created: 1, failed: 0 });
+
+    const sales = await call(
+      'POST',
+      '/api/import/sales',
+      {
+        rows: [
+          {
+            receipt: 'OLD-1',
+            date: '2026-11-02',
+            sku: 'MIL-400',
+            qty: 2,
+            unitPriceKobo: 350000,
+            tender: 'cash',
+          },
+          {
+            receipt: 'OLD-1',
+            date: '2026-11-02',
+            sku: 'PEAK-1',
+            qty: 1,
+            unitPriceKobo: 120000,
+            tender: 'cash',
+          },
+        ],
+      },
+      token
+    );
+    expect(sales.statusCode).toBe(200);
+    expect(sales.json()).toMatchObject({ ok: true, created: 1, failed: 0 });
+
+    const barcode = await call(
+      'GET',
+      '/api/products/by-barcode?code=6151100099999',
+      undefined,
+      token
+    );
+    expect((barcode.json() as { product: { onHand: number } }).product.onHand).toBe(13);
+
+    const again = await call(
+      'POST',
+      '/api/import/sales',
+      { rows: [{ receipt: 'OLD-1', sku: 'MIL-400', qty: 1, unitPriceKobo: 350000 }] },
+      token
+    );
+    expect(again.json()).toMatchObject({ ok: true, created: 0, failed: 1 });
+    expect(
+      (again.json() as { errors: Array<{ code?: string }> }).errors[0]?.code
+    ).toBe('SALE_REFERENCE_EXISTS');
   });
 
   it('keeps the health probe unchanged', async () => {

@@ -50,6 +50,10 @@ const api = {
     input: unknown
   ): Promise<{ ok: boolean; id?: string; error?: string; code?: string }> =>
     ipcRenderer.invoke('inventory:product-create', input),
+  productByBarcode: (
+    code: string
+  ): Promise<{ ok: boolean; product?: unknown | null; error?: string; code?: string }> =>
+    ipcRenderer.invoke('inventory:product-by-barcode', code),
   productUpdate: (
     id: string,
     patch: unknown
@@ -306,6 +310,28 @@ const api = {
     error?: string;
     code?: string;
   }> => ipcRenderer.invoke('automation:run'),
+
+  // --- Batch 13: bulk import + receipt header ---
+  businessProfile: (): Promise<{ ok: boolean; business?: unknown; error?: string; code?: string }> =>
+    ipcRenderer.invoke('business:profile'),
+  importProducts: (input: unknown): Promise<{ ok: boolean; created: number; failed: number; errors: unknown[]; error?: string; code?: string }> =>
+    ipcRenderer.invoke('import:products', input),
+  importPurchases: (input: unknown): Promise<{ ok: boolean; created: number; failed: number; errors: unknown[]; error?: string; code?: string }> =>
+    ipcRenderer.invoke('import:purchases', input),
+  importSales: (input: unknown): Promise<{ ok: boolean; created: number; failed: number; errors: unknown[]; error?: string; code?: string }> =>
+    ipcRenderer.invoke('import:sales', input),
+
+  // --- Batch 13: thermal receipt printer (Xprinter and any Windows driver) ---
+  printerList: (): Promise<{
+    ok: boolean;
+    printers?: Array<{ name: string; displayName: string; isDefault: boolean; status?: number }>;
+    error?: string;
+    code?: string;
+  }> => ipcRenderer.invoke('printer:list'),
+  printerPrint: (
+    input: unknown
+  ): Promise<{ ok: boolean; error?: string; code?: string }> =>
+    ipcRenderer.invoke('printer:print', input),
 };
 
 export type AnalytiqApi = typeof api;

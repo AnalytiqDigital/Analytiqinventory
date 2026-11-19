@@ -42,6 +42,9 @@ export interface AnalytiqApi {
   productCreate: (
     input: unknown
   ) => Promise<{ ok: boolean; id?: string; error?: string; code?: string }>;
+  productByBarcode: (
+    code: string
+  ) => Promise<{ ok: boolean; product?: ProductRow | null; error?: string; code?: string }>;
   productUpdate: (
     id: string,
     patch: unknown
@@ -259,6 +262,69 @@ export interface AnalytiqApi {
     error?: string;
     code?: string;
   }>;
+
+  // --- Batch 13: bulk import + receipt header ---
+  businessProfile: () => Promise<{
+    ok: boolean;
+    business?: BusinessProfile | null;
+    error?: string;
+    code?: string;
+  }>;
+  importProducts: (input: unknown) => Promise<ImportResponse>;
+  importPurchases: (input: unknown) => Promise<ImportResponse>;
+  importSales: (input: unknown) => Promise<ImportResponse>;
+
+  // --- Batch 13: thermal receipt printing ---
+  printerList: () => Promise<{
+    ok: boolean;
+    printers?: PrinterInfo[];
+    error?: string;
+    code?: string;
+  }>;
+  printerPrint: (input: PrinterPrintInput) => Promise<{ ok: boolean; error?: string; code?: string }>;
+}
+
+export interface PrinterInfo {
+  name: string;
+  displayName: string;
+  isDefault: boolean;
+  status?: number;
+}
+
+export interface PrinterPrintInput {
+  html: string;
+  printerName?: string;
+  paperWidthMm?: number;
+  copies?: number;
+}
+
+export interface BusinessProfile {
+  id: string;
+  name: string;
+  type: string;
+  address: string;
+  phone: string;
+  email: string;
+  state: string;
+  lga: string;
+  currency: string;
+  taxLabel: string;
+  taxRateBps: number;
+}
+
+export interface ImportIssue {
+  row: number;
+  message: string;
+  code?: string;
+}
+
+export interface ImportResponse {
+  ok: boolean;
+  created: number;
+  failed: number;
+  errors: ImportIssue[];
+  error?: string;
+  code?: string;
 }
 
 export interface LocationRow {

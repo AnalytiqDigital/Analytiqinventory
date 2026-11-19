@@ -7,6 +7,7 @@ import {
   PackageCheck,
   Plus,
   Truck,
+  Upload,
   XCircle,
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
@@ -16,6 +17,7 @@ import { Badge } from '../components/ui/badge';
 import { TD, TH, THead, TRow, Table } from '../components/ui/table';
 import { EmptyState, ErrorState, LoadingState } from '../components/ui/states';
 import { Modal } from '../components/ui/modal';
+import { ImportDialog } from '../components/ImportDialog';
 import { Stat } from '../components/ui/stat';
 import { RequirePermission } from '../components/RequirePermission';
 import { ipc } from '../lib/ipc';
@@ -74,6 +76,7 @@ export function PurchasesPage(): JSX.Element {
   const [page, setPage] = useState(1);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [values, setValues] = useState<PurchaseFormValues>(blankForm);
   const [formError, setFormError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -220,15 +223,20 @@ export function PurchasesPage(): JSX.Element {
           </p>
         </div>
         <RequirePermission permission="purchases.manage">
-          <Button
-            onClick={() => {
-              setValues(blankForm());
-              setFormError(null);
-              setModalOpen(true);
-            }}
-          >
-            <Plus className="h-4 w-4" /> New purchase
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="secondary" onClick={() => setImportOpen(true)}>
+              <Upload className="h-4 w-4" /> Import CSV
+            </Button>
+            <Button
+              onClick={() => {
+                setValues(blankForm());
+                setFormError(null);
+                setModalOpen(true);
+              }}
+            >
+              <Plus className="h-4 w-4" /> New purchase
+            </Button>
+          </div>
         </RequirePermission>
       </div>
 
@@ -601,6 +609,19 @@ export function PurchasesPage(): JSX.Element {
           </div>
         </form>
       </Modal>
+
+      <ImportDialog
+        open={importOpen}
+        kind="purchases"
+        onClose={() => setImportOpen(false)}
+        onImported={() => {
+          void queryClient.invalidateQueries({ queryKey: ['purchases'] });
+          void queryClient.invalidateQueries({ queryKey: ['suppliers'] });
+          void queryClient.invalidateQueries({ queryKey: ['stock-levels'] });
+          void queryClient.invalidateQueries({ queryKey: ['stock-movements'] });
+          void queryClient.invalidateQueries({ queryKey: ['products'] });
+        }}
+      />
     </div>
   );
 }

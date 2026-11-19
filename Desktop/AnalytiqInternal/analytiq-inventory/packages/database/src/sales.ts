@@ -111,6 +111,7 @@ export interface SaleView {
   tableName: string | null;
   customerId: string | null;
   customerName: string | null;
+  externalRef: string | null;
   createdAt: string;
   items: SaleItemView[];
   payments: SalePaymentView[];
@@ -150,12 +151,12 @@ async function resolveLocationId(
   return fallback;
 }
 
-function nextReceiptNo(local: LocalDb, businessId: string): string {
+function nextReceiptNo(local: LocalDb, businessId: string, when: Date): string {
   const row = local.raw
     .prepare('SELECT COUNT(*) AS n FROM sales WHERE business_id = ?')
     .get(businessId) as { n: number };
   const seq = row.n + 1;
-  const date = new Date();
+  const date = when;
   const ymd = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}`;
   return `R-${ymd}-${String(seq).padStart(5, '0')}`;
 }
@@ -333,9 +334,9 @@ export async function createSale(
     throw codedError('Select a customer to sell on credit', 'CREDIT_REQUIRES_CUSTOMER');
   }
 
-  const timestamp = new Date();
+  const timestamp = input.soldAt ? new Date(input.soldAt) : new Date();
   const saleId = newId('sal');
-  const receiptNo = nextReceiptNo(local, businessId);
+  const receiptNo = nextReceiptNo(local, businessId, timestamp);
 
   const apply = local.raw.transaction(() => {
     local.db
@@ -354,6 +355,7 @@ export async function createSale(
         totalKobo: total,
         tableId,
         customerId,
+        externalRef: input.externalRef?.trim() || null,
         amountPaidKobo: amountPaid,
         changeKobo: change,
         version: 1,
@@ -549,6 +551,7 @@ export async function getSale(
     tableName: tbl?.name ?? null,
     customerId: head.customerId,
     customerName: cust?.name ?? null,
+    externalRef: head.externalRef ?? null,
     createdAt: (head.createdAt as Date).toISOString(),
     items: itemRows.map((r) => ({
       id: r.id,

@@ -14,6 +14,7 @@ import {
   ShoppingCart,
   Smartphone,
   Trash2,
+  Upload,
   X,
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
@@ -21,14 +22,19 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Input } from '../components/ui/input';
 import { EmptyState, ErrorState, LoadingState } from '../components/ui/states';
 import { Modal } from '../components/ui/modal';
+import { ImportDialog } from '../components/ImportDialog';
 import { RequirePermission } from '../components/RequirePermission';
 import { hasModule } from '../components/layout/nav';
 import { ipc } from '../lib/ipc';
 import { formatKobo, parseNairaToKobo } from '../lib/money';
+import { printSale } from '../lib/printing';
+import { useBarcodeScanner } from '../lib/use-barcode-scanner';
 import { cn } from '../lib/cn';
 import { ProductThumb } from '../lib/product-media';
 import { useSession } from '../stores/session';
+import { usePrinter } from '../stores/printer';
 import type {
+  BusinessProfile,
   CustomerRow,
   DiningTable,
   ProductRow,
@@ -64,6 +70,24 @@ function newLine(product: ProductRow): CartLine {
   return { product, qty: 1, unitPriceKobo: product.sellingPriceKobo, lineDiscountKobo: 0 };
 }
 
+/** Short beep so the cashier hears a scan without looking at the screen. */
+function scanBeep(ok: boolean): void {
+  try {
+    const ctx = new window.AudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.frequency.value = ok ? 1200 : 320;
+    gain.gain.value = 0.05;
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + (ok ? 0.08 : 0.22));
+    osc.onended = () => void ctx.close();
+  } catch {
+    // Audio is best-effort; the cart still updates.
+  }
+}
+
 export function PosPage(): JSX.Element {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
@@ -76,6 +100,7 @@ export function PosPage(): JSX.Element {
     { method: 'cash', amountKobo: 0, reference: '' },
   ]);
   const [completedSale, setCompletedSale] = useState<SaleDetail | null>(null);
+  const [receiptNotice, setReceiptNotice] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [tableId, setTableId] = useState<string>('');
   const [customerId, setCustomerId] = useState<string>('');
@@ -170,6 +195,15 @@ export function PosPage(): JSX.Element {
     },
   });
 
+  const businessQuery = useQuery({
+    queryKey: ['business-profile'],
+    queryFn: async () => {
+      const res = await ipc.businessProfile();
+      return res.ok ? ((res.business ?? null) as BusinessProfile | null) : null;
+    },
+    staleTime: 5 * 60_000,
+  });
+
   const totals = useMemo(() => {
     const subtotal = cart.reduce((s, l) => s + l.unitPriceKobo * l.qty, 0);
     const lineDiscount = cart.reduce(
@@ -218,6 +252,31 @@ export function PosPage(): JSX.Element {
     });
   }
 
+  async function addScannedCode(code: string): Promise<boolean> {
+    const trimmed = code.trim();
+    if (!trimmed) return false;
+    const res = await ipc.productByBarcode(trimmed);
+    if (res.ok && res.product) {
+      addToCart(res.product as ProductRow);
+      setSearch('');
+      scanBeep(true);
+      return true;
+    }
+    scanBeep(false);
+    setError(`No active product matches “${trimmed}”`);
+    return false;
+  }
+
+  // Barcode guns type into whatever has focus. When no field is focused the
+  // global listener catches the burst; when the search box is focused its Enter
+  // handler (below) performs the same exact-match lookup.
+  useBarcodeScanner(
+    (code) => {
+      void addScannedCode(code);
+    },
+    completedSale == null && !tenderOpen && !historyOpen
+  );
+
   function updateLine(productId: string, patch: Partial<CartLine>): void {
     setCart((prev) => prev.map((l) => (l.product.id === productId ? { ...l, ...patch } : l)));
   }
@@ -255,6 +314,7 @@ export function PosPage(): JSX.Element {
       setHeaderDiscount('0.00');
       setPayments([{ method: 'cash', amountKobo: 0, reference: '' }]);
       setError(null);
+      setReceiptNotice(null);
       await queryClient.invalidateQueries({ queryKey: ['pos-products'] });
       await queryClient.invalidateQueries({ queryKey: ['sales-history'] });
       await queryClient.invalidateQueries({ queryKey: ['dashboard-sales'] });
@@ -263,7 +323,16 @@ export function PosPage(): JSX.Element {
       await queryClient.invalidateQueries({ queryKey: ['tables'] });
       if (res.id) {
         const detail = await ipc.saleGet(res.id);
-        if (detail.ok && detail.sale) setCompletedSale(detail.sale as SaleDetail);
+        if (detail.ok && detail.sale) {
+          const sale = detail.sale as SaleDetail;
+          setCompletedSale(sale);
+          if (usePrinter.getState().autoPrint) {
+            const outcome = await printSale(sale, businessQuery.data ?? null);
+            if (!outcome.ok) {
+              setReceiptNotice(outcome.error ?? 'Could not print the receipt');
+            }
+          }
+        }
       }
     },
     onError: (e: Error) => setError(e.message),
@@ -425,11 +494,18 @@ export function PosPage(): JSX.Element {
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
-                    const first = productsQuery.data?.items[0];
-                    if (first) {
-                      addToCart(first);
-                      setSearch('');
-                    }
+                    const code = search.trim();
+                    if (!code) return;
+                    void (async () => {
+                      const scanned = await addScannedCode(code);
+                      if (!scanned) {
+                        const first = productsQuery.data?.items[0];
+                        if (first) {
+                          addToCart(first);
+                          setSearch('');
+                        }
+                      }
+                    })();
                   }
                 }}
               />
@@ -827,7 +903,14 @@ export function PosPage(): JSX.Element {
               <CheckCircle2 className="h-5 w-5" />
               Payment received — give change {formatKobo(completedSale.changeKobo)}
             </p>
-            <ReceiptView sale={completedSale} onClose={() => setCompletedSale(null)} />
+            <ReceiptView
+              sale={completedSale}
+              business={businessQuery.data ?? null}
+              onClose={() => setCompletedSale(null)}
+            />
+            {receiptNotice ? (
+              <p className="text-center text-sm font-medium text-red-600">{receiptNotice}</p>
+            ) : null}
           </div>
         ) : null}
       </Modal>
@@ -855,35 +938,37 @@ export function PosPage(): JSX.Element {
   );
 }
 
-function ReceiptView({ sale, onClose }: { sale: SaleDetail; onClose: () => void }): JSX.Element {
-  const receiptRef = useRef<HTMLDivElement>(null);
+function ReceiptView({
+  sale,
+  business,
+  onClose,
+}: {
+  sale: SaleDetail;
+  business: BusinessProfile | null;
+  onClose: () => void;
+}): JSX.Element {
+  const [printing, setPrinting] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
-  function printReceipt(): void {
-    const node = receiptRef.current;
-    if (!node) return;
-    const w = window.open('', '_blank', 'width=320,height=600');
-    if (!w) return;
-    w.document.write(`<html><head><title>Receipt ${sale.receiptNo}</title><style>
- body { font-family: monospace; font-size: 12px; width: 280px; margin: 0 auto; padding: 8px; }
- h2, p { margin: 2px 0; text-align: center; }
- table { width: 100%; border-collapse: collapse; margin: 8px 0; }
- td { padding: 1px 0; vertical-align: top; }
- td:last-child { text-align: right; }
- .totals td { border-top: 1px dashed #000; }
- .center { text-align: center; }
- @media print { body { width: auto; } }
- </style></head><body>${node.innerHTML}</body></html>`);
-    w.document.close();
-    w.focus();
-    w.print();
+  async function printReceipt(): Promise<void> {
+    setPrinting(true);
+    setNotice(null);
+    const outcome = await printSale(sale, business);
+    setPrinting(false);
+    setNotice(
+      outcome.ok
+        ? outcome.usedFallback
+          ? 'Opened the system print dialog.'
+          : 'Receipt sent to the printer.'
+        : (outcome.error ?? 'Could not print the receipt')
+    );
   }
 
   return (
     <div className="space-y-3">
-      <div
-        ref={receiptRef}
-        className="rounded-xl border border-dashed border-slate-300 p-4 dark:border-slate-700"
-      >
+      <div className="rounded-xl border border-dashed border-slate-300 p-4 dark:border-slate-700">
+        {business?.name ? <p className="text-center font-bold">{business.name}</p> : null}
+        {business?.address ? <p className="text-center">{business.address}</p> : null}
         <h2 className="text-center font-bold">SALE RECEIPT</h2>
         <p className="text-center">{sale.receiptNo}</p>
         <p className="text-center">{new Date(sale.createdAt).toLocaleString()}</p>
@@ -966,11 +1051,14 @@ function ReceiptView({ sale, onClose }: { sale: SaleDetail; onClose: () => void 
           <Receipt className="h-4 w-4" />
           New sale
         </Button>
-        <Button className="flex-1" onClick={printReceipt}>
+        <Button className="flex-1" onClick={() => void printReceipt()} disabled={printing}>
           <Printer className="h-4 w-4" />
-          Print receipt
+          {printing ? 'Printing…' : 'Print receipt'}
         </Button>
       </div>
+      {notice ? (
+        <p className="text-center text-sm text-slate-600 dark:text-slate-300">{notice}</p>
+      ) : null}
     </div>
   );
 }
@@ -987,6 +1075,7 @@ function SalesHistory({
   const [page, setPage] = useState(1);
   const [refundReason, setRefundReason] = useState('');
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
   const queryClient = useQueryClient();
 
   const historyQuery = useQuery({
@@ -1007,6 +1096,15 @@ function SalesHistory({
       return res.sale as SaleDetail;
     },
     enabled: selectedId != null,
+  });
+
+  const businessQuery = useQuery({
+    queryKey: ['business-profile'],
+    queryFn: async () => {
+      const res = await ipc.businessProfile();
+      return res.ok ? ((res.business ?? null) as BusinessProfile | null) : null;
+    },
+    staleTime: 5 * 60_000,
   });
 
   const refundMutation = useMutation({
@@ -1038,7 +1136,11 @@ function SalesHistory({
           <span className="font-bold">{sale.receiptNo}</span>
           <StatusBadge status={sale.status} />
         </div>
-        <ReceiptView sale={sale} onClose={() => onSelect(null)} />
+        <ReceiptView
+          sale={sale}
+          business={businessQuery.data ?? null}
+          onClose={() => onSelect(null)}
+        />
         {sale.status === 'completed' && (
           <RequirePermission permission="sales.refund">
             <div className="space-y-2 border-t border-slate-200 pt-3 dark:border-slate-700">
@@ -1082,6 +1184,14 @@ function SalesHistory({
 
   return (
     <div className="space-y-2">
+      <RequirePermission permission="sales.create">
+        <div className="flex justify-end">
+          <Button variant="secondary" size="sm" onClick={() => setImportOpen(true)}>
+            <Upload className="h-4 w-4" />
+            Import sales CSV
+          </Button>
+        </div>
+      </RequirePermission>
       {historyQuery.isLoading && <LoadingState label="Loading sales…" />}
       {historyQuery.isError && <ErrorState message="Could not load sales history" />}
       {historyQuery.data?.items.length === 0 && (
@@ -1124,6 +1234,19 @@ function SalesHistory({
           </Button>
         </div>
       )}
+
+      <ImportDialog
+        open={importOpen}
+        kind="sales"
+        onClose={() => setImportOpen(false)}
+        onImported={() => {
+          void queryClient.invalidateQueries({ queryKey: ['sales-history'] });
+          void queryClient.invalidateQueries({ queryKey: ['pos-products'] });
+          void queryClient.invalidateQueries({ queryKey: ['dashboard-sales'] });
+          void queryClient.invalidateQueries({ queryKey: ['dashboard-levels'] });
+          void queryClient.invalidateQueries({ queryKey: ['customers'] });
+        }}
+      />
     </div>
   );
 }

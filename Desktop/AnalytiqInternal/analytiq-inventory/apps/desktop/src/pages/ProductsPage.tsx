@@ -10,6 +10,7 @@ import { Input } from '../components/ui/input';
 import { TD, TH, THead, TRow, Table } from '../components/ui/table';
 import { EmptyState, ErrorState, LoadingState } from '../components/ui/states';
 import { Modal } from '../components/ui/modal';
+import { ImportDialog } from '../components/ImportDialog';
 import { RequirePermission } from '../components/RequirePermission';
 import { ipc } from '../lib/ipc';
 import { formatKobo, parseNairaToKobo } from '../lib/money';
@@ -60,6 +61,7 @@ export function ProductsPage(): JSX.Element {
   const [includeInactive, setIncludeInactive] = useState(false);
   const [page, setPage] = useState(1);
   const [modalOpen, setModalOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [editing, setEditing] = useState<ProductRow | null>(null);
   const [imageBusy, setImageBusy] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
@@ -227,16 +229,26 @@ export function ProductsPage(): JSX.Element {
           </p>
         </div>
         <RequirePermission permission="products.manage">
-          <Button
-            size="lg"
-            onClick={() => {
-              setEditing(null);
-              form.reset(toForm());
-              setModalOpen(true);
-            }}
-          >
-            + New product
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="secondary"
+              size="lg"
+              onClick={() => setImportOpen(true)}
+            >
+              <Upload className="h-4 w-4" />
+              Import CSV
+            </Button>
+            <Button
+              size="lg"
+              onClick={() => {
+                setEditing(null);
+                form.reset(toForm());
+                setModalOpen(true);
+              }}
+            >
+              + New product
+            </Button>
+          </div>
         </RequirePermission>
       </div>
 
@@ -587,6 +599,18 @@ export function ProductsPage(): JSX.Element {
           </div>
         </form>
       </Modal>
+
+      <ImportDialog
+        open={importOpen}
+        kind="products"
+        onClose={() => setImportOpen(false)}
+        onImported={() => {
+          void queryClient.invalidateQueries({ queryKey: ['products'] });
+          void queryClient.invalidateQueries({ queryKey: ['categories'] });
+          void queryClient.invalidateQueries({ queryKey: ['pos-products'] });
+          void queryClient.invalidateQueries({ queryKey: ['dashboard-levels'] });
+        }}
+      />
     </div>
   );
 }

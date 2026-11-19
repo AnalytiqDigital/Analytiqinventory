@@ -25,6 +25,28 @@ The artifact lands in `apps/desktop/release/`. Bump `version` in
 `apps/desktop/package.json` before each release; the version is shown in
 **Settings → Updates** and in the update manifest comparison.
 
+### Code signing
+
+An unsigned installer shows "Windows protected your PC / Unknown publisher", so
+customer releases must be signed. Buy a Windows code-signing certificate
+(OV or EV, `.pfx`), then:
+
+```bash
+cd apps/desktop
+export CSC_LINK="/secure/path/AnalytIQ-CodeSigning.pfx"
+export CSC_KEY_PASSWORD="..."          # password of the .pfx
+pnpm dist:signed
+```
+
+`CSC_LINK` may be a local path, an `https://` URL or a `base64:` value;
+electron-builder reads the same variables. `pnpm dist:signed` runs
+`scripts/require-signing.mjs` first and **exits with an error when `CSC_LINK`
+is missing**, so a release cannot be built unsigned by accident. Plain
+`pnpm dist` still builds an unsigned installer for internal testing.
+
+Keep the `.pfx` and its password out of the repository (`.secrets/` is
+git-ignored) and off any machine that is not the release machine.
+
 Replace `apps/desktop/build/icon.png` with a new 1024×1024 PNG to rebrand; keep
 it square and full-bleed.
 

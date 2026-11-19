@@ -18,6 +18,8 @@ function fallbackApi(): AnalytiqApi {
       Promise.resolve({ ok: false, items: [], total: 0, error: 'Unavailable in browser preview' }),
     productGet: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
     productCreate: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    productByBarcode: () =>
+      Promise.resolve({ ok: false, product: null, error: 'Unavailable in browser preview' }),
     productUpdate: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
     productArchive: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
     productRestore: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
@@ -109,6 +111,17 @@ function fallbackApi(): AnalytiqApi {
       Promise.resolve({ ok: false, messages: [], error: 'Unavailable in browser preview' }),
     automationTest: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
     automationRun: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    businessProfile: () =>
+      Promise.resolve({ ok: false, business: null, error: 'Unavailable in browser preview' }),
+    importProducts: () =>
+      Promise.resolve({ ok: false, created: 0, failed: 0, errors: [], error: 'Unavailable in browser preview' }),
+    importPurchases: () =>
+      Promise.resolve({ ok: false, created: 0, failed: 0, errors: [], error: 'Unavailable in browser preview' }),
+    importSales: () =>
+      Promise.resolve({ ok: false, created: 0, failed: 0, errors: [], error: 'Unavailable in browser preview' }),
+    printerList: () =>
+      Promise.resolve({ ok: false, printers: [], error: 'Unavailable in browser preview' }),
+    printerPrint: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
   };
 }
 

@@ -47,13 +47,16 @@
 - Product search (name/SKU/barcode, Enter adds first match), cart with
   qty/price/discount editing, header discount, live totals with tax
   estimate (authoritative tax computed server-side).
+- Barcode scanners (keyboard wedge): a scan with nothing focused adds the
+  exact barcode/SKU match and beeps. See `docs/PRINTERS.md`.
 - Tender dialog: per-line method picker, split payments, reference field
   for transfer/POS, paid/remaining/change readout.
-- Receipt view: monospace layout, prints via a print-styled popup window
-  — works with POS thermal printers (80mm) and standard A4/Letter
-  printers through the OS print dialog.
-- Sales history: paginated list, receipt detail, refund/void with reason
-  (manager permission).
+- Receipt view: business header, monospace layout. Prints silently to the
+  configured Xprinter 58/76/80 mm printer (auto-print after each sale), with
+  the OS print dialog as fallback. See `docs/PRINTERS.md`.
+- Sales history: paginated list, receipt detail, reprint, refund/void with
+  reason (manager permission), and CSV import of historical sales
+  (`docs/IMPORT.md`).
 
 ## Restaurant pack (tables, tax categories, photos)
 

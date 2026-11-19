@@ -231,6 +231,17 @@ export const saleCreateSchema = z.object({
   payments: z.array(salePaymentInputSchema).min(1, 'Add at least one payment').max(10),
   tableId: z.string().trim().min(1).nullish(),
   customerId: z.string().trim().min(1).nullish(),
+  /**
+   * Backdating hook used by the CSV importer; defaults to now. The receipt
+   * number and the stock rows are stamped with the same instant.
+   */
+  soldAt: z
+    .string()
+    .trim()
+    .datetime({ offset: true, message: 'Sale date must be an ISO date/time' })
+    .nullish(),
+  /** Source reference for imported sales (idempotency key). */
+  externalRef: z.string().trim().max(60).nullish(),
 });
 
 export type SaleCreateInput = z.infer<typeof saleCreateSchema>;
@@ -559,6 +570,102 @@ export const automationTestSchema = z.object({
 });
 
 export type AutomationTestInput = z.infer<typeof automationTestSchema>;
+
+// --- Bulk import (CSV) -------------------------------------------------------
+// Row shapes for the importer. The renderer parses CSV text into these rows
+// (naira -> kobo happens there) and the service re-validates every row before
+// writing, so a hand-rolled REST call cannot bypass the rules.
+
+const importText = (max: number) => z.string().trim().max(max).default('');
+const importCode = z.string().trim().max(64).default('');
+const importKobo = z.number().int().min(0).max(MAX_KOBO);
+const importQty = z.number().int().min(1).max(1_000_000);
+
+export const productImportRowSchema = z.object({
+  name: z.string().trim().min(2, 'Product name is required').max(200),
+  sku: importCode,
+  barcode: importCode,
+  category: importText(120),
+  unit: z.string().trim().max(20).default('pcs'),
+  costPriceKobo: importKobo.default(0),
+  sellingPriceKobo: importKobo.default(0),
+  reorderLevel: z.number().int().min(0).max(1_000_000_000).default(0),
+  openingStock: z.number().int().min(0).max(1_000_000_000).default(0),
+  taxCategory: importText(120),
+});
+
+export const productsImportSchema = z.object({
+  rows: z
+    .array(productImportRowSchema)
+    .min(1, 'Nothing to import')
+    .max(5000, 'Import 5000 rows at a time at most'),
+});
+
+export type ProductImportRow = z.infer<typeof productImportRowSchema>;
+export type ProductsImportInput = z.infer<typeof productsImportSchema>;
+
+export const purchaseImportRowSchema = z.object({
+  reference: z.string().trim().min(1, 'Give each purchase a reference').max(60),
+  supplier: z.string().trim().min(1, 'Supplier is required').max(120),
+  supplierPhone: importText(20),
+  date: importText(40),
+  sku: z.string().trim().min(1, 'SKU or barcode is required').max(64),
+  qty: importQty,
+  unitCostKobo: importKobo,
+  taxKobo: importKobo.default(0),
+  note: importText(500),
+  received: z.boolean().default(false),
+});
+
+export const purchasesImportSchema = z.object({
+  rows: z
+    .array(purchaseImportRowSchema)
+    .min(1, 'Nothing to import')
+    .max(5000, 'Import 5000 rows at a time at most'),
+});
+
+export type PurchaseImportRow = z.infer<typeof purchaseImportRowSchema>;
+export type PurchasesImportInput = z.infer<typeof purchasesImportSchema>;
+
+export const saleImportRowSchema = z.object({
+  receipt: z.string().trim().min(1, 'Give each sale a reference').max(60),
+  date: importText(40),
+  sku: z.string().trim().min(1, 'SKU or barcode is required').max(64),
+  qty: importQty,
+  unitPriceKobo: importKobo,
+  lineDiscountKobo: importKobo.default(0),
+  tender: z.enum(PAYMENT_METHODS).default('cash'),
+  customer: importText(120),
+  taxKobo: importKobo.nullish(),
+});
+
+export const salesImportSchema = z.object({
+  rows: z
+    .array(saleImportRowSchema)
+    .min(1, 'Nothing to import')
+    .max(5000, 'Import 5000 rows at a time at most'),
+});
+
+export type SaleImportRow = z.infer<typeof saleImportRowSchema>;
+export type SalesImportInput = z.infer<typeof salesImportSchema>;
+
+/** Downloadable CSV templates, kept next to the schemas they must match. */
+export const importTemplates = {
+  products: [
+    'name,sku,barcode,category,unit,cost_price,selling_price,reorder_level,opening_stock,tax_category',
+    'Indomie 70g,IND-70,6151100012345,Noodles,pcs,320.00,450.00,10,100,',
+  ],
+  purchases: [
+    'reference,supplier,supplier_phone,date,sku,qty,unit_cost,tax,note,received',
+    'PUR-1001,Peak Foods,+2348012345678,2026-11-01,IND-70,240,300.00,0,November restock,yes',
+  ],
+  sales: [
+    'receipt,date,sku,qty,unit_price,line_discount,tender,customer,tax',
+    'INV-0001,2026-11-02,IND-70,2,450.00,0,cash,,0',
+  ],
+} as const;
+
+export type ImportKind = keyof typeof importTemplates;
 
 // --- Commercial plans ------------------------------------------------------
 // Shared by the sales website (display) and the cloud API (what is charged), so

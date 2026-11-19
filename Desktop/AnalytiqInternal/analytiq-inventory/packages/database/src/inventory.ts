@@ -296,6 +296,50 @@ export async function getProduct(
   return { ...row, onHand: total, lowStock: total <= row.reorderLevel, levels };
 }
 
+/**
+ * Exact scan lookup for a hardware barcode scanner. Barcodes and SKUs are
+ * unique per business, so at most one active product matches. Returns null
+ * rather than throwing — the POS beeps/flags an unknown scan.
+ */
+export async function productByBarcode(
+  local: LocalDb,
+  businessId: string,
+  rawCode: string,
+): Promise<ProductWithStock | null> {
+  const code = rawCode.trim();
+  if (!code) return null;
+  const [row] = await local.db
+    .select({
+      id: products.id,
+      name: products.name,
+      sku: products.sku,
+      barcode: products.barcode,
+      categoryId: products.categoryId,
+      categoryName: categories.name,
+      unit: products.unit,
+      costPriceKobo: products.costPriceKobo,
+      sellingPriceKobo: products.sellingPriceKobo,
+      reorderLevel: products.reorderLevel,
+      imagePath: products.imagePath,
+      taxCategoryId: products.taxCategoryId,
+      isActive: products.isActive,
+    })
+    .from(products)
+    .leftJoin(categories, eq(products.categoryId, categories.id))
+    .where(
+      and(
+        eq(products.businessId, businessId),
+        eq(products.isActive, 1),
+        sql`(${products.barcode} = ${code} OR ${products.sku} = ${code})`,
+      ),
+    )
+    .limit(1);
+  if (!row) return null;
+  const onHand = await onHandMap(local, businessId, [row.id], null);
+  const qty = onHand.get(row.id) ?? 0;
+  return { ...row, onHand: qty, lowStock: qty <= row.reorderLevel };
+}
+
 async function assertUniqueCode(
   local: LocalDb,
   businessId: string,
