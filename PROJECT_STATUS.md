@@ -308,9 +308,20 @@ Done:
 - `docs/RELEASE_CHECKLIST.md` covers vendor material, signing, build,
   clean-machine acceptance, LAN/hardware checks and publishing.
 
+- Local cloud API `.env` configured and verified (`KEY LOADED`); the API now
+  loads `.env` at startup (`src/env.ts`) and `nest build` no longer wipes
+  `dist` on repeat runs (`incremental: false`).
+- Legal drafts: `docs/legal/EULA.md`, `docs/legal/PRIVACY_NOTICE.md`,
+  `docs/legal/REFUND_POLICY.md`. Update hosting deferred for 1.0.0.
+- Committed as `d1dec18` and tagged `v1.0.0` (no git remote configured yet, so
+  not pushed).
+
 Next:
 
+- [ ] Run `bash scripts/backup-license-key.sh`, copy the `.enc` to an encrypted
+      USB, store the password in a password manager.
 - [ ] Buy the code-signing certificate and build with `pnpm dist:signed`.
 - [ ] Run the clean-machine acceptance list in `docs/RELEASE_CHECKLIST.md`
       (includes real scanner and Xprinter checks).
-- [ ] Commit, tag `v1.0.0`, push; upload installer + `latest.json`.
+- [ ] Deploy cloud API + website with live Paystack keys; publish legal docs.
+- [ ] Add a git remote, then `git push -u origin master --tags`.
