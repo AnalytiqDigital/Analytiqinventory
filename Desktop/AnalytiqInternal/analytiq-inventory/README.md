@@ -47,6 +47,7 @@ analytiq-inventory/
 | Backups and restore    | `docs/BACKUPS.md`                                                           |
 | Offline licence keys   | `docs/LICENSE_KEYS.md`                                                      |
 | Online checkout        | `docs/CHECKOUT.md`                                                          |
+| Website and Vercel     | `docs/WEBSITE.md`                                                           |
 | WhatsApp / AI alerts   | `docs/AUTOMATION.md`                                                        |
 | CSV import             | `docs/IMPORT.md`                                                            |
 | Printers and scanners  | `docs/PRINTERS.md`                                                          |

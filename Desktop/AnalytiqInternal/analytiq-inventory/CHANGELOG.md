@@ -25,7 +25,15 @@
   permission (admin and manager only). Migration `0012_finance_staff.sql`.
 - New buyer setup sheet `docs/BUYER_SETUP.md` covering the unsigned-installer
   SmartScreen "More info → Run anyway" steps.
-- Docs: `docs/STAFF.md`, `docs/FINANCE.md`, updated `docs/REPORTING.md`.
+- **Sales website**: redesigned dark landing page (hero dashboard, feature row,
+  pharmacy/boutique illustration, dashboard panels, hardware, packages, demo
+  request), hosted installation and daily-use guides at `/docs`, a `/download`
+  page, WhatsApp support buttons (`+234 812 431 4217`) and installer download on
+  the payment confirmation page next to the licence key. Installer URL and
+  WhatsApp number are configurable through `NEXT_PUBLIC_DOWNLOAD_URL` and
+  `NEXT_PUBLIC_WHATSAPP`; Vercel deployment steps are in `docs/WEBSITE.md`.
+- Docs: `docs/STAFF.md`, `docs/FINANCE.md`, `docs/WEBSITE.md`, updated
+  `docs/REPORTING.md` and `docs/CHECKOUT.md`.
 
 ## 1.0.0 — Commercial release
 

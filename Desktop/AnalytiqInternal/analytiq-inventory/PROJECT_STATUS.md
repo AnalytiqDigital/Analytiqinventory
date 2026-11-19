@@ -315,8 +315,13 @@ Implemented:
   one-click diagnostics (version, profile, licence, printers, backups).
 - LAN parity: staff, role-permission and expense routes on the local server;
   new `finance.manage` permission granted to admin and manager.
-- Docs: `docs/STAFF.md`, `docs/FINANCE.md`, `docs/BUYER_SETUP.md`, updated
-  `docs/REPORTING.md`, `README.md` and `CHANGELOG.md`.
+- Website: new dark landing page, `/docs` installation and usage guides,
+  `/download` page, WhatsApp support (`+234 812 431 4217`) and installer download
+  on the payment confirmation page. Installer URL is set with
+  `NEXT_PUBLIC_DOWNLOAD_URL`; Vercel steps are in `docs/WEBSITE.md`.
+- Docs: `docs/STAFF.md`, `docs/FINANCE.md`, `docs/BUYER_SETUP.md`,
+  `docs/WEBSITE.md`, updated `docs/REPORTING.md`, `docs/CHECKOUT.md`,
+  `README.md` and `CHANGELOG.md`.
 
 Version bumped to `1.1.0`; installer is now
 `apps/desktop/release/AnalytIQ-Inventory-Setup-1.1.0.exe` (unsigned until the
