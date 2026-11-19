@@ -186,12 +186,21 @@ export function HelpPage(): JSX.Element {
               need it if the app is reinstalled.
             </p>
             <p>
-              Support: <span className="font-medium">support@analytiq.example</span> · WhatsApp:{' '}
-              <span className="font-medium">+234 000 000 0000</span>
+              WhatsApp support:{' '}
+              <span className="font-medium">+234 812 431 4217</span>. Send a short description of
+              the problem and attach the diagnostics below.
             </p>
-            <p className="text-xs text-slate-500">
-              Replace the placeholders above with your real support contacts before selling.
-            </p>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() =>
+                void ipc.openExternal(
+                  'https://wa.me/2348124314217?text=Hi%20AnalytIQ%2C%20I%20need%20help%20with%20the%20app.'
+                )
+              }
+            >
+              <LifeBuoy className="h-4 w-4" /> Message support on WhatsApp
+            </Button>
           </CardContent>
         </Card>
       </div>
