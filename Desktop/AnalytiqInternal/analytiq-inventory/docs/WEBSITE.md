@@ -50,8 +50,9 @@ request the installer on WhatsApp — useful while the file is still being hoste
 
 ## Deploy to Vercel
 
-1. Push the repository to GitHub (or GitLab/Bitbucket). The project currently
-   has no remote.
+1. The source is on GitHub at `github.com/AnalytiqDigital/Analytiqinventory`
+   (branch `master`, project at the repository root). Push new commits there
+   first; Vercel redeploys on every push.
 2. In Vercel, choose **Add New → Project** and import the repository.
 3. Set **Root Directory** to `apps/website`.
 4. Turn on **Include files outside of the Root Directory in the Build Step**
