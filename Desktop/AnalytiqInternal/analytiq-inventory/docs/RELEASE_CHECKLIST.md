@@ -7,12 +7,13 @@ Work top to bottom; do not publish until every box is ticked.
 - [x] Production Ed25519 keypair generated: public key embedded in
       `packages/licensing/src/publicKey.ts`; private key at
       `.secrets/license-private.pem` (git-ignored, never shipped).
-- [ ] **Back up the private key offline**: run
-      `bash scripts/backup-license-key.sh`, enter your own 16+ character
-      password, then copy the `.enc` file to an encrypted USB drive and store
-      the password in a password manager. The script verifies the archive
-      decrypts back to the original. Losing the key means re-issuing every key
-      with a new keypair and a new build.
+- [ ] **Back up the private key offline**: from cmd run
+      `scripts\backup-license-key.cmd` (or in Git Bash
+      `bash scripts/backup-license-key.sh`), enter your own 16+ character
+      password, then copy the `.enc` file from your Desktop to an encrypted USB
+      drive and store the password in a password manager. The script verifies
+      the archive decrypts back to the original. Losing the key means
+      re-issuing every key with a new keypair and a new build.
 - [x] Local cloud API configured: `apps/cloud-api/.env` points at the key and
       `loadEnvFile()` now reads it (verified `KEY LOADED`).
 - [ ] Production cloud API: deploy, set `LICENSE_PRIVATE_KEY` (inline PEM with
