@@ -8,7 +8,10 @@ payment confirmation, download page and the installation/usage docs.
 | `/`                  | Landing page (features, dashboard, hardware, packages, demo) |
 | `/checkout`          | Plan choice + Paystack checkout form                         |
 | `/checkout/success`  | Licence key, installer download and WhatsApp install help    |
-| `/download`          | Installer page (direct link when hosted, otherwise WhatsApp) |
+| `/download`          | Installer page, system requirements and SHA-256 checksum     |
+| `/legal/terms`       | Terms of use and licence terms (EULA)                        |
+| `/legal/privacy`     | Privacy notice (NDPA)                                        |
+| `/legal/refund`      | Refund and cancellation policy                               |
 | `/docs`              | Help index                                                   |
 | `/docs/installation` | Install, SmartScreen, licence activation, hardware, backups  |
 | `/docs/usage`        | Daily selling, stock, credit, reports, finance, staff        |
@@ -28,6 +31,11 @@ Set these in Vercel (Project → Settings → Environment Variables) and in
 | `NEXT_PUBLIC_WHATSAPP`     | No       | Support number, digits only. Defaults to `2348124314217`                                                                                                                        |
 
 `NEXT_PUBLIC_*` values are embedded at build time: redeploy after changing them.
+`downloadUrl()` ignores a malformed `NEXT_PUBLIC_DOWNLOAD_URL` (anything that is
+not an `http(s)` URL or a local path) and falls back to the public release, so a
+stray value cannot produce a broken download link. The published SHA-256 in
+`lib/site.ts` applies to the default hosted ZIP; update it whenever a new build
+is uploaded.
 
 ## Hosting the installer
 
@@ -92,6 +100,10 @@ browser; browsing the landing page and docs works without it.
 - [ ] WhatsApp buttons open `https://wa.me/2348124314217` with a prefilled message.
 - [ ] `/docs/installation` and `/docs/usage` render; the download button points
       at the public AnalytIQ downloads release (or `NEXT_PUBLIC_DOWNLOAD_URL`).
+- [ ] `/legal/terms`, `/legal/privacy` and `/legal/refund` render and are linked
+      from the footer.
+- [ ] The SHA-256 on `/download` matches the hosted ZIP
+      (`sha256sum AnalytIQ-Inventory-1.1.0-Windows.zip`).
 - [ ] A Paystack test payment returns to `/checkout/success?reference=…` and shows
       the key, the installer download and the WhatsApp help button.
 - [ ] After sales: replace the placeholder support copy if the number changes.
