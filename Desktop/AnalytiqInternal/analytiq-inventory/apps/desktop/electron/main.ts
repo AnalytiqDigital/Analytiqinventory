@@ -36,10 +36,13 @@ import {
   authenticate,
   countStock,
   createCategory,
+  createExpense,
   createProduct,
   createSale,
+  createStaff,
   createTable,
   createTaxCategory,
+  deleteExpense,
   getLevels,
   getProduct,
   getBusinessProfile,
@@ -53,14 +56,18 @@ import {
   ensureDefaultTaxCategory,
   isFirstRun,
   listCategories,
+  listExpenses,
   listMovements,
   listProducts,
+  listRoles,
   listSales,
+  listStaff,
   listTables,
   listTaxCategories,
   login,
   logout,
   refundSale,
+  resetStaffPassword,
   restoreProduct,
   runSetup,
   setSyncSettings,
@@ -68,6 +75,8 @@ import {
   syncNow,
   updateLocation,
   updateProduct,
+  updateRolePermissions,
+  updateStaff,
   updateTable,
   updateTaxCategory,
   voidSale,
@@ -1044,7 +1053,10 @@ function importHandlers(): void {
   ipcMain.handle('import:products', async (_event, input: unknown) => {
     try {
       const { db, user } = await requireUser();
-      return { ok: true, ...(await importProducts(db, user.businessId, user.id, user.permissions, input)) };
+      return {
+        ok: true,
+        ...(await importProducts(db, user.businessId, user.id, user.permissions, input)),
+      };
     } catch (err: unknown) {
       return { ok: false, ...safeError(err), created: 0, failed: 0, errors: [] };
     }
@@ -1053,7 +1065,10 @@ function importHandlers(): void {
   ipcMain.handle('import:purchases', async (_event, input: unknown) => {
     try {
       const { db, user } = await requireUser();
-      return { ok: true, ...(await importPurchases(db, user.businessId, user.id, user.permissions, input)) };
+      return {
+        ok: true,
+        ...(await importPurchases(db, user.businessId, user.id, user.permissions, input)),
+      };
     } catch (err: unknown) {
       return { ok: false, ...safeError(err), created: 0, failed: 0, errors: [] };
     }
@@ -1062,9 +1077,120 @@ function importHandlers(): void {
   ipcMain.handle('import:sales', async (_event, input: unknown) => {
     try {
       const { db, user } = await requireUser();
-      return { ok: true, ...(await importSales(db, user.businessId, user.id, user.permissions, input)) };
+      return {
+        ok: true,
+        ...(await importSales(db, user.businessId, user.id, user.permissions, input)),
+      };
     } catch (err: unknown) {
       return { ok: false, ...safeError(err), created: 0, failed: 0, errors: [] };
+    }
+  });
+}
+
+// Batch 14: staff accounts, editable role permissions and the expenses ledger.
+function staffFinanceHandlers(): void {
+  ipcMain.handle('staff:list', async () => {
+    try {
+      const { db, user } = await requireUser();
+      return { ok: true, ...(await listStaff(db, user.businessId, user.permissions)) };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err), items: [] };
+    }
+  });
+
+  ipcMain.handle('staff:create', async (_event, input: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      const result = await createStaff(db, user.businessId, user.id, user.permissions, input);
+      return { ok: true, ...result };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
+
+  ipcMain.handle('staff:update', async (_event, payload: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      const { id, patch } = payload as { id?: unknown; patch?: unknown };
+      if (typeof id !== 'string' || id.length === 0) throw new Error('Staff id is required');
+      return {
+        ok: true,
+        ...(await updateStaff(db, user.businessId, user.id, user.permissions, id, patch)),
+      };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
+
+  ipcMain.handle('staff:reset-password', async (_event, payload: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      const { id, password } = payload as { id?: unknown; password?: unknown };
+      if (typeof id !== 'string' || id.length === 0) throw new Error('Staff id is required');
+      await resetStaffPassword(db, user.businessId, user.id, user.permissions, id, { password });
+      return { ok: true };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
+
+  ipcMain.handle('staff:roles', async () => {
+    try {
+      const { db, user } = await requireUser();
+      return { ok: true, ...(await listRoles(db, user.businessId, user.permissions)) };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err), items: [] };
+    }
+  });
+
+  ipcMain.handle('staff:role-permissions', async (_event, payload: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      const { id, permissions } = payload as { id?: unknown; permissions?: unknown };
+      if (typeof id !== 'string' || id.length === 0) throw new Error('Role id is required');
+      return {
+        ok: true,
+        ...(await updateRolePermissions(db, user.businessId, user.id, user.permissions, id, {
+          permissions,
+        })),
+      };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
+
+  ipcMain.handle('finance:expenses', async (_event, query: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      return {
+        ok: true,
+        ...(await listExpenses(db, user.businessId, user.permissions, query ?? {})),
+      };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err), items: [], totalKobo: 0 };
+    }
+  });
+
+  ipcMain.handle('finance:create-expense', async (_event, input: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      return {
+        ok: true,
+        ...(await createExpense(db, user.businessId, user.id, user.permissions, input)),
+      };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
+
+  ipcMain.handle('finance:delete-expense', async (_event, id: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      if (typeof id !== 'string' || id.length === 0) throw new Error('Expense id is required');
+      await deleteExpense(db, user.businessId, user.id, user.permissions, id);
+      return { ok: true };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
     }
   });
 }
@@ -1136,6 +1262,7 @@ void app.whenReady().then(async () => {
     backupHandlers();
     businessHandlers();
     importHandlers();
+    staffFinanceHandlers();
   }
   createWindow();
   app.on('activate', () => {

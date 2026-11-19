@@ -114,11 +114,47 @@ function fallbackApi(): AnalytiqApi {
     businessProfile: () =>
       Promise.resolve({ ok: false, business: null, error: 'Unavailable in browser preview' }),
     importProducts: () =>
-      Promise.resolve({ ok: false, created: 0, failed: 0, errors: [], error: 'Unavailable in browser preview' }),
+      Promise.resolve({
+        ok: false,
+        created: 0,
+        failed: 0,
+        errors: [],
+        error: 'Unavailable in browser preview',
+      }),
     importPurchases: () =>
-      Promise.resolve({ ok: false, created: 0, failed: 0, errors: [], error: 'Unavailable in browser preview' }),
+      Promise.resolve({
+        ok: false,
+        created: 0,
+        failed: 0,
+        errors: [],
+        error: 'Unavailable in browser preview',
+      }),
     importSales: () =>
-      Promise.resolve({ ok: false, created: 0, failed: 0, errors: [], error: 'Unavailable in browser preview' }),
+      Promise.resolve({
+        ok: false,
+        created: 0,
+        failed: 0,
+        errors: [],
+        error: 'Unavailable in browser preview',
+      }),
+    staff: () => Promise.resolve({ ok: false, items: [], error: 'Unavailable in browser preview' }),
+    staffCreate: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    staffUpdate: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    staffResetPassword: () =>
+      Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    staffRoles: () =>
+      Promise.resolve({ ok: false, items: [], error: 'Unavailable in browser preview' }),
+    staffRolePermissions: () =>
+      Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    expenses: () =>
+      Promise.resolve({
+        ok: false,
+        items: [],
+        totalKobo: 0,
+        error: 'Unavailable in browser preview',
+      }),
+    expenseCreate: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    expenseDelete: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
     printerList: () =>
       Promise.resolve({ ok: false, printers: [], error: 'Unavailable in browser preview' }),
     printerPrint: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),

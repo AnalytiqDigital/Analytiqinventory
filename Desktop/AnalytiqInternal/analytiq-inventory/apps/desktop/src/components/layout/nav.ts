@@ -35,7 +35,7 @@ export const NAV_ITEMS: NavItem[] = [
  { to: '/suppliers', label: 'Suppliers', icon: Truck, section: 'Manage', permission: 'suppliers.manage', module: 'suppliers' },
  { to: '/customers', label: 'Customers', icon: Users, section: 'Manage', permission: 'customers.manage', module: 'customers' },
  { to: '/reports', label: 'Reports', icon: BarChart3, section: 'Manage', permission: 'reports.view' },
- { to: '/finance', label: 'Finance', icon: Wallet, section: 'Manage', unfinished: true, permission: 'reports.view', module: 'finance' },
+ { to: '/finance', label: 'Finance', icon: Wallet, section: 'Manage', permission: 'reports.view', module: 'finance' },
  { to: '/staff', label: 'Staff & Permissions', icon: Users, section: 'Setup', permission: 'staff.manage' },
  { to: '/settings', label: 'Settings', icon: Settings, section: 'Setup', permission: 'settings.manage' },
  { to: '/tax-categories', label: 'Tax Categories', icon: Percent, section: 'Setup', permission: 'settings.manage', module: 'taxCategories' },

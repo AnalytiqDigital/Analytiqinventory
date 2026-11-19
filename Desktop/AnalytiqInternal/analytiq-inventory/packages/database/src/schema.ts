@@ -633,3 +633,30 @@ export const automationMessages = sqliteTable('automation_messages', {
 });
 
 export type AutomationMessageRow = typeof automationMessages.$inferSelect;
+
+// --- Batch 14: finance (expenses) -------------------------------------------
+// Expenses are an append-only money-out ledger. Profit is never stored: the
+// finance reports subtract expenses from sales gross profit at read time.
+
+export const expenses = sqliteTable(
+  'expenses',
+  {
+    id: text('id').primaryKey(),
+    businessId: text('business_id')
+      .notNull()
+      .references(() => businesses.id),
+    locationId: text('location_id').references(() => locations.id),
+    category: text('category').notNull(),
+    note: text('note').notNull().default(''),
+    amountKobo: integer('amount_kobo').notNull(),
+    paidAt: integer('paid_at', { mode: 'timestamp' }).notNull(),
+    createdBy: text('created_by'),
+    version: integer('version').notNull().default(1),
+    ...timestamps(),
+  },
+  (t) => ({
+    expensesBusinessPaid: index('expenses_business_paid_idx').on(t.businessId, t.paidAt),
+  })
+);
+
+export type ExpenseRow = typeof expenses.$inferSelect;

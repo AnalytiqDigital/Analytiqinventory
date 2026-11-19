@@ -12,6 +12,7 @@ export const PERMISSIONS = {
   'customers.manage': 'Manage customers and credit',
   'suppliers.manage': 'Manage suppliers',
   'reports.view': 'View reports and dashboard metrics',
+  'finance.manage': 'Record expenses and view profit statements',
   'staff.manage': 'Manage users, roles, and permissions',
   'settings.manage': 'Manage business and application settings',
 } as const;
@@ -35,6 +36,7 @@ export const MANAGER_PERMISSIONS: PermissionKey[] = [
   'customers.manage',
   'suppliers.manage',
   'reports.view',
+  'finance.manage',
 ];
 
 export const ADMIN_PERMISSIONS: PermissionKey[] = [

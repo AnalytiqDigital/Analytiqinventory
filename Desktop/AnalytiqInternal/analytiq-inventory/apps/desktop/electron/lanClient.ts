@@ -73,6 +73,18 @@ function pairArg(args: unknown[]): { id: string; patch: unknown } {
   return { id, patch };
 }
 
+function payloadArg<T extends Json>(args: unknown[], keys: string[]): T & { id: string } {
+  const payload = args[0];
+  if (!payload || typeof payload !== 'object') throw new Error('Invalid request payload');
+  const record = payload as Json;
+  if (typeof record.id !== 'string' || record.id.length === 0)
+    throw new Error('Record id is required');
+  for (const key of keys) {
+    if (record[key] === undefined) throw new Error(`Missing ${key}`);
+  }
+  return record as T & { id: string };
+}
+
 function inputArg(args: unknown[]): { id: string; input: unknown } {
   const payload = args[0];
   if (!payload || typeof payload !== 'object') throw new Error('Invalid request payload');
@@ -239,6 +251,40 @@ const ROUTES: Record<string, Route> = {
     method: 'GET',
     path: (a) => endpoint('/api/reports/summary', a[0]),
     fallback: { summary: null },
+  },
+
+  'staff:list': { method: 'GET', path: () => '/api/staff', fallback: { items: [] } },
+  'staff:create': { method: 'POST', path: () => '/api/staff', body: (a) => a[0] },
+  'staff:update': {
+    method: 'PATCH',
+    path: (a) => `/api/staff/${pairArg(a).id}`,
+    body: (a) => pairArg(a).patch,
+  },
+  'staff:reset-password': {
+    method: 'POST',
+    path: (a) => `/api/staff/${encodeURIComponent(payloadArg(a, ['password']).id)}/password`,
+    body: (a) => ({ password: (a[0] as Json).password }),
+  },
+  'staff:roles': { method: 'GET', path: () => '/api/staff/roles', fallback: { items: [] } },
+  'staff:role-permissions': {
+    method: 'PATCH',
+    path: (a) => `/api/staff/roles/${encodeURIComponent(payloadArg(a, ['permissions']).id)}`,
+    body: (a) => ({ permissions: (a[0] as Json).permissions }),
+  },
+
+  'finance:expenses': {
+    method: 'GET',
+    path: (a) => endpoint('/api/finance/expenses', a[0]),
+    fallback: { items: [], totalKobo: 0 },
+  },
+  'finance:create-expense': {
+    method: 'POST',
+    path: () => '/api/finance/expenses',
+    body: (a) => a[0],
+  },
+  'finance:delete-expense': {
+    method: 'DELETE',
+    path: (a) => `/api/finance/expenses/${idArg(a)}`,
   },
 
   'business:profile': {

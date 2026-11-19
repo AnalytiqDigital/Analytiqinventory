@@ -877,9 +877,90 @@ describe('LAN server API', () => {
       token
     );
     expect(again.json()).toMatchObject({ ok: true, created: 0, failed: 1 });
+    expect((again.json() as { errors: Array<{ code?: string }> }).errors[0]?.code).toBe(
+      'SALE_REFERENCE_EXISTS'
+    );
+  });
+
+  it('manages staff, role permissions and expenses', async () => {
+    const { token } = await signIn();
+    const productId = await newProduct(token);
+
+    const rolesRes = await call('GET', '/api/staff/roles', undefined, token);
+    expect(rolesRes.statusCode).toBe(200);
+    const roles = (
+      rolesRes.json() as {
+        items: Array<{ id: string; name: string; permissions: string[] }>;
+      }
+    ).items;
+    const cashierRole = roles.find((r) => r.name === 'Cashier');
+    expect(cashierRole?.permissions).toContain('sales.create');
+
+    const created = await call(
+      'POST',
+      '/api/staff',
+      {
+        name: 'Chidi Cashier',
+        email: 'chidi@testmart.ng',
+        password: 'Cashier123',
+        roleId: cashierRole?.id,
+      },
+      token
+    );
+    expect(created.statusCode).toBe(200);
+    const staffList = await call('GET', '/api/staff', undefined, token);
     expect(
-      (again.json() as { errors: Array<{ code?: string }> }).errors[0]?.code
-    ).toBe('SALE_REFERENCE_EXISTS');
+      (staffList.json() as { items: Array<{ email: string }> }).items.some(
+        (s) => s.email === 'chidi@testmart.ng'
+      )
+    ).toBe(true);
+
+    const login = await call('POST', '/api/auth/login', {
+      email: 'chidi@testmart.ng',
+      password: 'Cashier123',
+    });
+    const cashierToken = (login.json() as { token: string }).token;
+    const expenseDenied = await call('GET', '/api/finance/expenses', undefined, cashierToken);
+    expect(expenseDenied.statusCode).toBe(403);
+    expect(expenseDenied.json()).toMatchObject({ ok: false, code: 'FORBIDDEN' });
+
+    const expense = await call(
+      'POST',
+      '/api/finance/expenses',
+      { category: 'Rent', amountKobo: 500_000, note: 'November rent' },
+      token
+    );
+    expect(expense.statusCode).toBe(200);
+    const listed = await call('GET', '/api/finance/expenses', undefined, token);
+    expect((listed.json() as { totalKobo: number }).totalKobo).toBe(500_000);
+
+    const strip = await call(
+      'PATCH',
+      `/api/staff/roles/${cashierRole?.id}`,
+      { permissions: ['sales.view'] },
+      token
+    );
+    expect(strip.statusCode).toBe(200);
+    const saleDenied = await call(
+      'POST',
+      '/api/sales',
+      { items: [{ productId, qty: 1 }], payments: [{ method: 'cash', amountKobo: 50_000 }] },
+      cashierToken
+    );
+    expect(saleDenied.statusCode).toBe(403);
+
+    const reset = await call(
+      'POST',
+      `/api/staff/${(created.json() as { staff: { id: string } }).staff.id}/password`,
+      { password: 'Freshpass99' },
+      token
+    );
+    expect(reset.statusCode).toBe(200);
+    const relogin = await call('POST', '/api/auth/login', {
+      email: 'chidi@testmart.ng',
+      password: 'Freshpass99',
+    });
+    expect(relogin.statusCode).toBe(200);
   });
 
   it('keeps the health probe unchanged', async () => {

@@ -39,6 +39,9 @@ analytiq-inventory/
 | ---------------------- | --------------------------------------------------------------------------- |
 | POS, stock, purchasing | `docs/POS.md`, `docs/PRODUCTS_INVENTORY.md`, `docs/CUSTOMERS_PURCHASING.md` |
 | Reports                | `docs/REPORTING.md`                                                         |
+| Expenses and profit    | `docs/FINANCE.md`                                                           |
+| Staff and permissions  | `docs/STAFF.md`                                                             |
+| Buyer setup sheet      | `docs/BUYER_SETUP.md`                                                       |
 | LAN / multi-till       | `docs/LAN_SETUP.md`                                                         |
 | Branch sync            | `docs/SYNC.md`                                                              |
 | Backups and restore    | `docs/BACKUPS.md`                                                           |
@@ -117,6 +120,11 @@ If electron-builder cannot extract its code-signing cache (symlink privilege
 required on Windows), point `ELECTRON_BUILDER_CACHE` at a pre-extracted cache —
 `.ebcache/` in this repo is used for that and is git-ignored. See
 `docs/UPDATES.md` for the one-time steps.
+
+The installer is **unsigned** until a code-signing certificate is configured
+(`pnpm dist:signed`). Windows still installs it: SmartScreen shows
+"Windows protected your PC" → **More info** → **Run anyway**, and UAC shows
+*Unknown publisher*. The customer-facing steps are in `docs/BUYER_SETUP.md`.
 
 ## Selling a licence
 

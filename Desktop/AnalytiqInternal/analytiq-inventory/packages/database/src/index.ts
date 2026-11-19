@@ -11,6 +11,8 @@ export * from './customers';
 export * from './suppliers';
 export * from './purchases';
 export * from './reports';
+export * from './staff';
+export * from './finance';
 export * from './backups';
 export * from './locations';
 export * from './sync';
