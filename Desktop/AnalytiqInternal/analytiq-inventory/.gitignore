@@ -2,6 +2,9 @@ node_modules/
 dist/
 dist-electron/
 build/
+# Installer assets live in apps/desktop/build (icon + .gitkeep); everything
+# else named "build" is generated output.
+!apps/desktop/build/
 .turbo/
 out/
 .next/
@@ -11,8 +14,12 @@ next-env.d.ts
 *.local
 .env
 .env.local
+# Vendor license signing material must never enter the repository.
+.secrets/
 apps/*/data/*.db
 apps/*/data/*.db-journal
+# Cloud orders hold customer contact details and licence keys.
+apps/cloud-api/data/
 apps/desktop/release/
 .ebcache/
 .DS_Store

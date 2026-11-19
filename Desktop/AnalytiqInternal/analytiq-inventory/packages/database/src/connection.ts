@@ -21,3 +21,16 @@ export function openLocalDb(filePath: string): LocalDb {
 export function closeLocalDb(local: LocalDb): void {
   local.raw.close();
 }
+
+/**
+ * Re-open the same file after an offline restore. Mutates the shared LocalDb
+ * so every caller (IPC handlers, Fastify routes, Drizzle queries) keeps
+ * working without rebuilding its references.
+ */
+export function reopenLocalDb(local: LocalDb, filePath: string): void {
+  const raw = new Database(filePath);
+  raw.pragma('journal_mode = WAL');
+  raw.pragma('foreign_keys = ON');
+  local.raw = raw;
+  local.db = drizzle(raw, { schema });
+}

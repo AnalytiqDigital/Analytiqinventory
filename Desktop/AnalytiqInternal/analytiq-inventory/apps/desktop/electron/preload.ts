@@ -201,6 +201,111 @@ const api = {
     ipcRenderer.invoke('purchases:receive', id),
   purchasesCancel: (id: string): Promise<{ ok: boolean; error?: string; code?: string }> =>
     ipcRenderer.invoke('purchases:cancel', id),
+
+  reportsSummary: (
+    query: unknown
+  ): Promise<{ ok: boolean; summary?: unknown; error?: string; code?: string }> =>
+    ipcRenderer.invoke('reports:summary', query),
+
+  // --- Batch 12: backups ---
+  backups: (): Promise<{
+    ok: boolean;
+    dir?: string;
+    items?: unknown[];
+    error?: string;
+    code?: string;
+  }> => ipcRenderer.invoke('backup:list'),
+  backupCreate: (): Promise<{
+    ok: boolean;
+    backup?: unknown;
+    pruned?: number;
+    error?: string;
+    code?: string;
+  }> => ipcRenderer.invoke('backup:create'),
+  backupRestore: (
+    name: string
+  ): Promise<{
+    ok: boolean;
+    restored?: unknown;
+    safetyBackup?: unknown;
+    error?: string;
+    code?: string;
+  }> => ipcRenderer.invoke('backup:restore', name),
+  backupDelete: (
+    name: string
+  ): Promise<{ ok: boolean; removed?: string; error?: string; code?: string }> =>
+    ipcRenderer.invoke('backup:delete', name),
+  backupReveal: (): Promise<{ ok: boolean; error?: string; code?: string }> =>
+    ipcRenderer.invoke('backup:reveal'),
+
+  // --- Batch 10: offline license ---
+  licenseStatus: (): Promise<{ ok: boolean; status?: unknown; error?: string; code?: string }> =>
+    ipcRenderer.invoke('license:status'),
+  licenseActivate: (
+    key: string
+  ): Promise<{ ok: boolean; status?: unknown; error?: string; code?: string }> =>
+    ipcRenderer.invoke('license:activate', key),
+
+  // --- Batch 12: update check + safe external links ---
+  updateCheck: (): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('app:update-check'),
+  openExternal: (url: string): Promise<{ ok: boolean; error?: string; code?: string }> =>
+    ipcRenderer.invoke('app:open-external', url),
+
+  // --- Batch 8: locations + hub sync ---
+  locations: (): Promise<{ ok: boolean; items: unknown[]; error?: string; code?: string }> =>
+    ipcRenderer.invoke('locations:list'),
+  locationCreate: (
+    input: unknown
+  ): Promise<{ ok: boolean; location?: unknown; error?: string; code?: string }> =>
+    ipcRenderer.invoke('locations:create', input),
+  locationUpdate: (
+    id: string,
+    patch: unknown
+  ): Promise<{ ok: boolean; location?: unknown; error?: string; code?: string }> =>
+    ipcRenderer.invoke('locations:update', { id, patch }),
+  syncStatus: (
+    query?: unknown
+  ): Promise<{ ok: boolean; status?: unknown; error?: string; code?: string }> =>
+    ipcRenderer.invoke('sync:status', query),
+  syncConfigure: (
+    input: unknown
+  ): Promise<{ ok: boolean; settings?: unknown; error?: string; code?: string }> =>
+    ipcRenderer.invoke('sync:configure', input),
+  syncNow: (): Promise<{
+    ok: boolean;
+    pushed?: number;
+    pulled?: number;
+    finishedAt?: string;
+    error?: string;
+    code?: string;
+  }> => ipcRenderer.invoke('sync:now'),
+
+  // --- Batch 11: AI + WhatsApp automation ---
+  automationSettings: (): Promise<{
+    ok: boolean;
+    settings?: unknown;
+    error?: string;
+    code?: string;
+  }> => ipcRenderer.invoke('automation:settings'),
+  automationSave: (
+    input: unknown
+  ): Promise<{ ok: boolean; settings?: unknown; error?: string; code?: string }> =>
+    ipcRenderer.invoke('automation:save', input),
+  automationMessages: (
+    limit?: number
+  ): Promise<{ ok: boolean; messages?: unknown[]; error?: string; code?: string }> =>
+    ipcRenderer.invoke('automation:messages', limit),
+  automationTest: (
+    input: unknown
+  ): Promise<{ ok: boolean; message?: unknown; error?: string; code?: string }> =>
+    ipcRenderer.invoke('automation:test', input),
+  automationRun: (): Promise<{
+    ok: boolean;
+    result?: unknown;
+    error?: string;
+    code?: string;
+  }> => ipcRenderer.invoke('automation:run'),
 };
 
 export type AnalytiqApi = typeof api;

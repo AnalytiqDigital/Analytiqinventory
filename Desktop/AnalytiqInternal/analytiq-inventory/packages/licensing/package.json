@@ -1,0 +1,24 @@
+{
+  "name": "@analytiq/licensing",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint src --ext .ts",
+    "test": "vitest run",
+    "keygen": "node scripts/keygen.mjs",
+    "issue": "node scripts/issue.mjs"
+  },
+  "dependencies": {
+    "@analytiq/database": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "20.19.43",
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.0"
+  },
+  "module": "./src/index.ts"
+}

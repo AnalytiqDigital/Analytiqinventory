@@ -4,6 +4,8 @@
     "outDir": "dist",
     "rootDir": "src",
     "noEmit": false,
+    "module": "CommonJS",
+    "moduleResolution": "Node",
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true
   },

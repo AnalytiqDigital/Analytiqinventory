@@ -1,5 +1,60 @@
 # Changelog
 
+## 0.13.0 — Batch 12: backups, branding, updates and release hardening
+
+- Verified local backups: `VACUUM INTO` snapshots are checked with
+  `PRAGMA integrity_check` and a required-table probe before being offered, and
+  can be restored from **Settings → Backups**. Daily automatic snapshots.
+- Business branding/profile settings, update checks against an HTTPS manifest
+  (`ANALYTIQ_UPDATE_URL`), and hardened Electron defaults (sandbox, context
+  isolation, allow-listed IPC, no secrets in the package).
+- NSIS installer ships the unpacked SQLite native module and all migrations.
+- Docs: `docs/BACKUPS.md`, `docs/UPDATES.md`, `docs/SECURITY.md`.
+
+## 0.12.0 — Batch 11: WhatsApp and AI automation
+
+- Low-stock and end-of-day WhatsApp alerts with a persisted outbox
+  (`queued`, `sent`, `failed`, `dry_run`), once-a-day guards and a 15-minute
+  scheduler in the desktop app and LAN server.
+- WhatsApp Cloud API delivery, Meta template + language support for messages
+  outside the 24-hour window, and optional AI rewrite through any
+  OpenAI-compatible endpoint.
+- Secrets live only in the local database, are never echoed to the renderer,
+  and are excluded from sync/audit payloads.
+- Settings card for triggers, credentials, test messages and recent outbox.
+- Docs: `docs/AUTOMATION.md`.
+
+## 0.11.0 — Batch 10: licensing, online checkout and the sales website
+
+- Offline Ed25519 licence keys (`ANQ1.<payload>.<signature>`) with a 14-day
+  trial, install-id locking, activation/deactivation and vendor CLI tooling.
+- Cloud API (NestJS): `/api/plans`, `/api/checkout`, order status, and a
+  signature-verified Paystack webhook that issues the key exactly once
+  (idempotent settlement, amount/currency checks).
+- Shared plan catalogue in `@analytiq/validation` so the website price and the
+  charged amount cannot drift.
+- Sales website (Next.js): landing page with pricing, checkout form, and a
+  confirmation page that polls the order and shows a copyable key.
+- Docs: `docs/LICENSE_KEYS.md`, `docs/CHECKOUT.md`.
+
+## 0.10.0 — Batch 9: reporting
+
+- Live reports computed from the ledger (no stored aggregates): sales totals,
+  payment mix, top products, stock value and low-stock, customer credit and
+  supplier balances.
+- Reports page in the desktop app and `GET /api/reports/summary` on the LAN
+  server, both behind `reports.view`.
+- Docs: `docs/REPORTING.md`.
+
+## 0.9.0 — Batch 8: multi-location and branch sync
+
+- Locations management with per-location stock and scoping on sales and
+  purchases.
+- Opt-in relay sync between branches: shared entities push/pull, append-only
+  stock ledger, per-device cursors, no customer account required.
+- Desktop sync settings/status and LAN sync endpoints.
+- Docs: `docs/SYNC.md`.
+
 ## 0.8.0 — Batch 7: LAN server and multi-computer
 
 - New LAN mode: the primary computer owns SQLite and runs the Fastify server;
@@ -30,13 +85,13 @@
 
 ## 0.7.0 — Batch 6: customers, suppliers, purchasing
 
-- Customers with credit limits and a derived balance: a sale marked *Credit
-  (pay later)* puts the bill on the customer's account, the limit is checked
+- Customers with credit limits and a derived balance: a sale marked _Credit
+  (pay later)_ puts the bill on the customer's account, the limit is checked
   before the sale is written, and part-cash/part-credit works by splitting the
   tender. Payments recorded against the account reduce the balance; a customer
   who still owes cannot be archived.
 - Suppliers contact book, and a purchase ledger: purchases are recorded as
-  drafts, and *Receive* is the only thing that moves stock — one movement per
+  drafts, and _Receive_ is the only thing that moves stock — one movement per
   line, in a single transaction, refused on a second receive.
 - Desktop: new Customers, Suppliers and Purchases pages (search, filters,
   expandable purchase lines, multi-line item editor); POS gains a customer
@@ -71,17 +126,17 @@
 ## 0.5.0 — Batch 5: POS and Cash Register
 
 - Sales ledger: `sales` + items + payments + reversals; receipt numbers
-unique per business; money in integer kobo.
+  unique per business; money in integer kobo.
 - Atomic checkout: cart validation, line + header discounts, tax default
-from business rate, split tender (cash/transfer/pos/credit), stock guard
-per line — all in one transaction with audit rows.
+  from business rate, split tender (cash/transfer/pos/credit), stock guard
+  per line — all in one transaction with audit rows.
 - Refunds/voids restock via offsetting `return` rows with reversal
-records; sales never deleted; double reversal rejected.
+  records; sales never deleted; double reversal rejected.
 - Desktop: POS page with product search, cart editing, tender dialog,
-printable receipts (thermal + standard printers), sales history with
-refund/void flows.
+  printable receipts (thermal + standard printers), sales history with
+  refund/void flows.
 - Permission-gated writes (`sales.create`, `sales.refund`);
-authenticated IPC for all sales channels.
+  authenticated IPC for all sales channels.
 - Tests: service lifecycle, validation schemas. Docs: `docs/POS.md`.
 
 ## 0.4.0 — Batch 4: Products and Inventory

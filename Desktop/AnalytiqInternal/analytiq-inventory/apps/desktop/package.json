@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@analytiq/database": "workspace:*",
+    "@analytiq/licensing": "workspace:*",
     "@analytiq/validation": "workspace:*",
     "@hookform/resolvers": "^3.6.0",
     "@tanstack/react-query": "^5.51.0",
@@ -75,7 +76,8 @@
       "target": [
         "nsis"
       ],
-      "artifactName": "AnalytIQ-Inventory-Setup-${version}.${ext}"
+      "artifactName": "AnalytIQ-Inventory-Setup-${version}.${ext}",
+      "icon": "build/icon.png"
     },
     "nsis": {
       "oneClick": false,
@@ -84,6 +86,8 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "AnalytIQ Inventory & POS"
-    }
-  }
+    },
+    "copyright": "Copyright © 2026 AnalytIQ Digital"
+  },
+  "author": "AnalytIQ Digital"
 }

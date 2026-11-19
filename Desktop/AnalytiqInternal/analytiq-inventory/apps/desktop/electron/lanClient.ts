@@ -82,6 +82,13 @@ function inputArg(args: unknown[]): { id: string; input: unknown } {
 }
 
 const ROUTES: Record<string, Route> = {
+  'license:status': { method: 'GET', path: () => '/api/license/status' },
+  'license:activate': {
+    method: 'POST',
+    path: () => '/api/license/activate',
+    body: (a) => ({ key: a[0] }),
+  },
+
   'inventory:categories': { method: 'GET', path: () => '/api/categories', fallback: { items: [] } },
   'inventory:category-create': { method: 'POST', path: () => '/api/categories', body: (a) => a[0] },
   'inventory:products': {
@@ -222,6 +229,62 @@ const ROUTES: Record<string, Route> = {
     path: (a) => `/api/purchases/${idArg(a)}/receive`,
   },
   'purchases:cancel': { method: 'POST', path: (a) => `/api/purchases/${idArg(a)}/cancel` },
+
+  'reports:summary': {
+    method: 'GET',
+    path: (a) => endpoint('/api/reports/summary', a[0]),
+    fallback: { summary: null },
+  },
+
+  'backup:list': {
+    method: 'GET',
+    path: () => '/api/backups',
+    fallback: { items: [], dir: '' },
+  },
+  'backup:create': { method: 'POST', path: () => '/api/backups' },
+  'backup:restore': {
+    method: 'POST',
+    path: () => '/api/backups/restore',
+    body: (a) => ({ name: a[0] }),
+  },
+  'backup:delete': {
+    method: 'DELETE',
+    path: (a) => `/api/backups/${encodeURIComponent(String(a[0] ?? ''))}`,
+  },
+
+  'locations:list': { method: 'GET', path: () => '/api/locations', fallback: { items: [] } },
+  'locations:create': { method: 'POST', path: () => '/api/locations', body: (a) => a[0] },
+  'locations:update': {
+    method: 'PATCH',
+    path: (a) => `/api/locations/${pairArg(a).id}`,
+    body: (a) => pairArg(a).patch,
+  },
+
+  'sync:status': { method: 'GET', path: () => '/api/sync/status', fallback: { status: null } },
+  'sync:configure': { method: 'POST', path: () => '/api/sync/settings', body: (a) => a[0] },
+  'sync:now': { method: 'POST', path: () => '/api/sync/now' },
+
+  'automation:settings': {
+    method: 'GET',
+    path: () => '/api/automation/settings',
+    fallback: { settings: null },
+  },
+  'automation:save': {
+    method: 'POST',
+    path: () => '/api/automation/settings',
+    body: (a) => a[0],
+  },
+  'automation:messages': {
+    method: 'GET',
+    path: (a) => endpoint('/api/automation/messages', { limit: a[0] }),
+    fallback: { messages: [] },
+  },
+  'automation:test': { method: 'POST', path: () => '/api/automation/test', body: (a) => a[0] },
+  'automation:run': {
+    method: 'POST',
+    path: () => '/api/automation/run',
+    body: () => ({ force: true }),
+  },
 };
 
 export function registerLanClient(serverUrl: string): void {
@@ -248,6 +311,9 @@ export function registerLanClient(serverUrl: string): void {
       'sale.updated',
       'customer.updated',
       'table.updated',
+      'location.updated',
+      'sync.changed',
+      'automation.changed',
     ]) {
       socket.on(type, (payload: unknown) => broadcast(type, payload));
     }
@@ -352,12 +418,25 @@ export function registerLanClient(serverUrl: string): void {
 
   ipcMain.handle('auth:can-safestore', () => safeStorage.isEncryptionAvailable());
 
+  // Backups live on the primary computer's disk; there is no folder to open
+  // from a client machine.
+  ipcMain.handle('backup:reveal', () => ({
+    ok: false,
+    error: 'Backups are stored on the primary computer',
+    code: 'NOT_SUPPORTED',
+  }));
+
   for (const [channel, route] of Object.entries(ROUTES)) {
     ipcMain.handle(channel, async (_event, ...args: unknown[]) => {
       try {
         const pathname = route.path(args);
         const body = route.body?.(args);
         const result = await request(route.method, pathname, body, true);
+        if (result.body.code === 'UNAUTHENTICATED') {
+          token = null;
+          persistToken(null);
+          resetSocket();
+        }
         return { ...(route.fallback ?? {}), ...result.body };
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Request failed';
