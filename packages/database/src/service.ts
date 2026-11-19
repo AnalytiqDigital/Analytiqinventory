@@ -71,6 +71,42 @@ async function businessTypeOf(local: LocalDb, businessId: string): Promise<strin
  return row?.type ?? 'other';
 }
 
+export interface BusinessProfile {
+  id: string;
+  name: string;
+  type: string;
+  address: string;
+  phone: string;
+  email: string;
+  state: string;
+  lga: string;
+  currency: string;
+  taxLabel: string;
+  taxRateBps: number;
+}
+
+/** Receipt headers and the website/portal both need the business identity. */
+export async function getBusinessProfile(local: LocalDb, businessId: string): Promise<BusinessProfile | null> {
+  const [row] = await local.db
+    .select({
+      id: businesses.id,
+      name: businesses.name,
+      type: businesses.type,
+      address: businesses.address,
+      phone: businesses.phone,
+      email: businesses.email,
+      state: businesses.state,
+      lga: businesses.lga,
+      currency: businesses.currency,
+      taxLabel: businesses.taxLabel,
+      taxRateBps: businesses.taxRateBps,
+    })
+    .from(businesses)
+    .where(eq(businesses.id, businessId))
+    .limit(1);
+  return row ?? null;
+}
+
 async function userPermissions(local: LocalDb, userId: string, businessId: string): Promise<string[]> {
   const assignments = await local.db
     .select({ roleId: userRoles.roleId })

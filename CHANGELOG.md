@@ -1,5 +1,35 @@
 # Changelog
 
+## 1.0.0 — Commercial release
+
+- Version 1.0.0; the installer is now `AnalytIQ-Inventory-Setup-1.0.0.exe`.
+- Production Ed25519 licence keypair generated: the public key is embedded in
+  the app, the private key stays in `.secrets/` (git-ignored) and is configured
+  on the cloud API via `LICENSE_PRIVATE_KEY` / `LICENSE_PRIVATE_KEY_PATH`.
+- Code-signing path for the installer: `pnpm dist:signed` from
+  `apps/desktop` refuses to build unless `CSC_LINK` (and `CSC_KEY_PASSWORD`)
+  are set, so a release cannot ship unsigned by accident.
+- Release checklist added: `docs/RELEASE_CHECKLIST.md`.
+
+## 0.14.0 — Batch 13: bulk import, thermal printing and barcode scanning
+
+- **Import CSV** for products, purchases and historical sales (Products,
+  Purchases, Sell → Sales history). Downloadable templates, naira→kobo
+  conversion, row-level errors, 5,000 rows per file. Products/purchases are
+  validated as a whole and written in one transaction; sales are grouped by
+  receipt, written per sale, and refuse already-imported receipts via the new
+  `sales.external_ref` idempotency key. Categories, suppliers and customers are
+  created on demand; sales can be backdated (`soldAt`).
+- **Thermal receipt printing**: silent printing to Xprinter 58/76/80 mm (or any
+  Windows driver) from a hidden window, with a system-dialog fallback. Settings
+  for printer, roll width, copies and auto-print, plus a test print. Works on
+  LAN-client tills with their own printer.
+- **Barcode scanners**: keyboard-wedge scanning on the Sell screen with exact
+  barcode/SKU lookup, beep feedback and scan-into-search; new
+  `GET /api/products/by-barcode` and `productByBarcode` IPC.
+- New LAN routes `GET /api/business` and `POST /api/import/{products,purchases,sales}`.
+- Docs: `docs/IMPORT.md`, `docs/PRINTERS.md`.
+
 ## 0.13.0 — Batch 12: backups, branding, updates and release hardening
 
 - Verified local backups: `VACUUM INTO` snapshots are checked with

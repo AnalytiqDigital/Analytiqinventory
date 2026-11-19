@@ -3,8 +3,10 @@ import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { loadConfig } from './config';
+import { loadEnvFile } from './env';
 
 async function bootstrap(): Promise<void> {
+  loadEnvFile();
   const config = loadConfig();
   // rawBody keeps the exact bytes Paystack signed; the JSON parser still
   // populates request.body for every other route.

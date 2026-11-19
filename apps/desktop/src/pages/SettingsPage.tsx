@@ -28,6 +28,7 @@ import { ConfirmDialog, ErrorState, LoadingState } from '../components/ui/states
 import { Stat } from '../components/ui/stat';
 import { useSession } from '../stores/session';
 import { ipc } from '../lib/ipc';
+import { ReceiptPrinterSettings } from '../components/ReceiptPrinterSettings';
 import type {
   AutomationMessage,
   AutomationMessageStatus,
@@ -527,6 +528,8 @@ export function SettingsPage(): JSX.Element {
           ) : null}
         </CardContent>
       </Card>
+
+      <ReceiptPrinterSettings />
 
       <Card>
         <CardHeader>

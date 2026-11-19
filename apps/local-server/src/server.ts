@@ -28,6 +28,7 @@ import {
   deleteTable,
   ensureDefaultTaxCategory,
   getAutomationSettings,
+  getBusinessProfile,
   getCustomer,
   getLevels,
   getProduct,
@@ -35,6 +36,9 @@ import {
   getSale,
   getSyncStatus,
   httpTransport,
+  importProducts,
+  importPurchases,
+  importSales,
   ingestRecords,
   isFirstRun,
   isSyncEntity,
@@ -55,6 +59,7 @@ import {
   login,
   logout,
   openLocalDb,
+  productByBarcode,
   recordCustomerPayment,
   receivePurchase,
   refundSale,
@@ -384,6 +389,13 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
         const raw = queryOf(request.query);
         const query = { ...raw, includeInactive: boolQuery(raw.includeInactive) };
         return { ok: true, ...(await listProducts(local, user.businessId, query)) };
+      });
+
+      scope.get<{ Querystring: { code?: string } }>('/products/by-barcode', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        const code = typeof request.query.code === 'string' ? request.query.code : '';
+        if (!code.trim()) throw Object.assign(new Error('Scan or type a barcode'), { code: 'INVALID_SCAN' });
+        return { ok: true, product: await productByBarcode(local, user.businessId, code) };
       });
 
       scope.get<{ Params: { id: string } }>('/products/:id', async (request) => {
@@ -837,6 +849,70 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
             queryOf(request.query)
           ),
         };
+      });
+
+      // --- Batch 13: receipt header + bulk import ---
+      scope.get('/business', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return { ok: true, business: await getBusinessProfile(local, user.businessId) };
+      });
+
+      scope.post('/import/products', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        const result = await importProducts(
+          local,
+          user.businessId,
+          user.id,
+          user.permissions,
+          request.body ?? {}
+        );
+        if (result.created > 0) {
+          scope.realtime.emit(user.businessId, 'inventory.changed', {
+            reason: 'import.products',
+            count: result.created,
+          });
+        }
+        return { ok: true, ...result };
+      });
+
+      scope.post('/import/purchases', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        const result = await importPurchases(
+          local,
+          user.businessId,
+          user.id,
+          user.permissions,
+          request.body ?? {}
+        );
+        if (result.created > 0) {
+          scope.realtime.emit(user.businessId, 'inventory.changed', {
+            reason: 'import.purchases',
+            count: result.created,
+          });
+        }
+        return { ok: true, ...result };
+      });
+
+      scope.post('/import/sales', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        const result = await importSales(
+          local,
+          user.businessId,
+          user.id,
+          user.permissions,
+          request.body ?? {}
+        );
+        if (result.created > 0) {
+          scope.realtime.emit(user.businessId, 'sale.created', {
+            reason: 'import.sales',
+            count: result.created,
+          });
+          scope.realtime.emit(user.businessId, 'inventory.changed', {
+            reason: 'import.sales',
+            count: result.created,
+          });
+        }
+        return { ok: true, ...result };
       });
 
       // --- Batch 8: locations ---

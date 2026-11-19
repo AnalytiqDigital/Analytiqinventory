@@ -42,8 +42,13 @@ import {
   createTaxCategory,
   getLevels,
   getProduct,
+  getBusinessProfile,
   getReportsSummary,
   getSale,
+  importProducts,
+  importPurchases,
+  importSales,
+  productByBarcode,
   deleteTable,
   ensureDefaultTaxCategory,
   isFirstRun,
@@ -73,6 +78,7 @@ import path from 'node:path';
 import { mkdirSync, readFileSync } from 'node:fs';
 import log from 'electron-log';
 import { registerLanClient } from './lanClient';
+import { registerPrinterHandlers } from './printer';
 import { registerUpdateHandlers } from './updates';
 
 log.initialize();
@@ -316,6 +322,18 @@ function inventoryHandlers(): void {
       return { ok: true, ...result };
     } catch (err: unknown) {
       return { ok: false, ...safeError(err) };
+    }
+  });
+
+  ipcMain.handle('inventory:product-by-barcode', async (_event, code: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      if (typeof code !== 'string' || code.trim().length === 0) {
+        throw Object.assign(new Error('Scan or type a barcode'), { code: 'INVALID_SCAN' });
+      }
+      return { ok: true, product: await productByBarcode(db, user.businessId, code) };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err), product: null };
     }
   });
 
@@ -1008,6 +1026,49 @@ function backupHandlers(): void {
   });
 }
 
+// Business identity for receipt headers (name, address, phone, tax label).
+function businessHandlers(): void {
+  ipcMain.handle('business:profile', async () => {
+    try {
+      const { db, user } = await requireUser();
+      return { ok: true, business: await getBusinessProfile(db, user.businessId) };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err), business: null };
+    }
+  });
+}
+
+// Bulk CSV import. The renderer parses + converts naira to kobo; the service
+// validates every row again and returns per-row diagnostics.
+function importHandlers(): void {
+  ipcMain.handle('import:products', async (_event, input: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      return { ok: true, ...(await importProducts(db, user.businessId, user.id, user.permissions, input)) };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err), created: 0, failed: 0, errors: [] };
+    }
+  });
+
+  ipcMain.handle('import:purchases', async (_event, input: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      return { ok: true, ...(await importPurchases(db, user.businessId, user.id, user.permissions, input)) };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err), created: 0, failed: 0, errors: [] };
+    }
+  });
+
+  ipcMain.handle('import:sales', async (_event, input: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      return { ok: true, ...(await importSales(db, user.businessId, user.id, user.permissions, input)) };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err), created: 0, failed: 0, errors: [] };
+    }
+  });
+}
+
 function startBackupScheduler(db: LocalDb): void {
   const dir = backupDirectory();
   const run = async (): Promise<void> => {
@@ -1050,6 +1111,9 @@ function resolveLanServerUrl(): string | null {
 
 void app.whenReady().then(async () => {
   registerUpdateHandlers();
+  // Printing is local hardware: register it in both primary and LAN client
+  // mode so every till prints on the printer attached to it.
+  registerPrinterHandlers();
   const lanServerUrl = resolveLanServerUrl();
   if (lanServerUrl) {
     log.info(`LAN client mode: ${lanServerUrl}`);
@@ -1070,6 +1134,8 @@ void app.whenReady().then(async () => {
     syncHandlers();
     automationHandlers();
     backupHandlers();
+    businessHandlers();
+    importHandlers();
   }
   createWindow();
   app.on('activate', () => {

@@ -98,6 +98,11 @@ const ROUTES: Record<string, Route> = {
   },
   'inventory:product-get': { method: 'GET', path: (a) => `/api/products/${idArg(a)}` },
   'inventory:product-create': { method: 'POST', path: () => '/api/products', body: (a) => a[0] },
+  'inventory:product-by-barcode': {
+    method: 'GET',
+    path: (a) => `/api/products/by-barcode?code=${encodeURIComponent(String(a[0] ?? ''))}`,
+    fallback: { product: null },
+  },
   'inventory:product-update': {
     method: 'PATCH',
     path: (a) => `/api/products/${pairArg(a).id}`,
@@ -235,6 +240,15 @@ const ROUTES: Record<string, Route> = {
     path: (a) => endpoint('/api/reports/summary', a[0]),
     fallback: { summary: null },
   },
+
+  'business:profile': {
+    method: 'GET',
+    path: () => '/api/business',
+    fallback: { business: null },
+  },
+  'import:products': { method: 'POST', path: () => '/api/import/products', body: (a) => a[0] },
+  'import:purchases': { method: 'POST', path: () => '/api/import/purchases', body: (a) => a[0] },
+  'import:sales': { method: 'POST', path: () => '/api/import/sales', body: (a) => a[0] },
 
   'backup:list': {
     method: 'GET',

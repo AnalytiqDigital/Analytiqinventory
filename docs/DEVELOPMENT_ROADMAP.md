@@ -13,6 +13,8 @@
 - [x] Batch 10: Website, portal, licensing, payments.
 - [x] Batch 11: AI, WhatsApp, automation.
 - [x] Batch 12: Security, backups, updates, production release.
+- [x] Batch 13: Bulk CSV import (products, purchases, sales), thermal receipt
+      printing (Xprinter 58/76/80 mm) and barcode scanning.
 
 All planned batches are implemented. Remaining release work is verification,
 the installer rebuild and publishing (`docs/UPDATES.md`).

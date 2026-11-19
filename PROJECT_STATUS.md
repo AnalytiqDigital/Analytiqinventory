@@ -276,6 +276,41 @@ Implemented:
 - NSIS installer with unpacked SQLite native module and bundled migrations.
 - Docs: `docs/BACKUPS.md`, `docs/UPDATES.md`, `docs/SECURITY.md`.
 
-## Next
+## Batch 13 — Bulk import, printers and scanners: DONE
 
-Final verification, installer rebuild and release commit.
+Implemented:
+
+- CSV import for products, purchases and historical sales, with downloadable
+  templates, row-level validation and all-or-nothing writes (sales imports are
+  per-sale atomic and idempotent through `external_ref`).
+- Auto-created categories, suppliers and customers; opening stock, received
+  purchases and backdated sales (`soldAt`).
+- Silent thermal receipt printing for Xprinter 58/76/80 mm (or any Windows
+  driver) from a hidden window, with a system-dialog fallback; per-user printer,
+  width, copies and auto-print settings; test print.
+- Keyboard-wedge barcode scanning on the Sell screen with exact barcode/SKU
+  lookup, beep feedback and scan-into-search support.
+- LAN parity for barcode lookup, business profile and all three import routes.
+- Docs: `docs/IMPORT.md`, `docs/PRINTERS.md`.
+
+## 1.0.0 — Release preparation: IN PROGRESS
+
+Done:
+
+- Version bumped to `1.0.0` (root and desktop); installer built:
+  `apps/desktop/release/AnalytIQ-Inventory-Setup-1.0.0.exe` (unsigned until the
+  certificate is bought; the public key is embedded in the package).
+- Production Ed25519 keypair generated: public key embedded in the app, private
+  key at `.secrets/license-private.pem` (git-ignored, backup offline). Key
+  issuance smoke-tested end-to-end against the embedded public key.
+- Code-signing guard: `pnpm dist:signed` (from `apps/desktop`) refuses to build
+  unless `CSC_LINK`/`CSC_KEY_PASSWORD` are set. Docs in `docs/UPDATES.md`.
+- `docs/RELEASE_CHECKLIST.md` covers vendor material, signing, build,
+  clean-machine acceptance, LAN/hardware checks and publishing.
+
+Next:
+
+- [ ] Buy the code-signing certificate and build with `pnpm dist:signed`.
+- [ ] Run the clean-machine acceptance list in `docs/RELEASE_CHECKLIST.md`
+      (includes real scanner and Xprinter checks).
+- [ ] Commit, tag `v1.0.0`, push; upload installer + `latest.json`.

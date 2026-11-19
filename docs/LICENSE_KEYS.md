@@ -9,6 +9,13 @@ signature.
 - Embedded public key: `packages/licensing/src/publicKey.ts`
 - Signing material: `.secrets/license-private.pem` (git-ignored, never shipped)
 
+The production keypair for 1.0.0 is already generated: the public key in
+`src/publicKey.ts` is embedded in the app, and the private key is the only copy
+— back it up offline. Online purchases are signed by the cloud API with the
+same key, supplied as `LICENSE_PRIVATE_KEY` (PEM inline) or
+`LICENSE_PRIVATE_KEY_PATH` (file path). The website and desktop app never see
+the private key.
+
 ## How a key works
 
 ```
