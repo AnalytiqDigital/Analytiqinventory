@@ -274,6 +274,36 @@ export interface AnalytiqApi {
   importPurchases: (input: unknown) => Promise<ImportResponse>;
   importSales: (input: unknown) => Promise<ImportResponse>;
 
+  // --- Batch 14: staff, role permissions and expenses ---
+  staff: () => Promise<{ ok: boolean; items: StaffMember[]; error?: string; code?: string }>;
+  staffCreate: (
+    input: unknown
+  ) => Promise<{ ok: boolean; staff?: StaffMember; error?: string; code?: string }>;
+  staffUpdate: (
+    id: string,
+    patch: unknown
+  ) => Promise<{ ok: boolean; staff?: StaffMember; error?: string; code?: string }>;
+  staffResetPassword: (
+    id: string,
+    password: string
+  ) => Promise<{ ok: boolean; error?: string; code?: string }>;
+  staffRoles: () => Promise<{ ok: boolean; items: StaffRole[]; error?: string; code?: string }>;
+  staffRolePermissions: (
+    id: string,
+    permissions: string[]
+  ) => Promise<{ ok: boolean; role?: StaffRole; error?: string; code?: string }>;
+  expenses: (query: unknown) => Promise<{
+    ok: boolean;
+    items: ExpenseRow[];
+    totalKobo: number;
+    error?: string;
+    code?: string;
+  }>;
+  expenseCreate: (
+    input: unknown
+  ) => Promise<{ ok: boolean; expense?: ExpenseRow; error?: string; code?: string }>;
+  expenseDelete: (id: string) => Promise<{ ok: boolean; error?: string; code?: string }>;
+
   // --- Batch 13: thermal receipt printing ---
   printerList: () => Promise<{
     ok: boolean;
@@ -281,7 +311,9 @@ export interface AnalytiqApi {
     error?: string;
     code?: string;
   }>;
-  printerPrint: (input: PrinterPrintInput) => Promise<{ ok: boolean; error?: string; code?: string }>;
+  printerPrint: (
+    input: PrinterPrintInput
+  ) => Promise<{ ok: boolean; error?: string; code?: string }>;
 }
 
 export interface PrinterInfo {
@@ -441,12 +473,44 @@ export interface ReportsSummary {
   };
   payments: Array<{ method: string; count: number; amountKobo: number }>;
   daily: Array<{ date: string; transactions: number; grossKobo: number; taxKobo: number }>;
+  weekly: Array<{
+    weekStart: string;
+    transactions: number;
+    grossKobo: number;
+    taxKobo: number;
+    cogsKobo: number;
+    grossProfitKobo: number;
+    expensesKobo: number;
+    netProfitKobo: number;
+  }>;
   topProducts: Array<{
     productId: string;
     name: string;
     qty: number;
     revenueKobo: number;
     profitKobo: number;
+  }>;
+  products: Array<{
+    productId: string;
+    name: string;
+    sku: string;
+    qty: number;
+    revenueKobo: number;
+    profitKobo: number;
+    onHand: number;
+    reorderLevel: number;
+    costValueKobo: number;
+    retailValueKobo: number;
+  }>;
+  stockAlerts: Array<{
+    productId: string;
+    name: string;
+    sku: string;
+    onHand: number;
+    reorderLevel: number;
+    shortfall: number;
+    suggestedOrder: number;
+    costValueKobo: number;
   }>;
   topCustomers: Array<{
     customerId: string | null;
@@ -468,6 +532,43 @@ export interface ReportsSummary {
   };
   purchases: { receivedCount: number; receivedKobo: number };
   credit: { outstandingKobo: number; activeCustomers: number };
+  expenses: {
+    totalKobo: number;
+    count: number;
+    byCategory: Array<{ category: string; count: number; amountKobo: number }>;
+  };
+  finance: { expensesKobo: number; netProfitKobo: number };
+}
+
+export interface StaffMember {
+  id: string;
+  name: string;
+  email: string;
+  isActive: boolean;
+  roleId: string | null;
+  roleName: string;
+  createdAt: string;
+}
+
+export interface StaffRole {
+  id: string;
+  name: string;
+  description: string;
+  isSystem: boolean;
+  permissions: string[];
+  userCount: number;
+}
+
+export interface ExpenseRow {
+  id: string;
+  category: string;
+  note: string;
+  amountKobo: number;
+  paidAt: string;
+  locationId: string | null;
+  createdBy: string | null;
+  createdByName: string;
+  createdAt: string;
 }
 
 export interface CustomerRow {

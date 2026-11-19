@@ -293,6 +293,39 @@ Implemented:
 - LAN parity for barcode lookup, business profile and all three import routes.
 - Docs: `docs/IMPORT.md`, `docs/PRINTERS.md`.
 
+## Batch 14 — Staff, permissions, finance and richer reports: DONE
+
+Implemented:
+
+- Staff & Permissions page backed by `packages/database/src/staff.ts`: add,
+  edit, deactivate/reactivate staff, password reset with session revocation,
+  and editable permissions for the three built-in roles. Guards: last
+  staff-manager, self-deactivation, own-role change, Administrator keeps
+  `staff.manage` + `settings.manage`.
+- Finance page backed by `packages/database/src/finance.ts` and a new
+  `expenses` table (migration `0012_finance_staff.sql`): expenses by category,
+  profit statement (net = tax − COGS − expenses), cash received by method,
+  CSV export.
+- Reports service now also returns `expenses`, `finance`, `weekly`
+  (Monday-based, expense-only weeks included), `products` (per-product sold,
+  revenue, profit, on-hand, stock value) and `stockAlerts` (shortfall and
+  suggested order). Reports page gained Overview/Products/Weekly/Stock alerts
+  tabs.
+- Help & Support page: quick start, hardware notes, licence/support card and
+  one-click diagnostics (version, profile, licence, printers, backups).
+- LAN parity: staff, role-permission and expense routes on the local server;
+  new `finance.manage` permission granted to admin and manager.
+- Docs: `docs/STAFF.md`, `docs/FINANCE.md`, `docs/BUYER_SETUP.md`, updated
+  `docs/REPORTING.md`, `README.md` and `CHANGELOG.md`.
+
+Version bumped to `1.1.0`; installer is now
+`apps/desktop/release/AnalytIQ-Inventory-Setup-1.1.0.exe` (unsigned until the
+certificate is bought).
+
+Verification: database 92/92 (8 new), local-server 20/20 (1 new), desktop
+renderer 39/39, validation 20/20, licensing 7/7, cloud-api 25/25, website
+10/10, `pnpm lint` clean, `pnpm typecheck` 15/15.
+
 ## 1.0.0 — Release preparation: IN PROGRESS
 
 Done:

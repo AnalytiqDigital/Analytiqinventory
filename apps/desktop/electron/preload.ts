@@ -312,14 +312,82 @@ const api = {
   }> => ipcRenderer.invoke('automation:run'),
 
   // --- Batch 13: bulk import + receipt header ---
-  businessProfile: (): Promise<{ ok: boolean; business?: unknown; error?: string; code?: string }> =>
-    ipcRenderer.invoke('business:profile'),
-  importProducts: (input: unknown): Promise<{ ok: boolean; created: number; failed: number; errors: unknown[]; error?: string; code?: string }> =>
-    ipcRenderer.invoke('import:products', input),
-  importPurchases: (input: unknown): Promise<{ ok: boolean; created: number; failed: number; errors: unknown[]; error?: string; code?: string }> =>
-    ipcRenderer.invoke('import:purchases', input),
-  importSales: (input: unknown): Promise<{ ok: boolean; created: number; failed: number; errors: unknown[]; error?: string; code?: string }> =>
-    ipcRenderer.invoke('import:sales', input),
+  businessProfile: (): Promise<{
+    ok: boolean;
+    business?: unknown;
+    error?: string;
+    code?: string;
+  }> => ipcRenderer.invoke('business:profile'),
+  importProducts: (
+    input: unknown
+  ): Promise<{
+    ok: boolean;
+    created: number;
+    failed: number;
+    errors: unknown[];
+    error?: string;
+    code?: string;
+  }> => ipcRenderer.invoke('import:products', input),
+  importPurchases: (
+    input: unknown
+  ): Promise<{
+    ok: boolean;
+    created: number;
+    failed: number;
+    errors: unknown[];
+    error?: string;
+    code?: string;
+  }> => ipcRenderer.invoke('import:purchases', input),
+  importSales: (
+    input: unknown
+  ): Promise<{
+    ok: boolean;
+    created: number;
+    failed: number;
+    errors: unknown[];
+    error?: string;
+    code?: string;
+  }> => ipcRenderer.invoke('import:sales', input),
+
+  // --- Batch 14: staff, role permissions and expenses ---
+  staff: (): Promise<{ ok: boolean; items: unknown[]; error?: string; code?: string }> =>
+    ipcRenderer.invoke('staff:list'),
+  staffCreate: (
+    input: unknown
+  ): Promise<{ ok: boolean; staff?: unknown; error?: string; code?: string }> =>
+    ipcRenderer.invoke('staff:create', input),
+  staffUpdate: (
+    id: string,
+    patch: unknown
+  ): Promise<{ ok: boolean; staff?: unknown; error?: string; code?: string }> =>
+    ipcRenderer.invoke('staff:update', { id, patch }),
+  staffResetPassword: (
+    id: string,
+    password: string
+  ): Promise<{ ok: boolean; error?: string; code?: string }> =>
+    ipcRenderer.invoke('staff:reset-password', { id, password }),
+  staffRoles: (): Promise<{ ok: boolean; items: unknown[]; error?: string; code?: string }> =>
+    ipcRenderer.invoke('staff:roles'),
+  staffRolePermissions: (
+    id: string,
+    permissions: string[]
+  ): Promise<{ ok: boolean; role?: unknown; error?: string; code?: string }> =>
+    ipcRenderer.invoke('staff:role-permissions', { id, permissions }),
+  expenses: (
+    query: unknown
+  ): Promise<{
+    ok: boolean;
+    items: unknown[];
+    totalKobo: number;
+    error?: string;
+    code?: string;
+  }> => ipcRenderer.invoke('finance:expenses', query),
+  expenseCreate: (
+    input: unknown
+  ): Promise<{ ok: boolean; expense?: unknown; error?: string; code?: string }> =>
+    ipcRenderer.invoke('finance:create-expense', input),
+  expenseDelete: (id: string): Promise<{ ok: boolean; error?: string; code?: string }> =>
+    ipcRenderer.invoke('finance:delete-expense', id),
 
   // --- Batch 13: thermal receipt printer (Xprinter and any Windows driver) ---
   printerList: (): Promise<{
@@ -328,9 +396,7 @@ const api = {
     error?: string;
     code?: string;
   }> => ipcRenderer.invoke('printer:list'),
-  printerPrint: (
-    input: unknown
-  ): Promise<{ ok: boolean; error?: string; code?: string }> =>
+  printerPrint: (input: unknown): Promise<{ ok: boolean; error?: string; code?: string }> =>
     ipcRenderer.invoke('printer:print', input),
 };
 

@@ -42,7 +42,9 @@ pnpm dist:signed
 electron-builder reads the same variables. `pnpm dist:signed` runs
 `scripts/require-signing.mjs` first and **exits with an error when `CSC_LINK`
 is missing**, so a release cannot be built unsigned by accident. Plain
-`pnpm dist` still builds an unsigned installer for internal testing.
+`pnpm dist` still builds an unsigned installer for internal testing; buyers can
+install it by choosing **More info → Run anyway** at the SmartScreen prompt
+(see `docs/BUYER_SETUP.md`).
 
 Keep the `.pfx` and its password out of the repository (`.secrets/` is
 git-ignored) and off any machine that is not the release machine.

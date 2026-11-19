@@ -43,6 +43,21 @@ A `from` after `to` is rejected with code `INVALID_RANGE`
   at retail.
 - `purchases` — received purchase orders in the range.
 - `credit` — outstanding credit and active customer count.
+- `weekly` — Monday-based weeks in the range: transactions, gross, tax, COGS,
+  gross profit, expenses and net profit. Expense-only weeks are included.
+- `products` — every active product (up to 1,000) with quantity sold and profit
+  in the range, on-hand stock and stock value at cost/retail. Products with no
+  sales in the range appear with zeroes.
+- `stockAlerts` — active products at or below their reorder level (or at/below
+  zero), with shortfall, a suggested order (tops up to twice the reorder level)
+  and value at cost. Scoped by `locationId` when given.
+- `expenses` — total, count and by-category breakdown of expenses paid in the
+  range: `{ totalKobo, count, byCategory: [{ category, count, amountKobo }] }`.
+- `finance` — `expensesKobo` and `netProfitKobo` (net of tax − COGS − expenses).
+
+The Reports page shows these under tabs: **Overview**, **Products**, **Weekly**
+and **Stock alerts**. The Finance page uses the same response for its profit
+statement (`docs/FINANCE.md`).
 
 ## Known approximation: COGS
 
@@ -57,5 +72,7 @@ valuation.
 
 - `packages/database/src/reports.test.ts` — arithmetic, filters, permissions,
   empty and inverted ranges.
+- `packages/database/src/batch14.test.ts` — weekly buckets, all-product rows,
+  stock alerts and expense folding.
 - `apps/local-server/src/server.test.ts` — HTTP route, validation and the
   cashier denial.

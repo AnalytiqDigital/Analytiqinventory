@@ -75,17 +75,74 @@ export interface ReportCreditBlock {
   activeCustomers: number;
 }
 
+export interface ReportWeekRow {
+  weekStart: string;
+  transactions: number;
+  grossKobo: number;
+  taxKobo: number;
+  cogsKobo: number;
+  grossProfitKobo: number;
+  expensesKobo: number;
+  netProfitKobo: number;
+}
+
+export interface ReportProductDetailRow {
+  productId: string;
+  name: string;
+  sku: string;
+  qty: number;
+  revenueKobo: number;
+  profitKobo: number;
+  onHand: number;
+  reorderLevel: number;
+  costValueKobo: number;
+  retailValueKobo: number;
+}
+
+export interface ReportStockAlertRow {
+  productId: string;
+  name: string;
+  sku: string;
+  onHand: number;
+  reorderLevel: number;
+  shortfall: number;
+  suggestedOrder: number;
+  costValueKobo: number;
+}
+
+export interface ReportExpenseCategoryRow {
+  category: string;
+  count: number;
+  amountKobo: number;
+}
+
+export interface ReportExpensesBlock {
+  totalKobo: number;
+  count: number;
+  byCategory: ReportExpenseCategoryRow[];
+}
+
+export interface ReportFinanceBlock {
+  expensesKobo: number;
+  netProfitKobo: number;
+}
+
 export interface ReportsSummary {
   range: ReportRange;
   sales: ReportSalesBlock;
   payments: ReportPaymentRow[];
   daily: ReportDayRow[];
+  weekly: ReportWeekRow[];
   topProducts: ReportProductRow[];
+  products: ReportProductDetailRow[];
+  stockAlerts: ReportStockAlertRow[];
   topCustomers: ReportCustomerRow[];
   cashiers: ReportCustomerRow[];
   inventory: ReportInventoryBlock;
   purchases: ReportPurchaseBlock;
   credit: ReportCreditBlock;
+  expenses: ReportExpensesBlock;
+  finance: ReportFinanceBlock;
 }
 
 interface Filter {
@@ -147,6 +204,17 @@ function fillDaily(rows: ReportDayRow[], from: Date, to: Date): ReportDayRow[] {
     out.push(byDate.get(key) ?? { date: key, transactions: 0, grossKobo: 0, taxKobo: 0 });
   }
   return out;
+}
+
+/** Monday that starts the week containing `day` (YYYY-MM-DD). */
+function weekStartOf(day: string): string {
+  const d = new Date(`${day}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return day;
+  const offset = (d.getDay() + 6) % 7;
+  d.setDate(d.getDate() - offset);
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const date = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${month}-${date}`;
 }
 
 export function getReportsSummary(
@@ -371,6 +439,189 @@ export function getReportsSummary(
     )
     .get(creditParams) as Row | undefined;
 
+  const productRows = (
+    local.raw
+      .prepare(
+        `SELECT p.id AS id, p.name AS name, COALESCE(p.sku, '') AS sku,
+                COALESCE(SUM(CASE WHEN s.id IS NOT NULL THEN si.qty ELSE 0 END), 0) AS qty,
+                COALESCE(SUM(CASE WHEN s.id IS NOT NULL THEN si.line_total_kobo ELSE 0 END), 0) AS revenue,
+                COALESCE(SUM(CASE WHEN s.id IS NOT NULL THEN si.qty * p.cost_price_kobo ELSE 0 END), 0) AS cost,
+                COALESCE(stock.on_hand, 0) AS on_hand,
+                p.reorder_level AS reorder,
+                p.cost_price_kobo AS cost_price,
+                p.selling_price_kobo AS selling_price
+           FROM products p
+           LEFT JOIN sale_items si ON si.product_id = p.id
+           LEFT JOIN sales s ON s.id = si.sale_id AND ${filter.where} AND s.status = 'completed'
+           LEFT JOIN (SELECT product_id, SUM(qty_delta) AS on_hand
+                        FROM stock_movements
+                       WHERE ${movementWhere}
+                       GROUP BY product_id) stock ON stock.product_id = p.id
+          WHERE p.business_id = @business AND p.is_active = 1
+          GROUP BY p.id
+          ORDER BY qty DESC, revenue DESC
+          LIMIT @limit`
+      )
+      .all(withLimit(filter.params, 1000)) as Row[]
+  ).map((r) => {
+    const onHand = int(r, 'on_hand');
+    return {
+      productId: text(r, 'id'),
+      name: text(r, 'name'),
+      sku: text(r, 'sku'),
+      qty: int(r, 'qty'),
+      revenueKobo: int(r, 'revenue'),
+      profitKobo: int(r, 'revenue') - int(r, 'cost'),
+      onHand,
+      reorderLevel: int(r, 'reorder'),
+      costValueKobo: onHand * int(r, 'cost_price'),
+      retailValueKobo: onHand * int(r, 'selling_price'),
+    };
+  });
+
+  const stockAlerts = (
+    local.raw
+      .prepare(
+        `SELECT p.id AS id, p.name AS name, COALESCE(p.sku, '') AS sku,
+                stock.on_hand AS on_hand, p.reorder_level AS reorder,
+                p.cost_price_kobo AS cost_price
+           FROM (SELECT product_id, SUM(qty_delta) AS on_hand
+                   FROM stock_movements
+                  WHERE ${movementWhere}
+                  GROUP BY product_id) stock
+           JOIN products p ON p.id = stock.product_id
+          WHERE p.business_id = @business AND p.is_active = 1
+            AND ((p.reorder_level > 0 AND stock.on_hand <= p.reorder_level) OR stock.on_hand <= 0)
+          ORDER BY (stock.on_hand - p.reorder_level) ASC, p.name ASC
+          LIMIT 200`
+      )
+      .all(inventoryParams) as Row[]
+  ).map((r) => {
+    const onHand = int(r, 'on_hand');
+    const reorder = int(r, 'reorder');
+    const target = reorder > 0 ? reorder * 2 : 0;
+    return {
+      productId: text(r, 'id'),
+      name: text(r, 'name'),
+      sku: text(r, 'sku'),
+      onHand,
+      reorderLevel: reorder,
+      shortfall: Math.max(0, reorder - onHand),
+      suggestedOrder: Math.max(1, target - onHand),
+      costValueKobo: Math.max(0, onHand) * int(r, 'cost_price'),
+    };
+  });
+
+  const weekDayRows = local.raw
+    .prepare(
+      `SELECT date(s.created_at, 'unixepoch', 'localtime') AS day,
+              COUNT(*) AS n,
+              COALESCE(SUM(s.total_kobo), 0) AS gross,
+              COALESCE(SUM(s.tax_kobo), 0) AS tax,
+              COALESCE(SUM(items.cost), 0) AS cogs
+         FROM sales s
+         LEFT JOIN (SELECT si.sale_id AS sale_id,
+                           SUM(si.qty * p.cost_price_kobo) AS cost
+                      FROM sale_items si
+                      JOIN products p ON p.id = si.product_id
+                     GROUP BY si.sale_id) items ON items.sale_id = s.id
+        WHERE ${filter.where} AND s.status = 'completed'
+        GROUP BY day
+        ORDER BY day`
+    )
+    .all(filter.params) as Row[];
+
+  const expenseParams: Record<string, unknown> = {
+    business: businessId,
+    from: epoch(from),
+    to: epoch(to),
+  };
+  let expenseWhere = 'business_id = @business AND paid_at BETWEEN @from AND @to';
+  if (locationId) {
+    expenseWhere += ' AND location_id = @location';
+    expenseParams.location = locationId;
+  }
+  const expenseDayRows = local.raw
+    .prepare(
+      `SELECT date(paid_at, 'unixepoch', 'localtime') AS day,
+              COALESCE(SUM(amount_kobo), 0) AS total
+         FROM expenses
+        WHERE ${expenseWhere}
+        GROUP BY day`
+    )
+    .all(expenseParams) as Row[];
+
+  const expenseCategoryRows = local.raw
+    .prepare(
+      `SELECT category AS category, COUNT(*) AS n,
+              COALESCE(SUM(amount_kobo), 0) AS total
+         FROM expenses
+        WHERE ${expenseWhere}
+        GROUP BY category
+        ORDER BY total DESC`
+    )
+    .all(expenseParams) as Row[];
+
+  const expensesByCategory: ReportExpenseCategoryRow[] = expenseCategoryRows.map((r) => ({
+    category: text(r, 'category'),
+    count: int(r, 'n'),
+    amountKobo: int(r, 'total'),
+  }));
+  const expensesKobo = expensesByCategory.reduce((sum, e) => sum + e.amountKobo, 0);
+  const expensesCount = expensesByCategory.reduce((sum, e) => sum + e.count, 0);
+
+  const weekExpenses = new Map<string, number>();
+  for (const row of expenseDayRows) {
+    const key = weekStartOf(text(row, 'day'));
+    weekExpenses.set(key, (weekExpenses.get(key) ?? 0) + int(row, 'total'));
+  }
+  const weekMap = new Map<string, ReportWeekRow>();
+  for (const row of weekDayRows) {
+    const key = weekStartOf(text(row, 'day'));
+    const current =
+      weekMap.get(key) ??
+      ({
+        weekStart: key,
+        transactions: 0,
+        grossKobo: 0,
+        taxKobo: 0,
+        cogsKobo: 0,
+        grossProfitKobo: 0,
+        expensesKobo: 0,
+        netProfitKobo: 0,
+      } satisfies ReportWeekRow);
+    current.transactions += int(row, 'n');
+    current.grossKobo += int(row, 'gross');
+    current.taxKobo += int(row, 'tax');
+    current.cogsKobo += int(row, 'cogs');
+    weekMap.set(key, current);
+  }
+  for (const [key, total] of weekExpenses) {
+    const current =
+      weekMap.get(key) ??
+      ({
+        weekStart: key,
+        transactions: 0,
+        grossKobo: 0,
+        taxKobo: 0,
+        cogsKobo: 0,
+        grossProfitKobo: 0,
+        expensesKobo: 0,
+        netProfitKobo: 0,
+      } satisfies ReportWeekRow);
+    current.expensesKobo = total;
+    weekMap.set(key, current);
+  }
+  const weekly = [...weekMap.values()]
+    .map((row) => {
+      row.grossProfitKobo = row.grossKobo - row.taxKobo - row.cogsKobo;
+      row.netProfitKobo = row.grossProfitKobo - row.expensesKobo;
+      return row;
+    })
+    .sort((a, b) => a.weekStart.localeCompare(b.weekStart));
+
+  const grossProfitKobo = netKobo - cogsKobo;
+
   return {
     range: { from: from.toISOString(), to: to.toISOString(), locationId },
     sales: {
@@ -384,12 +635,15 @@ export function getReportsSummary(
       refundsKobo: int(refunds, 'total'),
       voidCount: int(voids, 'n'),
       cogsKobo,
-      grossProfitKobo: netKobo - cogsKobo,
+      grossProfitKobo,
       averageBasketKobo: transactions > 0 ? Math.round(grossKobo / transactions) : 0,
     },
     payments,
     daily: fillDaily(dailyRows, from, to),
+    weekly,
     topProducts,
+    products: productRows,
+    stockAlerts,
     topCustomers,
     cashiers,
     inventory: {
@@ -405,6 +659,15 @@ export function getReportsSummary(
     credit: {
       outstandingKobo: int(creditRow, 'outstanding'),
       activeCustomers: int(creditRow, 'active_customers'),
+    },
+    expenses: {
+      totalKobo: expensesKobo,
+      count: expensesCount,
+      byCategory: expensesByCategory,
+    },
+    finance: {
+      expensesKobo,
+      netProfitKobo: grossProfitKobo - expensesKobo,
     },
   };
 }

@@ -17,14 +17,17 @@ import {
   createBackup,
   createCategory,
   createCustomer,
+  createExpense,
   createLocation,
   createProduct,
   createPurchase,
   createSale,
+  createStaff,
   createSupplier,
   createTable,
   createTaxCategory,
   deleteBackup,
+  deleteExpense,
   deleteTable,
   ensureDefaultTaxCategory,
   getAutomationSettings,
@@ -47,12 +50,15 @@ import {
   listCategories,
   listCustomerPayments,
   listCustomers,
+  listExpenses,
   listLocations,
   listMovements,
   listProducts,
   listPurchases,
   listRecordsSince,
+  listRoles,
   listSales,
+  listStaff,
   listSuppliers,
   listTables,
   listTaxCategories,
@@ -64,6 +70,7 @@ import {
   receivePurchase,
   refundSale,
   requirePermission,
+  resetStaffPassword,
   restoreBackup,
   restoreProduct,
   runAutomation,
@@ -79,6 +86,8 @@ import {
   updateCustomer,
   updateLocation,
   updateProduct,
+  updateRolePermissions,
+  updateStaff,
   updateSupplier,
   updateTable,
   updateTaxCategory,
@@ -394,7 +403,8 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
       scope.get<{ Querystring: { code?: string } }>('/products/by-barcode', async (request) => {
         const { user, db: local } = userIdOf(request);
         const code = typeof request.query.code === 'string' ? request.query.code : '';
-        if (!code.trim()) throw Object.assign(new Error('Scan or type a barcode'), { code: 'INVALID_SCAN' });
+        if (!code.trim())
+          throw Object.assign(new Error('Scan or type a barcode'), { code: 'INVALID_SCAN' });
         return { ok: true, product: await productByBarcode(local, user.businessId, code) };
       });
 
@@ -913,6 +923,104 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
           });
         }
         return { ok: true, ...result };
+      });
+
+      // --- Batch 14: staff, role permissions and expenses ---
+      scope.get('/staff', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return { ok: true, ...(await listStaff(local, user.businessId, user.permissions)) };
+      });
+
+      scope.post('/staff', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return {
+          ok: true,
+          ...(await createStaff(
+            local,
+            user.businessId,
+            user.id,
+            user.permissions,
+            request.body ?? {}
+          )),
+        };
+      });
+
+      scope.get('/staff/roles', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return { ok: true, ...(await listRoles(local, user.businessId, user.permissions)) };
+      });
+
+      scope.patch<{ Params: { id: string } }>('/staff/roles/:id', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        const body = (request.body ?? {}) as { permissions?: unknown };
+        return {
+          ok: true,
+          ...(await updateRolePermissions(
+            local,
+            user.businessId,
+            user.id,
+            user.permissions,
+            request.params.id,
+            { permissions: body.permissions }
+          )),
+        };
+      });
+
+      scope.patch<{ Params: { id: string } }>('/staff/:id', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return {
+          ok: true,
+          ...(await updateStaff(
+            local,
+            user.businessId,
+            user.id,
+            user.permissions,
+            request.params.id,
+            request.body ?? {}
+          )),
+        };
+      });
+
+      scope.post<{ Params: { id: string } }>('/staff/:id/password', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        const body = (request.body ?? {}) as { password?: unknown };
+        await resetStaffPassword(
+          local,
+          user.businessId,
+          user.id,
+          user.permissions,
+          request.params.id,
+          { password: body.password }
+        );
+        return { ok: true };
+      });
+
+      scope.get('/finance/expenses', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return {
+          ok: true,
+          ...(await listExpenses(local, user.businessId, user.permissions, queryOf(request.query))),
+        };
+      });
+
+      scope.post('/finance/expenses', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return {
+          ok: true,
+          ...(await createExpense(
+            local,
+            user.businessId,
+            user.id,
+            user.permissions,
+            request.body ?? {}
+          )),
+        };
+      });
+
+      scope.delete<{ Params: { id: string } }>('/finance/expenses/:id', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        await deleteExpense(local, user.businessId, user.id, user.permissions, request.params.id);
+        return { ok: true };
       });
 
       // --- Batch 8: locations ---

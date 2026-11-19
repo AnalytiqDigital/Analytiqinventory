@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.1.0 — Batch 14: staff, permissions, finance and richer reports
+
+- **Staff & Permissions** page: add, edit, deactivate and reactivate staff,
+  reset passwords (which revokes their sessions), and toggle the permissions
+  of the Administrator, Manager and Cashier roles. The Administrator role
+  always keeps staff and settings management; guards prevent deactivating
+  yourself, changing your own role or removing the last account that can
+  manage staff.
+- **Finance** page: record expenses by category with date, note and location,
+  and read a profit statement for any range — gross sales, COGS, gross profit
+  with margin, expenses, net profit and cash received by payment method.
+  Export the statement, category breakdown and expense list to CSV.
+- **Reports** gained four blocks and tabs: **Products** (quantity sold,
+  revenue, profit, on-hand stock and stock value for every product),
+  **Weekly** (Monday-based weeks with expenses and net profit, expense-only
+  weeks included) and **Stock alerts** (products at or below reorder level,
+  with shortfall, suggested order and value at cost).
+- **Help & Support** page: quick-start checklist, scanner and Xprinter notes,
+  licence/support contacts and one-click diagnostics (version, business
+  profile, licence state, printers, backups) with copy-to-clipboard.
+- LAN parity: `GET/POST/PATCH /api/staff`, `/api/staff/roles`,
+  `/api/staff/:id/password` and `/api/finance/expenses`; new `finance.manage`
+  permission (admin and manager only). Migration `0012_finance_staff.sql`.
+- New buyer setup sheet `docs/BUYER_SETUP.md` covering the unsigned-installer
+  SmartScreen "More info → Run anyway" steps.
+- Docs: `docs/STAFF.md`, `docs/FINANCE.md`, updated `docs/REPORTING.md`.
+
 ## 1.0.0 — Commercial release
 
 - Version 1.0.0; the installer is now `AnalytIQ-Inventory-Setup-1.0.0.exe`.

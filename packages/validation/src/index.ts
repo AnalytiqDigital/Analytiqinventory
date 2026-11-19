@@ -735,3 +735,66 @@ export const checkoutSchema = z.object({
 });
 
 export type CheckoutInput = z.infer<typeof checkoutSchema>;
+
+// --- Batch 14: staff, permissions and finance -------------------------------
+
+export const staffCreateSchema = z.object({
+  name: z.string().trim().min(2, 'Enter the staff name').max(120),
+  email: z.string().trim().toLowerCase().email('Enter a valid email').max(254),
+  password: z.string().min(8, 'Use at least 8 characters').max(128),
+  roleId: z.string().trim().min(1, 'Choose a role'),
+});
+
+export type StaffCreateInput = z.infer<typeof staffCreateSchema>;
+
+export const staffUpdateSchema = z
+  .object({
+    name: z.string().trim().min(2, 'Enter the staff name').max(120).optional(),
+    roleId: z.string().trim().min(1).optional(),
+    isActive: z.boolean().optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, 'Nothing to update');
+
+export type StaffUpdateInput = z.infer<typeof staffUpdateSchema>;
+
+export const staffPasswordSchema = z.object({
+  password: z.string().min(8, 'Use at least 8 characters').max(128),
+});
+
+export type StaffPasswordInput = z.infer<typeof staffPasswordSchema>;
+
+export const rolePermissionsSchema = z.object({
+  permissions: z.array(z.string().trim().min(1)).max(64),
+});
+
+export type RolePermissionsInput = z.infer<typeof rolePermissionsSchema>;
+
+export const EXPENSE_CATEGORIES = [
+  'Rent',
+  'Salaries',
+  'Transport',
+  'Utilities',
+  'Supplies',
+  'Marketing',
+  'Repairs',
+  'Other',
+] as const;
+
+export const expenseCreateSchema = z.object({
+  category: z.string().trim().min(1, 'Choose a category').max(60),
+  note: z.string().trim().max(300).default(''),
+  amountKobo: z.number().int().positive('Enter an amount above zero'),
+  paidAt: z.coerce.date().optional(),
+  locationId: z.string().trim().min(1).nullish(),
+});
+
+export type ExpenseCreateInput = z.infer<typeof expenseCreateSchema>;
+
+export const expenseQuerySchema = z.object({
+  from: z.coerce.date().optional(),
+  to: z.coerce.date().optional(),
+  locationId: z.string().trim().min(1).nullish(),
+  limit: z.coerce.number().int().min(1).max(500).default(200),
+});
+
+export type ExpenseQuery = z.infer<typeof expenseQuerySchema>;
