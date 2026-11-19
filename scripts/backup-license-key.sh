@@ -10,6 +10,10 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 key="$root/.secrets/license-private.pem"
 out="${1:-$HOME/Desktop/analytiq-license-private-$(date +%Y%m%d).pem.enc}"
+# Accept a Windows-style path when launched from cmd.exe via the .cmd wrapper.
+if command -v cygpath >/dev/null 2>&1 && [[ "$out" == [A-Za-z]:* || "$out" == *\\* ]]; then
+  out="$(cygpath -u "$out")"
+fi
 
 if [ ! -f "$key" ]; then
   echo "Missing $key - nothing to back up." >&2
