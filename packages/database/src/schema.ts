@@ -563,3 +563,71 @@ export const schemaMeta = sqliteTable('schema_meta', {
   value: text('value').notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
 });
+
+// --- Batch 8: multi-branch sync ---------------------------------------------
+// sync_state: per-business connection settings and push/pull cursors.
+// sync_records: the relay's snapshot log (newest row per entity, monotonic seq).
+// Composite primary keys and the seq index live in 0008_batch8_sync.sql; the
+// sync service uses raw SQL against both tables.
+
+export const syncState = sqliteTable('sync_state', {
+  businessId: text('business_id').notNull(),
+  key: text('key').notNull(),
+  value: text('value').notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+});
+
+export const syncRecords = sqliteTable('sync_records', {
+  businessId: text('business_id').notNull(),
+  entity: text('entity').notNull(),
+  entityId: text('entity_id').notNull(),
+  version: integer('version').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+  seq: integer('seq').notNull(),
+  data: text('data').notNull(),
+});
+
+export type SyncStateRow = typeof syncState.$inferSelect;
+export type SyncRecordRow = typeof syncRecords.$inferSelect;
+
+// --- Batch 11: AI + WhatsApp automation -------------------------------------
+// One settings row per business and an outbox of every generated message.
+// Credentials are stored in this local database only; no sync entity includes
+// either table, so they never leave the installation.
+
+export const automationSettings = sqliteTable('automation_settings', {
+  businessId: text('business_id').primaryKey(),
+  whatsappEnabled: integer('whatsapp_enabled').notNull().default(0),
+  whatsappPhoneId: text('whatsapp_phone_id').notNull().default(''),
+  whatsappToken: text('whatsapp_token').notNull().default(''),
+  whatsappTo: text('whatsapp_to').notNull().default(''),
+  whatsappTemplate: text('whatsapp_template').notNull().default(''),
+  whatsappLang: text('whatsapp_lang').notNull().default('en'),
+  aiEnabled: integer('ai_enabled').notNull().default(0),
+  aiBaseUrl: text('ai_base_url').notNull().default(''),
+  aiApiKey: text('ai_api_key').notNull().default(''),
+  aiModel: text('ai_model').notNull().default('gpt-4o-mini'),
+  lowStockEnabled: integer('low_stock_enabled').notNull().default(0),
+  dailySummaryEnabled: integer('daily_summary_enabled').notNull().default(0),
+  dailySummaryHour: integer('daily_summary_hour').notNull().default(20),
+  lastLowStockOn: text('last_low_stock_on').notNull().default(''),
+  lastSummaryOn: text('last_summary_on').notNull().default(''),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+});
+
+export type AutomationSettingsRow = typeof automationSettings.$inferSelect;
+
+export const automationMessages = sqliteTable('automation_messages', {
+  id: text('id').primaryKey(),
+  businessId: text('business_id').notNull(),
+  kind: text('kind').notNull(),
+  channel: text('channel').notNull().default('whatsapp'),
+  toAddress: text('to_address').notNull().default(''),
+  body: text('body').notNull(),
+  status: text('status').notNull().default('queued'),
+  error: text('error').notNull().default(''),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  sentAt: integer('sent_at', { mode: 'timestamp' }),
+});
+
+export type AutomationMessageRow = typeof automationMessages.$inferSelect;

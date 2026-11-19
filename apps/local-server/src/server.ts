@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import { Server as SocketIOServer } from 'socket.io';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { join } from 'node:path';
 import {
   adjustStock,
@@ -9,30 +10,44 @@ import {
   archiveProduct,
   archiveSupplier,
   authenticate,
+  backupDirFor,
   cancelPurchase,
   closeLocalDb,
   countStock,
+  createBackup,
   createCategory,
   createCustomer,
+  createLocation,
   createProduct,
   createPurchase,
   createSale,
   createSupplier,
   createTable,
   createTaxCategory,
+  deleteBackup,
   deleteTable,
   ensureDefaultTaxCategory,
+  getAutomationSettings,
   getCustomer,
   getLevels,
   getProduct,
+  getReportsSummary,
   getSale,
+  getSyncStatus,
+  httpTransport,
+  ingestRecords,
   isFirstRun,
+  isSyncEntity,
+  listAutomationMessages,
+  listBackups,
   listCategories,
   listCustomerPayments,
   listCustomers,
+  listLocations,
   listMovements,
   listProducts,
   listPurchases,
+  listRecordsSince,
   listSales,
   listSuppliers,
   listTables,
@@ -43,11 +58,21 @@ import {
   recordCustomerPayment,
   receivePurchase,
   refundSale,
+  requirePermission,
+  restoreBackup,
   restoreProduct,
+  runAutomation,
+  runDailyBackupIfDue,
   runMigrations,
   runSetup,
+  sendTestMessage,
+  setAutomationSettings,
   setTableStatus,
+  setSyncSettings,
+  syncNow,
+  toAutomationView,
   updateCustomer,
+  updateLocation,
   updateProduct,
   updateSupplier,
   updateTable,
@@ -56,11 +81,15 @@ import {
   type AuthenticatedUser,
   type LocalDb,
 } from '@analytiq/database';
+import { activateLicense, getLicenseStatus, LICENSE_PUBLIC_KEY } from '@analytiq/licensing';
 
 declare module 'fastify' {
   interface FastifyInstance {
     db: LocalDb;
     realtime: RealtimeHub;
+    backupsDir: string;
+    licensePublicKey: string;
+    syncKey: string;
   }
   interface FastifyRequest {
     user: AuthenticatedUser | null;
@@ -72,6 +101,10 @@ export interface ServerOptions {
   dbPath?: string;
   logger?: boolean;
   tls?: { key: string | Buffer; cert: string | Buffer };
+  /** Overrides the embedded vendor public key; used by tests and white-label builds. */
+  licensePublicKey?: string;
+  /** Shared secret branches present on every /sync call. Empty disables sync. */
+  syncKey?: string;
 }
 
 interface StartOptions {
@@ -82,6 +115,22 @@ interface StartOptions {
 export function businessRoom(businessId: string): string {
   return `business:${businessId}`;
 }
+
+// Routes that must keep working without a usable license: signing out, session
+// refresh, and licensing itself (otherwise an expired copy could never be
+// activated).
+const LICENSE_EXEMPT = new Set([
+  '/api/auth/logout',
+  '/api/auth/me',
+  '/api/license/status',
+  '/api/license/activate',
+]);
+
+// Per-IP throttle in front of password checks. The database already locks an
+// account after repeated failures; this stops a caller from spraying many
+// accounts from one machine.
+const LOGIN_WINDOW_MS = 60_000;
+const LOGIN_MAX_ATTEMPTS = 10;
 
 /** Realtime fan-out. No-op until Socket.IO is attached on listen. */
 export class RealtimeHub {
@@ -104,14 +153,23 @@ function dbPathOf(options: ServerOptions): string {
 // code works against an embedded DB or a LAN server without translation.
 function httpStatusFor(code: string | undefined): number {
   if (!code) return 400;
-  if (code === 'UNAUTHENTICATED') return 401;
-  if (code === 'FORBIDDEN') return 403;
+  if (code === 'UNAUTHENTICATED' || code === 'SYNC_UNAUTHORIZED') return 401;
+  if (code === 'FORBIDDEN' || code === 'LICENSE_REQUIRED') return 403;
   if (code === 'ACCOUNT_LOCKED') return 423;
+  if (code === 'RATE_LIMITED') return 429;
+  if (code === 'SYNC_NOT_CONFIGURED') return 503;
   if (code.endsWith('_NOT_FOUND')) return 404;
   if (code.endsWith('_EXISTS') || code === 'ALREADY_SETUP' || code === 'TAX_CATEGORY_EXISTS') {
     return 409;
   }
   return 400;
+}
+
+/** Constant-time secret comparison; hashing first removes the length leak. */
+function secretEquals(provided: string, expected: string): boolean {
+  const a = createHash('sha256').update(provided).digest();
+  const b = createHash('sha256').update(expected).digest();
+  return timingSafeEqual(a, b);
 }
 
 function zodMessage(err: Error): string | null {
@@ -147,6 +205,26 @@ function userIdOf(request: FastifyRequest): { user: AuthenticatedUser; db: Local
   return { user, db: request.server.db };
 }
 
+const SYNC_MAX_BATCH = 500;
+
+/** The relay always speaks for the single business hosted on this machine. */
+function hubBusinessId(local: LocalDb): string {
+  const row = local.raw.prepare('SELECT id FROM businesses ORDER BY rowid LIMIT 1').get() as
+    { id: string } | undefined;
+  if (!row) {
+    const err = new Error('This server has no business set up yet');
+    (err as NodeJS.ErrnoException).code = 'SYNC_NOT_CONFIGURED';
+    throw err;
+  }
+  return row.id;
+}
+
+function syncInvalid(message: string): Error {
+  const err = new Error(message);
+  (err as NodeJS.ErrnoException).code = 'SYNC_INVALID';
+  return err;
+}
+
 export function buildServer(options: ServerOptions = {}): FastifyInstance {
   const app = Fastify({
     logger: options.logger ?? true,
@@ -159,11 +237,28 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
 
   app.decorate('db', db);
   app.decorate('realtime', new RealtimeHub());
+  app.decorate('backupsDir', backupDirFor(file));
+  app.decorate('licensePublicKey', options.licensePublicKey ?? LICENSE_PUBLIC_KEY);
+  app.decorate('syncKey', options.syncKey ?? process.env.ANALYTIQ_SYNC_KEY ?? '');
   app.decorateRequest('user', null);
   app.decorateRequest('token', '');
   app.addHook('onClose', async () => {
     closeLocalDb(db);
   });
+
+  const loginAttempts = new Map<string, number[]>();
+  function checkLoginRate(ip: string): void {
+    const nowMs = Date.now();
+    const recent = (loginAttempts.get(ip) ?? []).filter((t) => nowMs - t < LOGIN_WINDOW_MS);
+    if (recent.length >= LOGIN_MAX_ATTEMPTS) {
+      loginAttempts.set(ip, recent);
+      const err = new Error('Too many sign-in attempts. Try again in a minute.');
+      (err as NodeJS.ErrnoException).code = 'RATE_LIMITED';
+      throw err;
+    }
+    recent.push(nowMs);
+    loginAttempts.set(ip, recent);
+  }
 
   void app.register(swagger, {
     openapi: { info: { title: 'AnalytIQ Local Server', version: '0.1.0' } },
@@ -193,6 +288,7 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
       });
 
       scope.post('/auth/login', async (request) => {
+        checkLoginRate(request.ip);
         const result = await login(scope.db, request.body ?? {});
         return {
           ok: true,
@@ -218,6 +314,15 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
           throw err;
         }
         request.token = token;
+
+        const path = request.url.split('?')[0] ?? '';
+        if (LICENSE_EXEMPT.has(path)) return;
+        const status = getLicenseStatus(scope.db, { publicKey: scope.licensePublicKey });
+        if (!status.usable) {
+          const err = new Error(status.reason ?? 'This copy needs a license key');
+          (err as NodeJS.ErrnoException).code = 'LICENSE_REQUIRED';
+          throw err;
+        }
       });
 
       scope.post('/auth/logout', async (request) => {
@@ -228,6 +333,32 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
       scope.get('/auth/me', async (request) => {
         const { user } = userIdOf(request);
         return { ok: true, user };
+      });
+
+      scope.get('/license/status', async (request) => {
+        const { db: local } = userIdOf(request);
+        return {
+          ok: true,
+          status: getLicenseStatus(local, { publicKey: scope.licensePublicKey }),
+        };
+      });
+
+      scope.post('/license/activate', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        requirePermission(new Set(user.permissions), 'settings.manage');
+        const { key } = (request.body ?? {}) as { key?: unknown };
+        if (typeof key !== 'string' || key.trim().length === 0) {
+          const err = new Error('Paste a license key');
+          (err as NodeJS.ErrnoException).code = 'LICENSE_INVALID';
+          throw err;
+        }
+        return {
+          ok: true,
+          status: activateLicense(local, key, {
+            publicKey: scope.licensePublicKey,
+            actor: { userId: user.id, businessId: user.businessId },
+          }),
+        };
       });
 
       // --- products + inventory ---
@@ -694,8 +825,269 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
         await cancelPurchase(local, user.businessId, user.id, user.permissions, request.params.id);
         return { ok: true };
       });
+
+      scope.get('/reports/summary', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return {
+          ok: true,
+          summary: getReportsSummary(
+            local,
+            user.businessId,
+            user.permissions,
+            queryOf(request.query)
+          ),
+        };
+      });
+
+      // --- Batch 8: locations ---
+      scope.get('/locations', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return { ok: true, items: await listLocations(local, user.businessId) };
+      });
+
+      scope.post('/locations', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        const location = await createLocation(
+          local,
+          user.businessId,
+          user.id,
+          user.permissions,
+          request.body ?? {}
+        );
+        scope.realtime.emit(user.businessId, 'location.updated', {
+          reason: 'created',
+          id: location.id,
+        });
+        return { ok: true, location };
+      });
+
+      scope.patch<{ Params: { id: string } }>('/locations/:id', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        const location = await updateLocation(
+          local,
+          user.businessId,
+          user.id,
+          user.permissions,
+          request.params.id,
+          request.body ?? {}
+        );
+        scope.realtime.emit(user.businessId, 'location.updated', {
+          reason: 'updated',
+          id: location.id,
+        });
+        return { ok: true, location };
+      });
+
+      // Sync settings are stored in the hub's own database, so an admin on the
+      // LAN configures the hub's uplink through the same API they already use.
+      scope.get('/sync/status', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        requirePermission(new Set(user.permissions), 'settings.manage');
+        return { ok: true, status: getSyncStatus(local, user.businessId) };
+      });
+
+      scope.post('/sync/settings', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return {
+          ok: true,
+          settings: setSyncSettings(
+            local,
+            user.businessId,
+            user.id,
+            user.permissions,
+            request.body ?? {}
+          ),
+        };
+      });
+
+      scope.post('/sync/now', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        requirePermission(new Set(user.permissions), 'settings.manage');
+        const { settings } = getSyncStatus(local, user.businessId);
+        if (!settings.enabled) {
+          const err = new Error('Sync is turned off');
+          (err as NodeJS.ErrnoException).code = 'SYNC_DISABLED';
+          throw err;
+        }
+        const result = await syncNow(
+          local,
+          user.businessId,
+          httpTransport(settings.url, settings.key)
+        );
+        scope.realtime.emit(user.businessId, 'sync.changed', { reason: 'pull' });
+        return result;
+      });
+
+      // --- Batch 11: automation. Settings hold write-only secrets, so the GET
+      // returns booleans instead of the WhatsApp token and AI key.
+      scope.get('/automation/settings', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        requirePermission(new Set(user.permissions), 'settings.manage');
+        return {
+          ok: true,
+          settings: toAutomationView(getAutomationSettings(local, user.businessId)),
+        };
+      });
+
+      scope.post('/automation/settings', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return {
+          ok: true,
+          settings: toAutomationView(
+            setAutomationSettings(
+              local,
+              user.businessId,
+              user.id,
+              user.permissions,
+              request.body ?? {}
+            )
+          ),
+        };
+      });
+
+      scope.get('/automation/messages', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        requirePermission(new Set(user.permissions), 'settings.manage');
+        const limit = Number((request.query as { limit?: string })?.limit ?? 50);
+        return {
+          ok: true,
+          messages: await listAutomationMessages(local, user.businessId, limit),
+        };
+      });
+
+      scope.post('/automation/test', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        const message = await sendTestMessage(
+          local,
+          user.businessId,
+          user.id,
+          user.permissions,
+          request.body ?? {}
+        );
+        scope.realtime.emit(user.businessId, 'automation.changed', { reason: 'test' });
+        return { ok: true, message };
+      });
+
+      scope.post('/automation/run', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        requirePermission(new Set(user.permissions), 'settings.manage');
+        const result = await runAutomation(local, user.businessId, { force: true });
+        if (result.queued > 0) {
+          scope.realtime.emit(user.businessId, 'automation.changed', { reason: 'run' });
+        }
+        return { ok: true, result };
+      });
+
+      // --- Batch 12: backups. Snapshots live beside the database file on the
+      // primary computer; every operation requires settings.manage.
+      scope.get('/backups', async (request) => {
+        const { user } = userIdOf(request);
+        requirePermission(new Set(user.permissions), 'settings.manage');
+        return { ok: true, dir: scope.backupsDir, items: listBackups(scope.backupsDir) };
+      });
+
+      scope.post('/backups', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return {
+          ok: true,
+          ...createBackup(local, scope.backupsDir, user.permissions, user.id, user.businessId),
+        };
+      });
+
+      scope.post('/backups/restore', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        const { name } = (request.body ?? {}) as { name?: unknown };
+        return {
+          ok: true,
+          ...restoreBackup(
+            local,
+            dbPathOf(options),
+            scope.backupsDir,
+            user.permissions,
+            user.id,
+            user.businessId,
+            name
+          ),
+        };
+      });
+
+      scope.delete<{ Params: { name: string } }>('/backups/:name', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return {
+          ok: true,
+          ...deleteBackup(
+            local,
+            scope.backupsDir,
+            user.permissions,
+            user.id,
+            user.businessId,
+            request.params.name
+          ),
+        };
+      });
     },
     { prefix: '/api' }
+  );
+
+  // --- Batch 8: sync relay. Branches authenticate with a shared key instead of
+  // a login because they push and pull unattended on a timer. The relay stores
+  // the newest snapshot of every row and serves it in seq order.
+  void app.register(
+    async (scope) => {
+      scope.addHook('preHandler', async (request) => {
+        if (!scope.syncKey) {
+          const err = new Error('This server is not accepting sync connections');
+          (err as NodeJS.ErrnoException).code = 'SYNC_NOT_CONFIGURED';
+          throw err;
+        }
+        const header = request.headers['x-sync-key'];
+        const provided = typeof header === 'string' ? header : '';
+        if (!provided || !secretEquals(provided, scope.syncKey)) {
+          const err = new Error('Invalid sync key');
+          (err as NodeJS.ErrnoException).code = 'SYNC_UNAUTHORIZED';
+          throw err;
+        }
+        const status = getLicenseStatus(scope.db, { publicKey: scope.licensePublicKey });
+        if (!status.usable) {
+          const err = new Error(status.reason ?? 'This copy needs a license key');
+          (err as NodeJS.ErrnoException).code = 'LICENSE_REQUIRED';
+          throw err;
+        }
+      });
+
+      scope.post('/push', async (request) => {
+        const businessId = hubBusinessId(scope.db);
+        const body = (request.body ?? {}) as { records?: unknown };
+        if (!Array.isArray(body.records)) throw syncInvalid('Push expects a records array');
+        if (body.records.length > SYNC_MAX_BATCH) {
+          throw syncInvalid(`Push accepts at most ${SYNC_MAX_BATCH} records at a time`);
+        }
+        const result = ingestRecords(scope.db, businessId, body.records);
+        scope.realtime.emit(businessId, 'sync.changed', { reason: 'push', ...result });
+        return { ok: true, ...result };
+      });
+
+      scope.get('/pull', async (request) => {
+        const businessId = hubBusinessId(scope.db);
+        const query = queryOf(request.query);
+        if (!isSyncEntity(query.entity)) throw syncInvalid('Unknown sync entity');
+        const since = query.since === undefined ? 0 : Number(query.since);
+        const limit = query.limit === undefined ? SYNC_MAX_BATCH : Number(query.limit);
+        if (!Number.isInteger(since) || since < 0)
+          throw syncInvalid('since must be a whole number');
+        if (!Number.isInteger(limit) || limit < 1)
+          throw syncInvalid('limit must be a whole number');
+        const page = listRecordsSince(
+          scope.db,
+          businessId,
+          query.entity,
+          since,
+          Math.min(limit, SYNC_MAX_BATCH)
+        );
+        return { ok: true, ...page };
+      });
+    },
+    { prefix: '/sync' }
   );
 
   return app;
@@ -726,6 +1118,52 @@ export async function startServer(
   });
 
   app.realtime.attach(io);
+
+  // Batch 12: one verified snapshot per day, taken by the primary computer.
+  // The timer is unref'd so it never keeps a short-lived process alive.
+  const runBackup = async (): Promise<void> => {
+    try {
+      if (await isFirstRun(app.db)) return;
+      const result = runDailyBackupIfDue(app.db, app.backupsDir, 14);
+      if (result) app.log.info(`Daily backup written: ${result.backup.name}`);
+    } catch (err: unknown) {
+      app.log.warn(`Automatic backup failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+  const firstRun = setTimeout(() => void runBackup(), 60_000);
+  firstRun.unref();
+  const timer = setInterval(() => void runBackup(), 60 * 60 * 1000);
+  timer.unref();
+
+  // Batch 11: low-stock and daily-summary triggers. The once-a-day guards live
+  // in automation_settings, so a frequent tick is safe and cheap.
+  const runAutomations = async (): Promise<void> => {
+    try {
+      if (await isFirstRun(app.db)) return;
+      const business = app.db.raw
+        .prepare('SELECT id FROM businesses ORDER BY rowid LIMIT 1')
+        .get() as { id: string } | undefined;
+      if (!business) return;
+      const result = await runAutomation(app.db, business.id);
+      if (result.queued > 0) {
+        app.log.info(`Automation sent ${result.queued} message(s)`);
+        app.realtime.emit(business.id, 'automation.changed', { reason: 'scheduled' });
+      }
+    } catch (err: unknown) {
+      app.log.warn(`Automation tick failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+  const firstAutomation = setTimeout(() => void runAutomations(), 90_000);
+  firstAutomation.unref();
+  const automationTimer = setInterval(() => void runAutomations(), 15 * 60 * 1000);
+  automationTimer.unref();
+  app.addHook('onClose', async () => {
+    clearTimeout(firstRun);
+    clearInterval(timer);
+    clearTimeout(firstAutomation);
+    clearInterval(automationTimer);
+  });
+
   return app.listen({
     port: options.port ?? Number(process.env.PORT ?? 3001),
     host: options.host ?? process.env.HOST ?? '0.0.0.0',

@@ -48,9 +48,7 @@ export interface AnalytiqApi {
   ) => Promise<{ ok: boolean; error?: string; code?: string }>;
   productArchive: (id: string) => Promise<{ ok: boolean; error?: string; code?: string }>;
   productRestore: (id: string) => Promise<{ ok: boolean; error?: string; code?: string }>;
-  stockLevels: (
-    query: unknown
-  ) => Promise<{
+  stockLevels: (query: unknown) => Promise<{
     ok: boolean;
     items: StockLevelRow[];
     total: number;
@@ -66,9 +64,7 @@ export interface AnalytiqApi {
   stockMovements: (
     query: unknown
   ) => Promise<{ ok: boolean; items: MovementRow[]; total: number; error?: string; code?: string }>;
-  saleCreate: (
-    input: unknown
-  ) => Promise<{
+  saleCreate: (input: unknown) => Promise<{
     ok: boolean;
     id?: string;
     receiptNo?: string;
@@ -77,9 +73,7 @@ export interface AnalytiqApi {
     error?: string;
     code?: string;
   }>;
-  sales: (
-    query: unknown
-  ) => Promise<{
+  sales: (query: unknown) => Promise<{
     ok: boolean;
     items: SaleSummaryRow[];
     total: number;
@@ -125,9 +119,7 @@ export interface AnalytiqApi {
   tableDelete: (id: string) => Promise<{ ok: boolean; error?: string; code?: string }>;
 
   // --- Batch 6: customers, suppliers, purchasing ---
-  customers: (
-    query: unknown
-  ) => Promise<{
+  customers: (query: unknown) => Promise<{
     ok: boolean;
     items: CustomerRow[];
     total: number;
@@ -175,6 +167,241 @@ export interface AnalytiqApi {
     id: string
   ) => Promise<{ ok: boolean; stockLines?: number; error?: string; code?: string }>;
   purchasesCancel: (id: string) => Promise<{ ok: boolean; error?: string; code?: string }>;
+
+  // --- Batch 9: reports and analytics ---
+  reportsSummary: (
+    query: unknown
+  ) => Promise<{ ok: boolean; summary?: ReportsSummary; error?: string; code?: string }>;
+
+  // --- Batch 12: backups ---
+  backups: () => Promise<{
+    ok: boolean;
+    dir?: string;
+    items?: BackupRow[];
+    error?: string;
+    code?: string;
+  }>;
+  backupCreate: () => Promise<{
+    ok: boolean;
+    backup?: BackupRow;
+    pruned?: number;
+    error?: string;
+    code?: string;
+  }>;
+  backupRestore: (name: string) => Promise<{
+    ok: boolean;
+    restored?: BackupRow;
+    safetyBackup?: BackupRow;
+    error?: string;
+    code?: string;
+  }>;
+  backupDelete: (
+    name: string
+  ) => Promise<{ ok: boolean; removed?: string; error?: string; code?: string }>;
+  backupReveal: () => Promise<{ ok: boolean; error?: string; code?: string }>;
+
+  // --- Batch 10: offline license ---
+  licenseStatus: () => Promise<{
+    ok: boolean;
+    status?: LicenseStatus;
+    error?: string;
+    code?: string;
+  }>;
+  licenseActivate: (
+    key: string
+  ) => Promise<{ ok: boolean; status?: LicenseStatus; error?: string; code?: string }>;
+
+  // --- Batch 12: update check + safe external links ---
+  updateCheck: () => Promise<UpdateCheck>;
+  openExternal: (url: string) => Promise<{ ok: boolean; error?: string; code?: string }>;
+
+  // --- Batch 8: locations + hub sync ---
+  locations: () => Promise<{ ok: boolean; items: LocationRow[]; error?: string; code?: string }>;
+  locationCreate: (
+    input: unknown
+  ) => Promise<{ ok: boolean; location?: LocationRow; error?: string; code?: string }>;
+  locationUpdate: (
+    id: string,
+    patch: unknown
+  ) => Promise<{ ok: boolean; location?: LocationRow; error?: string; code?: string }>;
+  syncStatus: () => Promise<{ ok: boolean; status?: SyncStatus; error?: string; code?: string }>;
+  syncConfigure: (
+    input: unknown
+  ) => Promise<{ ok: boolean; settings?: SyncSettings; error?: string; code?: string }>;
+  syncNow: () => Promise<{
+    ok: boolean;
+    pushed?: number;
+    pulled?: number;
+    finishedAt?: string;
+    error?: string;
+    code?: string;
+  }>;
+
+  // --- Batch 11: AI + WhatsApp automation ---
+  automationSettings: () => Promise<{
+    ok: boolean;
+    settings?: AutomationSettingsView;
+    error?: string;
+    code?: string;
+  }>;
+  automationSave: (
+    input: unknown
+  ) => Promise<{ ok: boolean; settings?: AutomationSettingsView; error?: string; code?: string }>;
+  automationMessages: (
+    limit?: number
+  ) => Promise<{ ok: boolean; messages?: AutomationMessage[]; error?: string; code?: string }>;
+  automationTest: (input: {
+    body: string;
+  }) => Promise<{ ok: boolean; message?: AutomationMessage; error?: string; code?: string }>;
+  automationRun: () => Promise<{
+    ok: boolean;
+    result?: AutomationRunResult;
+    error?: string;
+    code?: string;
+  }>;
+}
+
+export interface LocationRow {
+  id: string;
+  name: string;
+  address: string;
+  state: string;
+  lga: string;
+  isDefault: boolean;
+  version: number;
+}
+
+export interface SyncSettings {
+  url: string;
+  key: string;
+  enabled: boolean;
+}
+
+export interface SyncStatus {
+  settings: SyncSettings;
+  lastPushAt: string | null;
+  lastPullAt: string | null;
+  lastError: string | null;
+}
+
+export interface AutomationSettingsView {
+  whatsappEnabled: boolean;
+  whatsappPhoneId: string;
+  whatsappTokenSet: boolean;
+  whatsappTo: string;
+  whatsappTemplate: string;
+  whatsappLang: string;
+  aiEnabled: boolean;
+  aiBaseUrl: string;
+  aiApiKeySet: boolean;
+  aiModel: string;
+  lowStockEnabled: boolean;
+  dailySummaryEnabled: boolean;
+  dailySummaryHour: number;
+  lastLowStockOn: string;
+  lastSummaryOn: string;
+}
+
+export type AutomationMessageStatus = 'queued' | 'sent' | 'failed' | 'dry_run';
+
+export interface AutomationMessage {
+  id: string;
+  kind: string;
+  channel: string;
+  toAddress: string;
+  body: string;
+  status: AutomationMessageStatus;
+  error: string;
+  createdAt: string;
+  sentAt: string | null;
+}
+
+export interface AutomationRunResult {
+  queued: number;
+  sent: number;
+  failed: number;
+  dryRun: number;
+  skipped: string[];
+}
+
+export interface UpdateCheck {
+  ok: boolean;
+  configured: boolean;
+  currentVersion: string;
+  latestVersion?: string;
+  updateAvailable?: boolean;
+  url?: string;
+  notes?: string;
+  error?: string;
+  code?: string;
+}
+
+export type LicenseState = 'active' | 'trial' | 'expired' | 'invalid' | 'unlicensed';
+
+export interface LicenseStatus {
+  state: LicenseState;
+  reason: string | null;
+  plan: string | null;
+  business: string | null;
+  licenseId: string | null;
+  expiresAt: string | null;
+  daysLeft: number | null;
+  trialEndsAt: string | null;
+  installId: string;
+  usable: boolean;
+}
+
+export interface BackupRow {
+  name: string;
+  sizeBytes: number;
+  createdAt: string;
+}
+
+export interface ReportsSummary {
+  range: { from: string; to: string; locationId: string | null };
+  sales: {
+    transactions: number;
+    subtotalKobo: number;
+    discountKobo: number;
+    taxKobo: number;
+    grossKobo: number;
+    netKobo: number;
+    refundCount: number;
+    refundsKobo: number;
+    voidCount: number;
+    cogsKobo: number;
+    grossProfitKobo: number;
+    averageBasketKobo: number;
+  };
+  payments: Array<{ method: string; count: number; amountKobo: number }>;
+  daily: Array<{ date: string; transactions: number; grossKobo: number; taxKobo: number }>;
+  topProducts: Array<{
+    productId: string;
+    name: string;
+    qty: number;
+    revenueKobo: number;
+    profitKobo: number;
+  }>;
+  topCustomers: Array<{
+    customerId: string | null;
+    name: string;
+    transactions: number;
+    totalKobo: number;
+  }>;
+  cashiers: Array<{
+    customerId: string | null;
+    name: string;
+    transactions: number;
+    totalKobo: number;
+  }>;
+  inventory: {
+    productCount: number;
+    lowStockCount: number;
+    costValueKobo: number;
+    retailValueKobo: number;
+  };
+  purchases: { receivedCount: number; receivedKobo: number };
+  credit: { outstandingKobo: number; activeCustomers: number };
 }
 
 export interface CustomerRow {

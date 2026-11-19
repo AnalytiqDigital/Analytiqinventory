@@ -8,12 +8,11 @@
       photos, named tax categories, barcode).
 - [x] Batch 6: Customers, suppliers, purchasing.
 - [x] Batch 7: LAN server + multi-computer (REST + Socket.IO, client mode).
-- [ ] Batch 8: Cloud sync + multi-location.
-- [ ] Batch 9: Reporting + BI.
-- [ ] Batch 10: Website, portal, licensing, payments.
-- [ ] Batch 11: AI, WhatsApp, automation.
-- [ ] Batch 12: Security, backups, updates, production release.
+- [x] Batch 8: Cloud sync + multi-location.
+- [x] Batch 9: Reporting + BI.
+- [x] Batch 10: Website, portal, licensing, payments.
+- [x] Batch 11: AI, WhatsApp, automation.
+- [x] Batch 12: Security, backups, updates, production release.
 
-First commercial release priority: standalone app, products/inventory, POS,
-customers/suppliers, purchasing, basic reports, backup/restore, website sales
-and licensing. LAN/cloud/AI follow without destabilising core.
+All planned batches are implemented. Remaining release work is verification,
+the installer rebuild and publishing (`docs/UPDATES.md`).

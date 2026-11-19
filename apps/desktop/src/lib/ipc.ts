@@ -73,6 +73,42 @@ function fallbackApi(): AnalytiqApi {
     purchasesCreate: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
     purchasesReceive: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
     purchasesCancel: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+
+    reportsSummary: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+
+    backups: () =>
+      Promise.resolve({ ok: false, items: [], error: 'Unavailable in browser preview' }),
+    backupCreate: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    backupRestore: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    backupDelete: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    backupReveal: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+
+    licenseStatus: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    licenseActivate: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+
+    updateCheck: () =>
+      Promise.resolve({
+        ok: false,
+        configured: false,
+        currentVersion: '0.1.0-dev',
+        error: 'Unavailable in browser preview',
+      }),
+    openExternal: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+
+    locations: () =>
+      Promise.resolve({ ok: false, items: [], error: 'Unavailable in browser preview' }),
+    locationCreate: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    locationUpdate: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    syncStatus: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    syncConfigure: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    syncNow: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    automationSettings: () =>
+      Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    automationSave: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    automationMessages: () =>
+      Promise.resolve({ ok: false, messages: [], error: 'Unavailable in browser preview' }),
+    automationTest: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    automationRun: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
   };
 }
 

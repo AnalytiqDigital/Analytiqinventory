@@ -18,6 +18,7 @@ NSIS packaging config, component tests. Verification pending (blocked shell).
 ## Batch 3 — Database, Authentication, Business Setup: DONE (scaffold, unverified builds)
 
 Implemented:
+
 - SQLite schema (`packages/database/src/schema.ts`): businesses, locations,
   users, roles, permissions, role_permissions, user_roles, devices, sessions,
   audit_logs, app_settings (+ schema_meta). UUID text PKs, business/location
@@ -43,6 +44,7 @@ validation/database/desktop.
 ## Batch 4 — Products and Inventory: DONE (scaffold, unverified builds)
 
 Implemented:
+
 - Schema: `categories`, `products`, `stock_movements` with indexes; migration
   `0002_batch4_products_inventory.sql` + journal entry.
 - Service (`inventory.ts`): categories, product CRUD with unique SKU/barcode
@@ -61,19 +63,20 @@ validation/database/desktop.
 ## Batch 5 — POS and Cash Register: DONE (scaffold, unverified builds)
 
 Implemented:
+
 - Schema: `sales`, `sale_items`, `sale_payments`, `sale_reversals` with
-indexes; migration `0003_batch5_pos_sales.sql` + journal entry.
+  indexes; migration `0003_batch5_pos_sales.sql` + journal entry.
 - Service (`sales.ts`): atomic `createSale` (cart validation, line +
-header discounts, business-rate tax default, split tender over
-cash/transfer/pos/credit, credit-must-match, stock guard per line),
-`refundSale`/`voidSale` (restock via `return` rows + reversal record,
-double-reversal guard), `getSale`/`listSales`.
+  header discounts, business-rate tax default, split tender over
+  cash/transfer/pos/credit, credit-must-match, stock guard per line),
+  `refundSale`/`voidSale` (restock via `return` rows + reversal record,
+  double-reversal guard), `getSale`/`listSales`.
 - Desktop IPC: 5 `sales:*` channels, session-gated, permission-checked.
 - UI: PosPage (product search, cart, tender dialog, receipt view with
-print popup for thermal + standard printers, sales history with
-refund/void), wired to `/pos` route.
+  print popup for thermal + standard printers, sales history with
+  refund/void), wired to `/pos` route.
 - Tests: `sales.test.ts` (service), `sales.test.ts` (validation).
-Docs: `docs/POS.md`.
+  Docs: `docs/POS.md`.
 
 Not yet run (environment blocked shell execution): install, typecheck,
 lint, tests for validation/database/desktop.
@@ -81,6 +84,7 @@ lint, tests for validation/database/desktop.
 ## Restaurant Pack (Batch 5 extension): Tables, Product Images, Tax Categories, Barcode
 
 Implemented:
+
 - Schema: `tax_categories` (named rates in basis points, one default per
   business), `dining_tables` (name, seats, note, `free`/`occupied` status),
   `products.image_path`, `products.tax_category_id`, `sales.table_id`; migration
@@ -111,6 +115,7 @@ Implemented:
 ## Batch 6 — Customers, Suppliers, Purchasing: DONE
 
 Implemented:
+
 - Schema: `customers`, `suppliers`, `purchases`, `purchase_items`,
   `customer_payments`, plus `sales.customer_id`; migration
   `0006_batch6_contacts_purchasing.sql` with business/name, phone, supplier and
@@ -151,6 +156,7 @@ Electron's ABI.
 ## Batch 7 — LAN Server and Multi-Computer: DONE
 
 Implemented:
+
 - `apps/local-server/src/server.ts`: Fastify app with OpenAPI at `/docs`,
   `/health`, and the REST surface mirroring the desktop IPC — `status`,
   `setup`, `auth/login|logout|me`, products and categories, stock
@@ -187,6 +193,89 @@ the asar, and `apps/desktop/release/AnalytIQ-Inventory-Setup-0.1.0.exe` was
 built and smoke-tested — packaged SQLite loads, all 7 migrations apply, and the
 installed app starts and creates its database.
 
+## Batch 8 — Cloud Sync and Multi-Location: DONE
+
+Implemented:
+
+- Locations management (create/update, promote branch), per-location stock
+  levels and scoping on sales/purchases, and a default-location fallback.
+- `packages/sync-engine`: relay-based branch sync — push changed shared
+  entities, pull unseen ones, append-only stock ledger, per-device cursors.
+  Sync is opt-in per installation and needs no customer account.
+- Local-server sync endpoints and desktop sync settings/status UI; audit trail
+  for sync runs.
+- Tests: sync-engine unit tests, sync endpoints in the server suite.
+- Docs: `docs/SYNC.md`.
+
+## Batch 9 — Reporting and Analytics: DONE
+
+Implemented:
+
+- `getReportsSummary()` in `packages/database/src/reports.ts` — sales totals,
+  payment mix, top products, stock value/low-stock, credit outstanding and
+  supplier balances, computed live from the ledger.
+- Desktop Reports page, LAN route `GET /api/reports/summary`, and the same
+  permission (`reports.view`) on every path.
+- Tests: reporting assertions inside the database suite.
+- Docs: `docs/REPORTING.md`.
+
+## Batch 10a — Offline Licensing and Trial: DONE
+
+Implemented:
+
+- `packages/licensing`: Ed25519 `ANQ1.<payload>.<signature>` keys, embedded
+  public key, trial start on first check (14 days), activation/deactivation,
+  install-id device locking, `schema_meta` storage.
+- Vendor tooling: `keygen.mjs` and `issue.mjs`; the private key never enters the
+  repository or the installer.
+- Desktop settings licence card and gating of business screens after trial
+  expiry (status/auth endpoints stay reachable).
+- Docs: `docs/LICENSE_KEYS.md`.
+
+## Batch 10b — Cloud Licensing API and Website Checkout: DONE
+
+Implemented:
+
+- `apps/cloud-api` (NestJS): `GET /api/plans`, `POST /api/checkout`,
+  `GET /api/checkout/:reference`, signed Paystack webhook, Swagger at `/docs`.
+- Shared plan catalogue and `checkoutSchema` in `packages/validation`, so the
+  displayed price and the charged amount come from one source.
+- `FileOrderStore` (atomic, serialised writes; `OrderStore` seam for a later
+  database), idempotent settlement with amount/currency checks, licence
+  issuance through the pure `@analytiq/licensing/dist/key` module.
+- `apps/website` (Next.js): landing page with pricing, `/checkout` form,
+  `/checkout/success` poller that shows and copies the key, shared API client
+  with coded error mapping.
+- Tests: cloud-api 22 (service, Paystack client, webhook, checkout controller),
+  website 10 (formatter + API client).
+- Docs: `docs/CHECKOUT.md`.
+
+## Batch 11 — AI and WhatsApp Automation: DONE
+
+Implemented:
+
+- `automation_settings`/`automation_messages` outbox; low-stock and daily-summary
+  message generation, once-a-day guards, per-business opt-in.
+- WhatsApp Cloud API delivery with dry-run mode, Meta template support and
+  language, and optional AI rewrite through an OpenAI-compatible endpoint.
+- Server routes (`/api/automation/*`), 15-minute scheduler in the desktop app
+  and LAN server, realtime `automation.changed` events, Settings UI.
+- Secrets are stored only in the local database, redacted in views, and never
+  echoed back to the renderer.
+- Tests: 10 automation tests; server route test.
+- Docs: `docs/AUTOMATION.md`.
+
+## Batch 12 — Security, Backups and Release: DONE
+
+Implemented:
+
+- Verified local backups (`VACUUM INTO` + integrity and table checks), restore
+  from the Backups card, automatic daily snapshots.
+- Branding/business profile, update-check plumbing, hardened Electron defaults
+  (`contextIsolation`, `sandbox`, allow-listed IPC), secret-handling rules.
+- NSIS installer with unpacked SQLite native module and bundled migrations.
+- Docs: `docs/BACKUPS.md`, `docs/UPDATES.md`, `docs/SECURITY.md`.
+
 ## Next
 
-Batch 8: cloud sync + multi-location.
+Final verification, installer rebuild and release commit.

@@ -1,20 +1,36 @@
-import { app, BrowserWindow, ipcMain, safeStorage } from 'electron';
+import { app, BrowserWindow, ipcMain, safeStorage, shell } from 'electron';
 import {
   adjustStock,
   archiveCustomer,
   archiveProduct,
   archiveSupplier,
   cancelPurchase,
+  createBackup,
   createCustomer,
+  createLocation,
   createPurchase,
   createSupplier,
+  deleteBackup,
+  getAutomationSettings,
   getCustomer,
+  getSyncStatus,
+  httpTransport,
+  listAutomationMessages,
+  listBackups,
   listCustomerPayments,
   listCustomers,
+  listLocations,
   listPurchases,
   listSuppliers,
   receivePurchase,
   recordCustomerPayment,
+  requirePermission,
+  restoreBackup,
+  runAutomation,
+  runDailyBackupIfDue,
+  sendTestMessage,
+  setAutomationSettings,
+  toAutomationView,
   updateCustomer,
   updateSupplier,
   authenticate,
@@ -26,6 +42,7 @@ import {
   createTaxCategory,
   getLevels,
   getProduct,
+  getReportsSummary,
   getSale,
   deleteTable,
   ensureDefaultTaxCategory,
@@ -41,17 +58,22 @@ import {
   refundSale,
   restoreProduct,
   runSetup,
+  setSyncSettings,
   setTableStatus,
+  syncNow,
+  updateLocation,
   updateProduct,
   updateTable,
   updateTaxCategory,
   voidSale,
   type LocalDb,
 } from '@analytiq/database';
+import { activateLicense, getLicenseStatus } from '@analytiq/licensing';
 import path from 'node:path';
-import { readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import log from 'electron-log';
 import { registerLanClient } from './lanClient';
+import { registerUpdateHandlers } from './updates';
 
 log.initialize();
 log.transports.file.level = 'info';
@@ -188,7 +210,7 @@ function localAuthHandlers(): void {
 // --- Batch 4: products + inventory. Every write is validated with Zod in the
 // service layer and requires the caller's session permissions; reads need an
 // authenticated session. The renderer never touches the DB file.
-async function requireUser(): Promise<{
+async function authenticateSession(): Promise<{
   db: LocalDb;
   user: { id: string; businessId: string; permissions: string[] };
 }> {
@@ -198,6 +220,53 @@ async function requireUser(): Promise<{
   if (!user)
     throw Object.assign(new Error('Session expired — sign in again'), { code: 'UNAUTHENTICATED' });
   return { db, user };
+}
+
+// Every business handler goes through here, so an unlicensed copy can still
+// sign in and activate but cannot read or write business data.
+async function requireUser(): Promise<{
+  db: LocalDb;
+  user: { id: string; businessId: string; permissions: string[] };
+}> {
+  const session = await authenticateSession();
+  const status = getLicenseStatus(session.db);
+  if (!status.usable) {
+    throw Object.assign(new Error(status.reason ?? 'This copy needs a license key'), {
+      code: 'LICENSE_REQUIRED',
+    });
+  }
+  return session;
+}
+
+// Licensing itself must work without a usable license: status always, activate
+// for admins. Both authenticate the session directly.
+function licenseHandlers(): void {
+  ipcMain.handle('license:status', async () => {
+    try {
+      const { db } = await authenticateSession();
+      return { ok: true, status: getLicenseStatus(db) };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
+
+  ipcMain.handle('license:activate', async (_event, key: unknown) => {
+    try {
+      const { db, user } = await authenticateSession();
+      requirePermission(new Set(user.permissions), 'settings.manage');
+      if (typeof key !== 'string' || key.trim().length === 0) {
+        throw Object.assign(new Error('Paste a license key'), { code: 'LICENSE_INVALID' });
+      }
+      return {
+        ok: true,
+        status: activateLicense(db, key, {
+          actor: { userId: user.id, businessId: user.businessId },
+        }),
+      };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
 }
 
 function inventoryHandlers(): void {
@@ -597,6 +666,20 @@ function inventoryHandlers(): void {
     }
   });
 
+  // --- Batch 9: reports and BI. Read-only aggregates derived from the ledger;
+  // requires reports.view, enforced inside the service.
+  ipcMain.handle('reports:summary', async (_event, query: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      return {
+        ok: true,
+        summary: getReportsSummary(db, user.businessId, user.permissions, query ?? {}),
+      };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
+
   ipcMain.handle('tables:list', async (_event, query: unknown) => {
     try {
       const { db, user } = await requireUser();
@@ -652,6 +735,295 @@ function inventoryHandlers(): void {
   });
 }
 
+// --- Batch 8: locations + hub sync. Settings live per business and require
+// settings.manage, mirroring the LAN server. Sync runs against the uplink the
+// owner configured; sales and purchases stay on the till that recorded them.
+function firstBusinessId(db: LocalDb): string | null {
+  const row = db.raw.prepare('SELECT id FROM businesses ORDER BY rowid LIMIT 1').get() as
+    { id: string } | undefined;
+  return row?.id ?? null;
+}
+
+function locationHandlers(): void {
+  ipcMain.handle('locations:list', async () => {
+    try {
+      const { db, user } = await requireUser();
+      return { ok: true, items: await listLocations(db, user.businessId) };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err), items: [] };
+    }
+  });
+
+  ipcMain.handle('locations:create', async (_event, input: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      return {
+        ok: true,
+        location: await createLocation(db, user.businessId, user.id, user.permissions, input),
+      };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
+
+  ipcMain.handle('locations:update', async (_event, payload: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      const { id, patch } = payload as { id: string; patch: unknown };
+      if (typeof id !== 'string' || id.length === 0) throw new Error('Location id is required');
+      return {
+        ok: true,
+        location: await updateLocation(db, user.businessId, user.id, user.permissions, id, patch),
+      };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
+}
+
+function syncHandlers(): void {
+  ipcMain.handle('sync:status', async () => {
+    try {
+      const { db, user } = await requireUser();
+      requirePermission(new Set(user.permissions), 'settings.manage');
+      return { ok: true, status: getSyncStatus(db, user.businessId) };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
+
+  ipcMain.handle('sync:configure', async (_event, input: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      return {
+        ok: true,
+        settings: setSyncSettings(db, user.businessId, user.id, user.permissions, input),
+      };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
+
+  ipcMain.handle('sync:now', async () => {
+    try {
+      const { db, user } = await requireUser();
+      requirePermission(new Set(user.permissions), 'settings.manage');
+      const { settings } = getSyncStatus(db, user.businessId);
+      if (!settings.enabled) {
+        throw Object.assign(new Error('Sync is turned off'), { code: 'SYNC_DISABLED' });
+      }
+      const result = await syncNow(db, user.businessId, httpTransport(settings.url, settings.key));
+      return result;
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
+}
+
+function startSyncScheduler(db: LocalDb): void {
+  const run = async (): Promise<void> => {
+    try {
+      if (await isFirstRun(db)) return;
+      const businessId = firstBusinessId(db);
+      if (!businessId) return;
+      const { settings } = getSyncStatus(db, businessId);
+      if (!settings.enabled || !settings.url || !settings.key) return;
+      const result = await syncNow(db, businessId, httpTransport(settings.url, settings.key));
+      log.info(`Sync finished: ${result.pushed} pushed, ${result.pulled} pulled`);
+    } catch (err: unknown) {
+      log.warn(`Background sync failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+  setTimeout(() => void run(), 45_000).unref?.();
+  const timer = setInterval(() => void run(), 5 * 60 * 1000);
+  timer.unref?.();
+}
+
+// --- Batch 11: automation. Same contract as the LAN server: stored secrets are
+// never returned to the renderer, only whether one is saved.
+function automationHandlers(): void {
+  ipcMain.handle('automation:settings', async () => {
+    try {
+      const { db, user } = await requireUser();
+      requirePermission(new Set(user.permissions), 'settings.manage');
+      return { ok: true, settings: toAutomationView(getAutomationSettings(db, user.businessId)) };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
+
+  ipcMain.handle('automation:save', async (_event, input: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      return {
+        ok: true,
+        settings: toAutomationView(
+          setAutomationSettings(db, user.businessId, user.id, user.permissions, input)
+        ),
+      };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
+
+  ipcMain.handle('automation:messages', async (_event, limit: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      requirePermission(new Set(user.permissions), 'settings.manage');
+      return {
+        ok: true,
+        messages: await listAutomationMessages(
+          db,
+          user.businessId,
+          typeof limit === 'number' ? limit : 50
+        ),
+      };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err), messages: [] };
+    }
+  });
+
+  ipcMain.handle('automation:test', async (_event, input: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      const message = await sendTestMessage(
+        db,
+        user.businessId,
+        user.id,
+        user.permissions,
+        input ?? {}
+      );
+      return { ok: true, message };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
+
+  ipcMain.handle('automation:run', async () => {
+    try {
+      const { db, user } = await requireUser();
+      requirePermission(new Set(user.permissions), 'settings.manage');
+      return { ok: true, result: await runAutomation(db, user.businessId, { force: true }) };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
+}
+
+function startAutomationScheduler(db: LocalDb): void {
+  const run = async (): Promise<void> => {
+    try {
+      if (await isFirstRun(db)) return;
+      const businessId = firstBusinessId(db);
+      if (!businessId) return;
+      const result = await runAutomation(db, businessId);
+      if (result.queued > 0) {
+        log.info(`Automation sent ${result.queued} message(s)`);
+        mainWindow?.webContents.send('realtime:event', {
+          type: 'automation.changed',
+          payload: { reason: 'scheduled' },
+        });
+      }
+    } catch (err: unknown) {
+      log.warn(`Automation tick failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+  setTimeout(() => void run(), 90_000).unref?.();
+  const timer = setInterval(() => void run(), 15 * 60 * 1000);
+  timer.unref?.();
+}
+
+// --- Batch 12: local backups. Snapshots sit beside the database in userData;
+// restore requires settings.manage and forces a fresh sign-in afterwards.
+function backupDirectory(): string {
+  return path.join(app.getPath('userData'), 'backups');
+}
+
+function backupHandlers(): void {
+  ipcMain.handle('backup:list', async () => {
+    try {
+      const { user } = await requireUser();
+      requirePermission(new Set(user.permissions), 'settings.manage');
+      return { ok: true, dir: backupDirectory(), items: listBackups(backupDirectory()) };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err), items: [] };
+    }
+  });
+
+  ipcMain.handle('backup:create', async () => {
+    try {
+      const { db, user } = await requireUser();
+      return {
+        ok: true,
+        ...createBackup(db, backupDirectory(), user.permissions, user.id, user.businessId),
+      };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
+
+  ipcMain.handle('backup:restore', async (_event, name: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      const result = restoreBackup(
+        db,
+        dbPath(),
+        backupDirectory(),
+        user.permissions,
+        user.id,
+        user.businessId,
+        name
+      );
+      // Sessions live in the database that was just replaced.
+      currentToken = null;
+      mainWindow?.webContents.reload();
+      return { ok: true, ...result };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
+
+  ipcMain.handle('backup:delete', async (_event, name: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      return {
+        ok: true,
+        ...deleteBackup(db, backupDirectory(), user.permissions, user.id, user.businessId, name),
+      };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
+
+  ipcMain.handle('backup:reveal', async () => {
+    try {
+      const dir = backupDirectory();
+      mkdirSync(dir, { recursive: true });
+      const problem = await shell.openPath(dir);
+      if (problem) return { ok: false, error: problem, code: 'OPEN_FAILED' };
+      return { ok: true };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
+}
+
+function startBackupScheduler(db: LocalDb): void {
+  const dir = backupDirectory();
+  const run = async (): Promise<void> => {
+    try {
+      if (await isFirstRun(db)) return;
+      const result = runDailyBackupIfDue(db, dir, 14);
+      if (result) log.info(`Daily backup written: ${result.backup.name}`);
+    } catch (err: unknown) {
+      log.warn(`Automatic backup failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+  setTimeout(() => void run(), 30_000).unref?.();
+  const timer = setInterval(() => void run(), 60 * 60 * 1000);
+  timer.unref?.();
+}
+
 // Client mode is configured per install: ANALYTIQ_SERVER_URL wins, then
 // `server.json` ({ "serverUrl": "http://192.168.1.10:3001" }) beside the
 // executable or in the userData folder. Without any of these, the app runs as
@@ -677,18 +1049,27 @@ function resolveLanServerUrl(): string | null {
 }
 
 void app.whenReady().then(async () => {
+  registerUpdateHandlers();
   const lanServerUrl = resolveLanServerUrl();
   if (lanServerUrl) {
     log.info(`LAN client mode: ${lanServerUrl}`);
     registerLanClient(lanServerUrl);
   } else {
     try {
-      await ensureDb();
+      const db = await ensureDb();
+      startBackupScheduler(db);
+      startSyncScheduler(db);
+      startAutomationScheduler(db);
     } catch (err: unknown) {
       log.error(`Database init failed: ${err instanceof Error ? err.message : String(err)}`);
     }
     localAuthHandlers();
+    licenseHandlers();
     inventoryHandlers();
+    locationHandlers();
+    syncHandlers();
+    automationHandlers();
+    backupHandlers();
   }
   createWindow();
   app.on('activate', () => {
