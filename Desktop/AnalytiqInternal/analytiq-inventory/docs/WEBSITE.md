@@ -21,32 +21,37 @@ are client-side and need the cloud API.
 Set these in Vercel (Project → Settings → Environment Variables) and in
 `apps/website/.env.local` for local work.
 
-| Variable                   | Required | Purpose                                                                                        |
-| -------------------------- | -------- | ---------------------------------------------------------------------------------------------- |
-| `NEXT_PUBLIC_API_URL`      | Yes      | Public origin of the deployed cloud API (`apps/cloud-api`), e.g. `https://api.analytiq.ng`     |
-| `NEXT_PUBLIC_DOWNLOAD_URL` | No       | Direct HTTPS link to the Windows installer. Blank makes every download button open `/download` |
-| `NEXT_PUBLIC_WHATSAPP`     | No       | Support number, digits only. Defaults to `2348124314217`                                       |
+| Variable                   | Required | Purpose                                                                                                                                                                         |
+| -------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NEXT_PUBLIC_API_URL`      | Yes      | Public origin of the deployed cloud API (`apps/cloud-api`), e.g. `https://api.analytiq.ng`                                                                                      |
+| `NEXT_PUBLIC_DOWNLOAD_URL` | No       | Direct HTTPS link to the Windows installer. Defaults to the public release in `AnalytiqDigital/analytiq-downloads`; set it to `/download` to show the WhatsApp fallback instead |
+| `NEXT_PUBLIC_WHATSAPP`     | No       | Support number, digits only. Defaults to `2348124314217`                                                                                                                        |
 
 `NEXT_PUBLIC_*` values are embedded at build time: redeploy after changing them.
 
 ## Hosting the installer
 
 The installer is about 95 MB and the repo is already large, so **do not commit
-the `.exe`**. Upload the built package to any direct-download host and point
-`NEXT_PUBLIC_DOWNLOAD_URL` at it:
+the `.exe`**. The site points at the public release in
+`github.com/AnalytiqDigital/analytiq-downloads` by default, which works for
+buyers because the source repository is private. Override
+`NEXT_PUBLIC_DOWNLOAD_URL` only to move the download elsewhere:
 
-- **GitHub Releases** (recommended): add a remote, create a `v1.1.0` release and
-  attach `apps/desktop/release/AnalytIQ-Inventory-1.1.0-Windows.zip` (installer +
-  `INSTALL.txt`). Use the asset URL as `NEXT_PUBLIC_DOWNLOAD_URL`.
+- **GitHub Releases** (recommended): attach the ZIP to a release on a
+  **separate public downloads repository** (`AnalytiqDigital/analytiq-downloads`)
+  and use that asset URL. Releases on a private repository are only
+  downloadable by the owner.
 - **Cloudflare R2 / Backblaze B2**: make the object public and use its HTTPS URL.
 - **Any HTTPS host** that serves the file directly (no login or interstitial).
+  Avoid Google Drive: large files show a confirmation page and downloads get
+  rate-limited when the link is shared.
 
 A ready-to-upload bundle is produced at
 `apps/desktop/release/AnalytIQ-Inventory-1.1.0-Windows.zip` (91 MB). Zip uploads
 are friendlier to browsers and antivirus scans than a bare `.exe`.
 
-If no URL is configured, `/download` and the post-payment page tell the buyer to
-request the installer on WhatsApp — useful while the file is still being hosted.
+Setting `NEXT_PUBLIC_DOWNLOAD_URL=/download` restores the WhatsApp fallback
+shown while the file is not hosted anywhere.
 
 ## Deploy to Vercel
 
@@ -72,8 +77,8 @@ browser; browsing the landing page and docs works without it.
 
 - **"No Next.js version detected"** — the Root Directory is still the repo root.
   Set it to `apps/website`.
-- **`@analytiq/validation` cannot be resolved** — turn on *Include files outside
-  of the Root Directory in the Build Step*.
+- **`@analytiq/validation` cannot be resolved** — turn on _Include files outside
+  of the Root Directory in the Build Step_.
 - **Install fails because it runs inside `apps/website`** — set the Install
   Command to `cd ../.. && pnpm install --frozen-lockfile`.
 - **Images 404** — assets live in `apps/website/public`; commit them.
@@ -86,7 +91,7 @@ browser; browsing the landing page and docs works without it.
 - [ ] Package buttons open `/checkout?plan=starter|standard|pro`.
 - [ ] WhatsApp buttons open `https://wa.me/2348124314217` with a prefilled message.
 - [ ] `/docs/installation` and `/docs/usage` render; the download button points
-      at `NEXT_PUBLIC_DOWNLOAD_URL` (or `/download` when unset).
+      at the public AnalytIQ downloads release (or `NEXT_PUBLIC_DOWNLOAD_URL`).
 - [ ] A Paystack test payment returns to `/checkout/success?reference=…` and shows
       the key, the installer download and the WhatsApp help button.
 - [ ] After sales: replace the placeholder support copy if the number changes.

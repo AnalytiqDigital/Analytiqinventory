@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  DEFAULT_INSTALLER_URL,
   DOWNLOAD_FALLBACK_PATH,
   SUPPORT_WHATSAPP,
   downloadUrl,
@@ -40,10 +41,11 @@ describe('whatsappUrl', () => {
 });
 
 describe('downloadUrl', () => {
-  it('falls back to the download page when no host is configured', () => {
+  it('defaults to the public GitHub release when no host is configured', () => {
     delete process.env.NEXT_PUBLIC_DOWNLOAD_URL;
-    expect(downloadUrl()).toBe(DOWNLOAD_FALLBACK_PATH);
-    expect(isInstallerHosted()).toBe(false);
+    expect(downloadUrl()).toBe(DEFAULT_INSTALLER_URL);
+    expect(DEFAULT_INSTALLER_URL).toContain('analytiq-downloads/releases/download/v1.1.0/');
+    expect(isInstallerHosted()).toBe(true);
   });
 
   it('uses the configured installer URL', () => {
@@ -55,6 +57,12 @@ describe('downloadUrl', () => {
 
   it('treats a blank value as not configured', () => {
     process.env.NEXT_PUBLIC_DOWNLOAD_URL = '   ';
+    expect(downloadUrl()).toBe(DEFAULT_INSTALLER_URL);
+  });
+
+  it('still allows switching back to the local download page', () => {
+    process.env.NEXT_PUBLIC_DOWNLOAD_URL = DOWNLOAD_FALLBACK_PATH;
     expect(downloadUrl()).toBe(DOWNLOAD_FALLBACK_PATH);
+    expect(isInstallerHosted()).toBe(false);
   });
 });
