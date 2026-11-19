@@ -38,6 +38,11 @@ describe('whatsappUrl', () => {
     process.env.NEXT_PUBLIC_WHATSAPP = '+234 800 000 0000';
     expect(whatsappUrl()).toBe('https://wa.me/2348000000000');
   });
+
+  it('falls back to the default number when an override has no digits', () => {
+    process.env.NEXT_PUBLIC_WHATSAPP = '=';
+    expect(whatsappUrl()).toBe(`https://wa.me/${SUPPORT_WHATSAPP}`);
+  });
 });
 
 describe('downloadUrl', () => {
@@ -64,5 +69,14 @@ describe('downloadUrl', () => {
     process.env.NEXT_PUBLIC_DOWNLOAD_URL = DOWNLOAD_FALLBACK_PATH;
     expect(downloadUrl()).toBe(DOWNLOAD_FALLBACK_PATH);
     expect(isInstallerHosted()).toBe(false);
+  });
+
+  it('ignores a malformed override instead of rendering a broken link', () => {
+    process.env.NEXT_PUBLIC_DOWNLOAD_URL = '=';
+    expect(downloadUrl()).toBe(DEFAULT_INSTALLER_URL);
+    process.env.NEXT_PUBLIC_DOWNLOAD_URL = 'not a url';
+    expect(downloadUrl()).toBe(DEFAULT_INSTALLER_URL);
+    process.env.NEXT_PUBLIC_DOWNLOAD_URL = 'javascript:alert(1)';
+    expect(downloadUrl()).toBe(DEFAULT_INSTALLER_URL);
   });
 });

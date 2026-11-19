@@ -1,8 +1,12 @@
 import type { Metadata } from 'next';
 import {
+  DEFAULT_INSTALLER_URL,
+  INSTALLER_SHA256,
+  INSTALLER_SIZE_LABEL,
+  INSTALLER_VERSION,
+  SUPPORT_WHATSAPP_LABEL,
   downloadUrl,
   isInstallerHosted,
-  SUPPORT_WHATSAPP_LABEL,
   whatsappUrl,
 } from '../../lib/site';
 
@@ -30,9 +34,11 @@ export default function DownloadPage() {
           </p>
           <div className="download-meta">
             <span>Windows 10 / 11 · 64-bit</span>
-            <span>≈ 95 MB</span>
-            <span>Works fully offline</span>
-            <span>Version 1.1.0</span>
+            <span>4 GB RAM</span>
+            <span>500 MB free disk</span>
+            <span>{INSTALLER_SIZE_LABEL} download</span>
+            <span>Version {INSTALLER_VERSION}</span>
+            <span>Offline-first</span>
           </div>
 
           {hosted ? (
@@ -75,6 +81,25 @@ export default function DownloadPage() {
             </a>
             .
           </div>
+
+          {installer === DEFAULT_INSTALLER_URL ? (
+            <div className="callout green" style={{ marginTop: 16, marginBottom: 0 }}>
+              <strong>Check the file before you run it.</strong> Compare the SHA-256 hash of your
+              download with the value below. In PowerShell:
+              <br />
+              <code>
+                Get-FileHash .\AnalytIQ-Inventory-{INSTALLER_VERSION}-Windows.zip -Algorithm SHA256
+              </code>
+              <br />
+              Expected: <code className="hash">{INSTALLER_SHA256}</code>
+            </div>
+          ) : null}
+
+          <p className="fine-print">
+            Your records stay on the shop PC. Support and licence terms are covered by the{' '}
+            <a href="/legal/terms">terms of use</a>, <a href="/legal/privacy">privacy notice</a> and{' '}
+            <a href="/legal/refund">refund policy</a>.
+          </p>
         </div>
       </div>
     </main>
