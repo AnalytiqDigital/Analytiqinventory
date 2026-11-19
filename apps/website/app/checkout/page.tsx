@@ -14,8 +14,9 @@ export default function CheckoutPage() {
         <div className="checkout-head">
           <h1>Buy your AnalytIQ licence</h1>
           <p>
-            Pay securely with Paystack. Your key is issued the moment the payment confirms — copy it
-            into the app under Settings → Licence.
+            Pay securely with Paystack. The moment payment confirms, your licence key and the
+            installer download appear on screen — install the app, then paste the key under Settings
+            → Licence.
           </p>
         </div>
         <Suspense fallback={<div className="card">Loading checkout…</div>}>

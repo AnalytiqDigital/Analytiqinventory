@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { CheckoutError, fetchOrder, type OrderView } from '../../../lib/api';
 import { formatDate, formatNaira } from '../../../lib/format';
+import { downloadUrl, whatsappUrl } from '../../../lib/site';
 
 const POLL_MS = 3000;
 const MAX_ATTEMPTS = 40;
@@ -162,8 +163,8 @@ export default function SuccessStatus() {
       <h1>Payment received — your licence is ready</h1>
       <p className="lede">
         {order.planName} licence for <strong>{order.business}</strong>, valid until{' '}
-        {formatDate(expiresOn)}. A copy of this key is on your order page, so keep this tab or save
-        the key somewhere safe.
+        {formatDate(expiresOn)}. Copy the key somewhere safe, then download the installer below. A
+        copy of this key stays on your order page.
       </p>
 
       <div className="key-box">
@@ -177,8 +178,35 @@ export default function SuccessStatus() {
         </button>
       </div>
 
+      <div className="download-box">
+        <h2>Download the app</h2>
+        <p>
+          Installer for Windows 10/11. Install it on the shop computer, then activate the key above
+          under Settings → Licence.
+        </p>
+        <div className="success-actions">
+          <a className="btn btn-primary" href={downloadUrl()}>
+            Download AnalytIQ installer
+          </a>
+          <a
+            className="btn btn-outline"
+            href={whatsappUrl(
+              `Hi AnalytIQ, I just bought the ${order.planName} plan for ${order.business}. Please help me install it.`
+            )}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Installation help on WhatsApp
+          </a>
+        </div>
+      </div>
+
       <ol className="steps">
-        <li>Open AnalytIQ on the shop computer.</li>
+        <li>
+          Download the installer above and install AnalytIQ on the shop computer (Windows will show
+          &ldquo;More info → Run anyway&rdquo;).
+        </li>
+        <li>Open AnalytIQ and finish the short setup wizard.</li>
         <li>Go to Settings → Licence.</li>
         <li>Paste the key and choose Activate. Activation works offline.</li>
         <li>

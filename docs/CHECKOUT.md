@@ -61,7 +61,9 @@ See `apps/cloud-api/.env.example`.
 | `LICENSE_PRIVATE_KEY`      | Inline PEM alternative (`\n` escapes allowed)                                                            |
 | `LICENSE_DAYS`             | Fallback lifetime if a plan has no `days`                                                                |
 
-The website reads `NEXT_PUBLIC_API_URL` (default `http://localhost:3002`).
+The website reads `NEXT_PUBLIC_API_URL` (default `http://localhost:3002`),
+`NEXT_PUBLIC_DOWNLOAD_URL` (installer link) and `NEXT_PUBLIC_WHATSAPP` (support
+number). See `docs/WEBSITE.md` for the Vercel deployment walkthrough.
 
 **The private key must stay on the server or a vendor machine.** It is never
 bundled into the app, never logged, and `.secrets/` plus `apps/cloud-api/data/`
@@ -94,8 +96,11 @@ Settlement is idempotent:
    shared `checkoutSchema`, and posts to the API.
 3. The browser is redirected to Paystack's `authorizationUrl`.
 4. Paystack redirects back to `/checkout/success?reference=…`; the page polls
-   `GET /api/checkout/:reference` every 3 s (up to ~2 minutes) and shows the key
-   with a copy button and activation steps.
+   `GET /api/checkout/:reference` every 3 s (up to ~2 minutes) and shows:
+   - the licence key with a copy button,
+   - the Windows installer download button (`NEXT_PUBLIC_DOWNLOAD_URL`, or the
+     `/download` page when the installer is not hosted yet),
+   - activation steps and a WhatsApp install-help button.
 
 If the customer closes the tab, the key is still issued by the webhook. Support
 can look it up by reference in the order file.
