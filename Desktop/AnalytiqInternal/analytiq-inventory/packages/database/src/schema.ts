@@ -197,6 +197,10 @@ export const products = sqliteTable(
     reorderLevel: integer('reorder_level').notNull().default(0),
     imagePath: text('image_path').notNull().default(''),
     taxCategoryId: text('tax_category_id').references(() => taxCategories.id),
+    /** Pharmacy/provisions: stock is tracked per batch with an expiry date. */
+    trackBatches: integer('track_batches').notNull().default(0),
+    /** Expiry alert window; 0 means "only alert once expired". */
+    nearExpiryDays: integer('near_expiry_days').notNull().default(30),
     isActive: integer('is_active').notNull().default(1),
     version: integer('version').notNull().default(1),
     ...timestamps(),
@@ -259,6 +263,8 @@ export const stockMovements = sqliteTable(
     qtyDelta: integer('qty_delta').notNull(),
     qtyAfter: integer('qty_after').notNull(),
     reason: text('reason').notNull().default(''),
+    /** Batch consumed/added by this movement; NULL for unbatched products. */
+    batchId: text('batch_id'),
     userId: text('user_id').references(() => users.id),
     version: integer('version').notNull().default(1),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
@@ -334,6 +340,9 @@ export const sales = sqliteTable(
     changeKobo: integer('change_kobo').notNull().default(0),
     tableId: text('table_id').references(() => diningTables.id),
     customerId: text('customer_id').references(() => customers.id),
+    loyaltyPointsRedeemed: integer('loyalty_points_redeemed').notNull().default(0),
+    loyaltyDiscountKobo: integer('loyalty_discount_kobo').notNull().default(0),
+    loyaltyPointsEarned: integer('loyalty_points_earned').notNull().default(0),
     /** Source-system reference for imported sales; null for till sales. */
     externalRef: text('external_ref'),
     version: integer('version').notNull().default(1),
@@ -435,6 +444,7 @@ export const customers = sqliteTable(
     address: text('address').notNull().default(''),
     note: text('note').notNull().default(''),
     creditLimitKobo: integer('credit_limit_kobo').notNull().default(0),
+    priceTierId: text('price_tier_id'),
     isActive: integer('is_active').notNull().default(1),
     version: integer('version').notNull().default(1),
     ...timestamps(),
@@ -522,6 +532,8 @@ export const purchaseItems = sqliteTable(
     qty: integer('qty').notNull(),
     unitCostKobo: integer('unit_cost_kobo').notNull(),
     lineTotalKobo: integer('line_total_kobo').notNull(),
+    batchNo: text('batch_no').notNull().default(''),
+    expiryDate: integer('expiry_date', { mode: 'timestamp' }),
   },
   (t) => ({
     purchaseItemsPurchaseIdx: index('purchase_items_purchase_idx').on(t.purchaseId),
@@ -660,3 +672,277 @@ export const expenses = sqliteTable(
 );
 
 export type ExpenseRow = typeof expenses.$inferSelect;
+
+// --- Batch 15: business pack ------------------------------------------------
+// Batches/expiry, wholesale price tiers, loyalty + CRM, counter returns,
+// branch transfers, debtor reminders and encrypted off-PC backups.
+
+export const productBatches = sqliteTable(
+  'product_batches',
+  {
+    id: text('id').primaryKey(),
+    businessId: text('business_id')
+      .notNull()
+      .references(() => businesses.id),
+    productId: text('product_id')
+      .notNull()
+      .references(() => products.id),
+    locationId: text('location_id')
+      .notNull()
+      .references(() => locations.id),
+    batchNo: text('batch_no').notNull().default(''),
+    expiryDate: integer('expiry_date', { mode: 'timestamp' }),
+    note: text('note').notNull().default(''),
+    version: integer('version').notNull().default(1),
+    ...timestamps(),
+  },
+  (t) => ({
+    productBatchesExpiryIdx: index('product_batches_business_expiry_idx').on(
+      t.businessId,
+      t.expiryDate
+    ),
+    productBatchesProductIdx: index('product_batches_product_location_idx').on(
+      t.productId,
+      t.locationId
+    ),
+  })
+);
+
+export type ProductBatch = typeof productBatches.$inferSelect;
+
+export const priceTiers = sqliteTable(
+  'price_tiers',
+  {
+    id: text('id').primaryKey(),
+    businessId: text('business_id')
+      .notNull()
+      .references(() => businesses.id),
+    name: text('name').notNull(),
+    description: text('description').notNull().default(''),
+    isDefault: integer('is_default').notNull().default(0),
+    version: integer('version').notNull().default(1),
+    ...timestamps(),
+  },
+  (t) => ({
+    priceTiersNameUnique: uniqueIndex('price_tiers_business_name_unique').on(t.businessId, t.name),
+  })
+);
+
+export type PriceTier = typeof priceTiers.$inferSelect;
+
+export const productPrices = sqliteTable(
+  'product_prices',
+  {
+    id: text('id').primaryKey(),
+    businessId: text('business_id')
+      .notNull()
+      .references(() => businesses.id),
+    productId: text('product_id')
+      .notNull()
+      .references(() => products.id),
+    priceTierId: text('price_tier_id')
+      .notNull()
+      .references(() => priceTiers.id),
+    priceKobo: integer('price_kobo').notNull(),
+    ...timestamps(),
+  },
+  (t) => ({
+    productPricesUnique: uniqueIndex('product_prices_product_tier_unique').on(
+      t.productId,
+      t.priceTierId
+    ),
+    productPricesTierIdx: index('product_prices_tier_idx').on(t.priceTierId),
+  })
+);
+
+export type ProductPrice = typeof productPrices.$inferSelect;
+
+export const customerNotes = sqliteTable(
+  'customer_notes',
+  {
+    id: text('id').primaryKey(),
+    businessId: text('business_id')
+      .notNull()
+      .references(() => businesses.id),
+    customerId: text('customer_id')
+      .notNull()
+      .references(() => customers.id),
+    body: text('body').notNull(),
+    createdBy: text('created_by'),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  },
+  (t) => ({
+    customerNotesIdx: index('customer_notes_customer_idx').on(t.customerId, t.createdAt),
+  })
+);
+
+export type CustomerNote = typeof customerNotes.$inferSelect;
+
+export const loyaltyEntries = sqliteTable(
+  'loyalty_entries',
+  {
+    id: text('id').primaryKey(),
+    businessId: text('business_id')
+      .notNull()
+      .references(() => businesses.id),
+    customerId: text('customer_id')
+      .notNull()
+      .references(() => customers.id),
+    saleId: text('sale_id'),
+    kind: text('kind').notNull(),
+    points: integer('points').notNull(),
+    reason: text('reason').notNull().default(''),
+    createdBy: text('created_by'),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  },
+  (t) => ({
+    loyaltyEntriesCustomerIdx: index('loyalty_entries_customer_idx').on(
+      t.customerId,
+      t.createdAt
+    ),
+    loyaltyEntriesSaleKind: uniqueIndex('loyalty_entries_sale_kind_unique').on(t.saleId, t.kind),
+  })
+);
+
+export type LoyaltyEntry = typeof loyaltyEntries.$inferSelect;
+
+export const saleReturns = sqliteTable(
+  'sale_returns',
+  {
+    id: text('id').primaryKey(),
+    businessId: text('business_id')
+      .notNull()
+      .references(() => businesses.id),
+    saleId: text('sale_id')
+      .notNull()
+      .references(() => sales.id),
+    locationId: text('location_id').notNull(),
+    receiptNo: text('receipt_no').notNull(),
+    kind: text('kind').notNull().default('refund'),
+    reason: text('reason').notNull(),
+    refundKobo: integer('refund_kobo').notNull().default(0),
+    refundMethod: text('refund_method').notNull().default('cash'),
+    exchangeSaleId: text('exchange_sale_id'),
+    createdBy: text('created_by'),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  },
+  (t) => ({
+    saleReturnsBusinessIdx: index('sale_returns_business_idx').on(t.businessId, t.createdAt),
+    saleReturnsSaleIdx: index('sale_returns_sale_idx').on(t.saleId),
+  })
+);
+
+export type SaleReturnRow = typeof saleReturns.$inferSelect;
+
+export const saleReturnItems = sqliteTable(
+  'sale_return_items',
+  {
+    id: text('id').primaryKey(),
+    returnId: text('return_id')
+      .notNull()
+      .references(() => saleReturns.id),
+    saleItemId: text('sale_item_id')
+      .notNull()
+      .references(() => saleItems.id),
+    productId: text('product_id')
+      .notNull()
+      .references(() => products.id),
+    qty: integer('qty').notNull(),
+    refundKobo: integer('refund_kobo').notNull().default(0),
+  },
+  (t) => ({
+    saleReturnItemsIdx: index('sale_return_items_return_idx').on(t.returnId),
+  })
+);
+
+export type SaleReturnItemRow = typeof saleReturnItems.$inferSelect;
+
+export const stockTransfers = sqliteTable(
+  'stock_transfers',
+  {
+    id: text('id').primaryKey(),
+    businessId: text('business_id')
+      .notNull()
+      .references(() => businesses.id),
+    reference: text('reference').notNull(),
+    fromLocationId: text('from_location_id')
+      .notNull()
+      .references(() => locations.id),
+    toLocationId: text('to_location_id')
+      .notNull()
+      .references(() => locations.id),
+    note: text('note').notNull().default(''),
+    createdBy: text('created_by'),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  },
+  (t) => ({
+    stockTransfersRefUnique: uniqueIndex('stock_transfers_business_reference_unique').on(
+      t.businessId,
+      t.reference
+    ),
+  })
+);
+
+export type StockTransfer = typeof stockTransfers.$inferSelect;
+
+export const stockTransferItems = sqliteTable(
+  'stock_transfer_items',
+  {
+    id: text('id').primaryKey(),
+    transferId: text('transfer_id')
+      .notNull()
+      .references(() => stockTransfers.id),
+    productId: text('product_id')
+      .notNull()
+      .references(() => products.id),
+    qty: integer('qty').notNull(),
+  },
+  (t) => ({
+    stockTransferItemsIdx: index('stock_transfer_items_transfer_idx').on(t.transferId),
+  })
+);
+
+export type StockTransferItem = typeof stockTransferItems.$inferSelect;
+
+export const debtorReminders = sqliteTable(
+  'debtor_reminders',
+  {
+    id: text('id').primaryKey(),
+    businessId: text('business_id')
+      .notNull()
+      .references(() => businesses.id),
+    customerId: text('customer_id')
+      .notNull()
+      .references(() => customers.id),
+    balanceKobo: integer('balance_kobo').notNull(),
+    status: text('status').notNull().default('queued'),
+    error: text('error').notNull().default(''),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+    sentAt: integer('sent_at', { mode: 'timestamp' }),
+  },
+  (t) => ({
+    debtorRemindersIdx: index('debtor_reminders_business_idx').on(t.businessId, t.createdAt),
+  })
+);
+
+export type DebtorReminderRow = typeof debtorReminders.$inferSelect;
+
+export const backupUploads = sqliteTable(
+  'backup_uploads',
+  {
+    id: text('id').primaryKey(),
+    businessId: text('business_id')
+      .notNull()
+      .references(() => businesses.id),
+    fileName: text('file_name').notNull(),
+    sizeBytes: integer('size_bytes').notNull(),
+    status: text('status').notNull().default('queued'),
+    error: text('error').notNull().default(''),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  },
+  (t) => ({
+    backupUploadsIdx: index('backup_uploads_business_idx').on(t.businessId, t.createdAt),
+  })
+);
+
+export type BackupUploadRow = typeof backupUploads.$inferSelect;

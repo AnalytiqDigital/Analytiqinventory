@@ -18,6 +18,7 @@ import type { LocalDb } from './connection';
 import { requirePermission } from './permissions';
 import { writeAuditSync } from './service';
 import { locations, products, purchaseItems, purchases, stockMovements, suppliers } from './schema';
+import { ensureBatch } from './batches';
 
 function codedError(message: string, code: string): Error {
   const err = new Error(message);
@@ -76,6 +77,8 @@ export interface PurchaseItemView {
   qty: number;
   unitCostKobo: number;
   lineTotalKobo: number;
+  batchNo: string;
+  expiryDate: string | null;
 }
 
 export interface PurchaseView {
@@ -172,6 +175,8 @@ export async function createPurchase(
           qty: line.qty,
           unitCostKobo: line.unitCostKobo,
           lineTotalKobo: line.qty * line.unitCostKobo,
+          batchNo: line.batchNo,
+          expiryDate: line.expiryDate ? new Date(line.expiryDate) : null,
         })
         .run();
     }
@@ -222,6 +227,24 @@ export async function receivePurchase(
   const receive = local.raw.transaction(() => {
     for (const line of lines) {
       const after = onHand(local, businessId, line.productId, purchase.locationId) + line.qty;
+      const hasBatch = line.batchNo !== '' || line.expiryDate != null;
+      const batchId = hasBatch
+        ? ensureBatch(
+            local,
+            businessId,
+            line.productId,
+            purchase.locationId,
+            line.batchNo,
+            line.expiryDate ? new Date(line.expiryDate) : null
+          )
+        : null;
+      if (hasBatch) {
+        local.db
+          .update(products)
+          .set({ trackBatches: 1, updatedAt: timestamp })
+          .where(eq(products.id, line.productId))
+          .run();
+      }
       local.db
         .insert(stockMovements)
         .values({
@@ -233,6 +256,7 @@ export async function receivePurchase(
           qtyDelta: line.qty,
           qtyAfter: after,
           reason: `Purchase ${purchase.reference}`,
+          batchId,
           userId,
           version: 1,
           createdAt: timestamp,
@@ -378,6 +402,8 @@ export async function listPurchases(
         qty: l.item.qty,
         unitCostKobo: l.item.unitCostKobo,
         lineTotalKobo: l.item.lineTotalKobo,
+        batchNo: l.item.batchNo,
+        expiryDate: l.item.expiryDate ? l.item.expiryDate.toISOString() : null,
       })),
     });
   }

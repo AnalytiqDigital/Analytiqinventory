@@ -23,7 +23,16 @@ import { requirePermission } from './permissions';
 import { writeAuditSync } from './service';
 import { categories, locations, products, stockMovements, taxCategories } from './schema';
 
-export const STOCK_KINDS = ['opening', 'adjust', 'count', 'sale', 'purchase', 'return'] as const;
+export const STOCK_KINDS = [
+  'opening',
+  'adjust',
+  'count',
+  'sale',
+  'purchase',
+  'return',
+  'transfer_out',
+  'transfer_in',
+] as const;
 export type StockKind = (typeof STOCK_KINDS)[number];
 
 const productCreateSchema = productSchema.extend({
@@ -153,6 +162,8 @@ export interface ProductWithStock {
   reorderLevel: number;
   imagePath: string;
   taxCategoryId: string | null;
+  trackBatches: number;
+  nearExpiryDays: number;
   isActive: number;
   onHand: number;
   lowStock: boolean;
@@ -223,6 +234,8 @@ export async function listProducts(
       reorderLevel: products.reorderLevel,
       imagePath: products.imagePath,
       taxCategoryId: products.taxCategoryId,
+      trackBatches: products.trackBatches,
+      nearExpiryDays: products.nearExpiryDays,
       isActive: products.isActive,
     })
     .from(products)
@@ -260,6 +273,8 @@ async function getProductRow(local: LocalDb, businessId: string, productId: stri
       reorderLevel: products.reorderLevel,
       imagePath: products.imagePath,
       taxCategoryId: products.taxCategoryId,
+      trackBatches: products.trackBatches,
+      nearExpiryDays: products.nearExpiryDays,
       isActive: products.isActive,
     })
     .from(products)
@@ -322,6 +337,8 @@ export async function productByBarcode(
       reorderLevel: products.reorderLevel,
       imagePath: products.imagePath,
       taxCategoryId: products.taxCategoryId,
+      trackBatches: products.trackBatches,
+      nearExpiryDays: products.nearExpiryDays,
       isActive: products.isActive,
     })
     .from(products)
@@ -421,6 +438,8 @@ export async function createProduct(
       reorderLevel: input.reorderLevel,
       imagePath: input.imagePath,
       taxCategoryId: input.taxCategoryId ?? null,
+      trackBatches: input.trackBatches ? 1 : 0,
+      nearExpiryDays: input.nearExpiryDays,
       isActive: 1,
       version: 1,
       createdAt: timestamp,
@@ -489,6 +508,8 @@ export async function updateProduct(
     ...(input.reorderLevel !== undefined ? { reorderLevel: input.reorderLevel } : {}),
     ...(input.imagePath !== undefined ? { imagePath: input.imagePath } : {}),
     ...(input.taxCategoryId !== undefined ? { taxCategoryId: input.taxCategoryId ?? null } : {}),
+    ...(input.trackBatches !== undefined ? { trackBatches: input.trackBatches ? 1 : 0 } : {}),
+    ...(input.nearExpiryDays !== undefined ? { nearExpiryDays: input.nearExpiryDays } : {}),
   };
 
   const apply = local.raw.transaction(() => {

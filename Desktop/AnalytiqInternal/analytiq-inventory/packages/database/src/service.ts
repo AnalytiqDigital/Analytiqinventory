@@ -1,7 +1,8 @@
-import { loginSchema, setupSchema, type LoginInput, type SetupInput } from '@analytiq/validation';
+import { loginSchema, setupSchema, resolveModules, type LoginInput, type SetupInput } from '@analytiq/validation';
 import { and, eq } from 'drizzle-orm';
 import type { LocalDb } from './connection';
 import { hashPassword, hashToken, newId, newSessionToken, verifyPassword } from './auth';
+import { getModuleOverrides } from './appSettings';
 import {
   ALL_PERMISSIONS,
   ADMIN_PERMISSIONS,
@@ -34,6 +35,8 @@ export interface AuthenticatedUser {
   permissions: string[];
  /** `businesses.type` - drives which modules the app shows. */
  businessType: string;
+ /** Installed modules: the type preset plus this business's switches. */
+ modules: string[];
 }
 
 export interface LoginResult {
@@ -69,6 +72,15 @@ async function businessTypeOf(local: LocalDb, businessId: string): Promise<strin
  .where(eq(businesses.id, businessId))
  .limit(1);
  return row?.type ?? 'other';
+}
+
+async function businessAccessOf(
+  local: LocalDb,
+  businessId: string
+): Promise<{ businessType: string; modules: string[] }> {
+  const businessType = await businessTypeOf(local, businessId);
+  const modules = [...resolveModules(businessType, getModuleOverrides(local, businessId))];
+  return { businessType, modules };
 }
 
 export interface BusinessProfile {
@@ -302,6 +314,7 @@ export async function login(local: LocalDb, raw: unknown): Promise<LoginResult> 
   recordLogin();
 
   const grants = await userPermissions(local, user.id, user.businessId);
+  const access = await businessAccessOf(local, user.businessId);
   return {
     token,
     expiresAt,
@@ -311,7 +324,8 @@ export async function login(local: LocalDb, raw: unknown): Promise<LoginResult> 
  name: user.name,
  email: user.email,
  permissions: grants,
- businessType: await businessTypeOf(local, user.businessId),
+ businessType: access.businessType,
+ modules: access.modules,
  },
   };
 }
@@ -333,12 +347,14 @@ export async function authenticate(local: LocalDb, token: string): Promise<Authe
   const [user] = await local.db.select().from(users).where(eq(users.id, session.userId)).limit(1);
   if (!user || user.isActive !== 1) return null;
   const grants = await userPermissions(local, user.id, user.businessId);
+  const access = await businessAccessOf(local, user.businessId);
   return {
  id: user.id,
  businessId: user.businessId,
  name: user.name,
  email: user.email,
  permissions: grants,
- businessType: await businessTypeOf(local, user.businessId),
+ businessType: access.businessType,
+ modules: access.modules,
  };
 }

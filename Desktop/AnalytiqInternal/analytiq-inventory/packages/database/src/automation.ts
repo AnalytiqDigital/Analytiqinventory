@@ -601,3 +601,26 @@ export async function sendTestMessage(
     .get();
   return toMessageView(row!);
 }
+
+/**
+ * Queue any WhatsApp text on the configured number and try to deliver it.
+ * Used by debtor reminders. The outbox row is kept either way, so businesses
+ * can see exactly what was sent (or would have been sent) without WhatsApp.
+ */
+export async function queueAndDeliverWhatsApp(
+  local: LocalDb,
+  businessId: string,
+  entry: { kind: string; to: string; body: string },
+  options: { fetchImpl?: typeof fetch } = {}
+): Promise<AutomationMessage> {
+  const settings = getAutomationSettings(local, businessId);
+  const message = queueMessage(local, businessId, entry.kind, entry.body, entry.to);
+  await deliver(local, settings, message, options.fetchImpl ?? fetch);
+  const row = local.db
+    .select()
+    .from(automationMessages)
+    .where(eq(automationMessages.id, message.id))
+    .limit(1)
+    .get();
+  return toMessageView(row!);
+}
