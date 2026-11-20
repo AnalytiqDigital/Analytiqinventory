@@ -20,14 +20,14 @@ beforeEach(() => {
 describe('session store', () => {
   it('grants permission only when present', () => {
     useSession.setState({
-      user: { id: 'u', businessId: 'b', name: 'A', email: 'a@b.ng', permissions: ['sales.create'], businessType: 'restaurant' },
+      user: { id: 'u', businessId: 'b', name: 'A', email: 'a@b.ng', permissions: ['sales.create'], businessType: 'restaurant', modules: [] },
     });
     expect(useSession.getState().can('sales.create')).toBe(true);
     expect(useSession.getState().can('staff.manage')).toBe(false);
   });
 
   it('signIn stores the user on success', async () => {
-    const user = { id: 'u', businessId: 'b', name: 'A', email: 'a@b.ng', permissions: [], businessType: 'retail' };
+    const user = { id: 'u', businessId: 'b', name: 'A', email: 'a@b.ng', permissions: [], businessType: 'retail', modules: [] };
     mocked.authLogin.mockResolvedValue({ ok: true, user });
     const result = await useSession.getState().signIn('a@b.ng', 'Admin1234');
     expect(result.ok).toBe(true);

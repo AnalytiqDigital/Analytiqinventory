@@ -104,10 +104,14 @@ export function PosPage(): JSX.Element {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [tableId, setTableId] = useState<string>('');
   const [customerId, setCustomerId] = useState<string>('');
+  const [redeemPoints, setRedeemPoints] = useState('');
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const businessType = useSession((s) => s.user?.businessType);
-  const customersEnabled = hasModule(businessType, 'customers');
+  const sessionUser = useSession((s) => s.user);
+  const businessType = sessionUser?.businessType;
+  const customersEnabled = hasModule(businessType, 'customers', sessionUser?.modules);
+  const priceTiersEnabled = hasModule(businessType, 'priceTiers', sessionUser?.modules);
+  const loyaltyEnabled = hasModule(businessType, 'loyalty', sessionUser?.modules);
   const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -186,6 +190,55 @@ export function PosPage(): JSX.Element {
     },
   });
 
+  const selectedCustomer = (customersQuery.data ?? []).find((c) => c.id === customerId) ?? null;
+
+  // Wholesale price list: the customer's tier price replaces the retail price
+  // until the cashier types over it.
+  const tierPricesQuery = useQuery({
+    queryKey: ['pos-tier-prices', selectedCustomer?.priceTierId ?? ''],
+    enabled: priceTiersEnabled && !!selectedCustomer?.priceTierId,
+    queryFn: async () => {
+      const res = await ipc.tierPrices(selectedCustomer!.priceTierId!);
+      if (!res.ok) throw new Error(res.error ?? 'Could not load the price list');
+      const map = new Map<string, number>();
+      for (const row of res.items ?? []) {
+        if (row.tierPriceKobo != null) map.set(row.productId, row.tierPriceKobo);
+      }
+      return map;
+    },
+  });
+
+  const loyaltySettingsQuery = useQuery({
+    queryKey: ['pos-loyalty-settings'],
+    enabled: loyaltyEnabled,
+    queryFn: async () => {
+      const res = await ipc.loyaltySettings();
+      if (!res.ok) throw new Error(res.error ?? 'Could not load loyalty settings');
+      return res.settings ?? null;
+    },
+  });
+
+  const loyaltyBalanceQuery = useQuery({
+    queryKey: ['pos-loyalty-balance', customerId],
+    enabled: loyaltyEnabled && customerId !== '',
+    queryFn: async () => {
+      const res = await ipc.loyaltyEntries(customerId);
+      if (!res.ok) throw new Error(res.error ?? 'Could not load loyalty points');
+      return res.balance ?? 0;
+    },
+  });
+
+  useEffect(() => {
+    if (!priceTiersEnabled) return;
+    const map = tierPricesQuery.data ?? new Map<string, number>();
+    setCart((prev) =>
+      prev.map((l) => {
+        const price = map.get(l.product.id) ?? l.product.sellingPriceKobo;
+        return l.unitPriceKobo === price ? l : { ...l, unitPriceKobo: price };
+      })
+    );
+  }, [tierPricesQuery.data, priceTiersEnabled]);
+
   const taxQuery = useQuery({
     queryKey: ['tax-categories'],
     queryFn: async () => {
@@ -228,8 +281,33 @@ export function PosPage(): JSX.Element {
       return sum + Math.round((afterHeader * rate) / 10000);
     }, 0);
     const taxable = netSubtotal - header;
-    return { subtotal, lineDiscount, header, taxEstimate, total: taxable + taxEstimate };
-  }, [cart, headerDiscount, taxQuery.data]);
+    const beforeLoyalty = taxable + taxEstimate;
+    const loyalty = loyaltyEnabled ? loyaltySettingsQuery.data : null;
+    const pointValue = loyalty?.enabled ? loyalty.pointValueKobo : 0;
+    const requested = Math.max(0, Math.floor(Number.parseInt(redeemPoints || '0', 10) || 0));
+    const balance = loyaltyBalanceQuery.data ?? 0;
+    const maxByTotal = pointValue > 0 ? Math.floor(beforeLoyalty / pointValue) : 0;
+    const pointsUsed = Math.min(requested, balance, maxByTotal);
+    const loyaltyDiscount = pointsUsed * pointValue;
+    return {
+      subtotal,
+      lineDiscount,
+      header,
+      taxEstimate,
+      beforeLoyalty,
+      pointsUsed,
+      loyaltyDiscount,
+      total: beforeLoyalty - loyaltyDiscount,
+    };
+  }, [
+    cart,
+    headerDiscount,
+    taxQuery.data,
+    loyaltyEnabled,
+    loyaltySettingsQuery.data,
+    loyaltyBalanceQuery.data,
+    redeemPoints,
+  ]);
 
   const paidTotal = payments.reduce((s, p) => s + p.amountKobo, 0);
   const cartCount = cart.reduce((s, l) => s + l.qty, 0);
@@ -297,6 +375,7 @@ export function PosPage(): JSX.Element {
         headerDiscountKobo: parseNairaToKobo(headerDiscount) ?? 0,
         tableId: tableId === '' ? null : tableId,
         customerId: customerId === '' ? null : customerId,
+        redeemPoints: totals.pointsUsed,
         payments: payments.map((p) => ({
           method: p.method,
           amountKobo: p.amountKobo,
@@ -311,6 +390,7 @@ export function PosPage(): JSX.Element {
       setCart([]);
       setTableId('');
       setCustomerId('');
+      setRedeemPoints('');
       setHeaderDiscount('0.00');
       setPayments([{ method: 'cash', amountKobo: 0, reference: '' }]);
       setError(null);
@@ -715,6 +795,12 @@ export function PosPage(): JSX.Element {
                   <span>Tax (est.)</span>
                   <span className="tabular-nums">{formatKobo(totals.taxEstimate)}</span>
                 </div>
+                {totals.loyaltyDiscount > 0 ? (
+                  <div className="flex justify-between text-amber-700 dark:text-amber-400">
+                    <span>Loyalty points ({totals.pointsUsed})</span>
+                    <span className="tabular-nums">−{formatKobo(totals.loyaltyDiscount)}</span>
+                  </div>
+                ) : null}
                 <div className="flex items-baseline justify-between pt-1">
                   <span className="font-bold">Total</span>
                   <span className="text-2xl font-black tabular-nums tracking-tight text-brand-700 dark:text-brand-300">
@@ -751,6 +837,28 @@ export function PosPage(): JSX.Element {
               {formatKobo(totals.total)}
             </p>
           </div>
+          {loyaltyEnabled &&
+          customerId !== '' &&
+          (loyaltySettingsQuery.data?.enabled ?? false) &&
+          (loyaltyBalanceQuery.data ?? 0) > 0 ? (
+            <div className="flex items-center justify-between gap-3 rounded-xl bg-amber-50 p-3 text-sm dark:bg-amber-950/30">
+              <div>
+                <p className="font-semibold text-amber-800 dark:text-amber-300">Loyalty points</p>
+                <p className="text-xs text-amber-700/80 dark:text-amber-400/80">
+                  Balance {loyaltyBalanceQuery.data} · 1 point ={' '}
+                  {formatKobo(loyaltySettingsQuery.data?.pointValueKobo ?? 0)}
+                </p>
+              </div>
+              <Input
+                inputMode="numeric"
+                aria-label="Points to redeem"
+                placeholder="0"
+                value={redeemPoints}
+                onChange={(e) => setRedeemPoints(e.target.value.replace(/[^0-9]/g, ''))}
+                className="h-9 w-24 text-right tabular-nums"
+              />
+            </div>
+          ) : null}
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {(Object.keys(METHOD_META) as PaymentMethod[]).map((m) => {
               const Meta = METHOD_META[m];

@@ -398,6 +398,66 @@ const api = {
   }> => ipcRenderer.invoke('printer:list'),
   printerPrint: (input: unknown): Promise<{ ok: boolean; error?: string; code?: string }> =>
     ipcRenderer.invoke('printer:print', input),
+
+  // --- Batch 15: business pack ---
+  modulesView: (): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('modules:install-view'),
+  modulesSet: (input: unknown): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('modules:install-set', input),
+  batches: (query: unknown): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('batches:list', query),
+  batchIntake: (input: unknown): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('batches:intake', input),
+  expiryAlerts: (withinDays?: number): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('batches:expiry-alerts', withinDays),
+  priceTiers: (): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('price-tiers:list'),
+  priceTierCreate: (input: unknown): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('price-tiers:create', input),
+  priceTierUpdate: (id: string, patch: unknown): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('price-tiers:update', { id, patch }),
+  priceTierDelete: (id: string): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('price-tiers:delete', id),
+  tierPrices: (id: string): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('price-tiers:prices', id),
+  tierPricesSet: (id: string, prices: unknown): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('price-tiers:prices-set', { id, prices }),
+  loyaltySettings: (): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('loyalty:settings'),
+  loyaltySettingsSet: (input: unknown): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('loyalty:settings-set', input),
+  loyaltyEntries: (customerId: string): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('loyalty:entries', customerId),
+  loyaltyAdjust: (input: unknown): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('loyalty:adjust', input),
+  customerNotes: (customerId: string): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('customers:notes', customerId),
+  customerNoteAdd: (id: string, note: unknown): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('customers:note-add', { id, note }),
+  customerVisitSummary: (customerId: string): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('customers:visit-summary', customerId),
+  returnLookup: (receiptNo: string): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('returns:lookup', receiptNo),
+  returnCreate: (input: unknown): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('returns:create', input),
+  returnsList: (query: unknown): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('returns:list', query),
+  transfers: (query: unknown): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('transfers:list', query),
+  transferCreate: (input: unknown): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('transfers:create', input),
+  debtors: (query: unknown): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('debtors:list', query),
+  debtorRemind: (input: unknown): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('debtors:remind', input),
+  cloudBackupSettings: (): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('cloud-backup:settings'),
+  cloudBackupSave: (input: unknown): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('cloud-backup:settings-set', input),
+  cloudBackupRun: (): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('cloud-backup:run'),
+  cloudBackupUploads: (): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('cloud-backup:uploads'),
 };
 
 export type AnalytiqApi = typeof api;

@@ -27,6 +27,7 @@ import { TD, TH, THead, TRow, Table } from '../components/ui/table';
 import { ConfirmDialog, ErrorState, LoadingState } from '../components/ui/states';
 import { Stat } from '../components/ui/stat';
 import { useSession } from '../stores/session';
+import { CloudBackupCard, LoyaltySettingsCard } from '../components/settings/BusinessPackCards';
 import { ipc } from '../lib/ipc';
 import { ReceiptPrinterSettings } from '../components/ReceiptPrinterSettings';
 import type {
@@ -980,6 +981,9 @@ export function SettingsPage(): JSX.Element {
           </div>
         </CardContent>
       </Card>
+
+      <LoyaltySettingsCard />
+      <CloudBackupCard />
 
       <Card>
         <CardHeader className="flex flex-wrap items-center justify-between gap-2">

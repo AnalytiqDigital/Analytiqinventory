@@ -47,4 +47,34 @@ describe('nav module gating', () => {
   expect(hasModule('restaurant', 'tables')).toBe(true);
   expect(hasModule('pharmacy', 'tables')).toBe(false);
  });
+
+ it('honours the installed module list over the business defaults', () => {
+  const installed = ['tables', 'expiry', 'loyalty'];
+  expect(hasModule('pharmacy', 'tables', installed)).toBe(true);
+  expect(hasModule('restaurant', 'tables', ['expiry'])).toBe(false);
+  const items = visibleNavItems('pharmacy', allowAll, installed);
+  expect(items.some((i) => i.to === '/tables')).toBe(true);
+  expect(items.some((i) => i.to === '/batches')).toBe(true);
+  expect(items.some((i) => i.to === '/transfers')).toBe(false);
+ });
+
+ it('shows the Phase B screens when their modules are installed', () => {
+  const items = visibleNavItems('retail', allowAll, [
+   'returns',
+   'transfers',
+   'priceTiers',
+   'expiry',
+   'customers',
+  ]);
+  for (const to of ['/returns', '/transfers', '/price-lists', '/batches', '/debtors']) {
+   expect(items.some((i) => i.to === to)).toBe(true);
+  }
+ });
+
+ it('hides the Phase B screens when their modules are off', () => {
+  const items = visibleNavItems('retail', allowAll, ['customers']);
+  for (const to of ['/returns', '/transfers', '/price-lists', '/batches']) {
+   expect(items.some((i) => i.to === to)).toBe(false);
+  }
+ });
 });

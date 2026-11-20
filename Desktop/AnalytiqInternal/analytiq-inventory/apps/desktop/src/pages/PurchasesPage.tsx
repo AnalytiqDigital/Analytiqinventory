@@ -32,6 +32,8 @@ interface DraftLine {
   productId: string;
   qty: string;
   unitCost: string;
+  batchNo: string;
+  expiryDate: string;
 }
 
 interface PurchaseFormValues {
@@ -46,7 +48,7 @@ interface PurchaseFormValues {
 let lineSeq = 0;
 function blankLine(): DraftLine {
   lineSeq += 1;
-  return { key: `line-${lineSeq}`, productId: '', qty: '1', unitCost: '0.00' };
+  return { key: `line-${lineSeq}`, productId: '', qty: '1', unitCost: '0.00', batchNo: '', expiryDate: '' };
 }
 
 function blankForm(): PurchaseFormValues {
@@ -137,7 +139,13 @@ export function PurchasesPage(): JSX.Element {
           if (unitCostKobo === null)
             throw new Error('Each unit cost must be an amount like 1500.00');
           const qty = Number(l.qty);
-          return { productId: l.productId, qty, unitCostKobo };
+          return {
+            productId: l.productId,
+            qty,
+            unitCostKobo,
+            batchNo: l.batchNo.trim(),
+            expiryDate: l.expiryDate ? new Date(`${l.expiryDate}T23:59:59`).toISOString() : null,
+          };
         });
       if (lines.length === 0) throw new Error('Add at least one item');
       for (const l of lines) {
@@ -526,8 +534,11 @@ export function PurchasesPage(): JSX.Element {
 
           <div className="space-y-2">
             <p className="text-xs font-medium text-slate-600 dark:text-slate-300">Items</p>
-            {values.lines.map((l) => (
-              <div key={l.key} className="grid grid-cols-[1fr_70px_90px_36px] items-end gap-2">
+            {values.lines.map((l) => {
+              const tracked = (productsQuery.data ?? []).find((p) => p.id === l.productId)?.trackBatches;
+              return (
+              <div key={l.key} className="space-y-1 rounded-xl border border-slate-100 p-2 dark:border-slate-800">
+              <div className="grid grid-cols-[1fr_70px_90px_36px] items-end gap-2">
                 <select
                   aria-label="Product"
                   className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-900"
@@ -566,7 +577,25 @@ export function PurchasesPage(): JSX.Element {
                   ✕
                 </Button>
               </div>
-            ))}
+              {tracked ? (
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    aria-label="Batch number"
+                    placeholder="Batch number"
+                    value={l.batchNo}
+                    onChange={(e) => updateLine(l.key, { batchNo: e.target.value })}
+                  />
+                  <Input
+                    aria-label="Expiry date"
+                    type="date"
+                    value={l.expiryDate}
+                    onChange={(e) => updateLine(l.key, { expiryDate: e.target.value })}
+                  />
+                </div>
+              ) : null}
+              </div>
+              );
+            })}
             <Button
               type="button"
               variant="secondary"

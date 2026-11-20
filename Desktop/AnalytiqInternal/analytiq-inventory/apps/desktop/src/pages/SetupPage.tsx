@@ -26,8 +26,11 @@ const BUSINESS_TYPES = [
   { value: 'retail', label: 'Retail', icon: '🏪', blurb: 'Shop & provisions' },
   { value: 'supermarket', label: 'Supermarket', icon: '🛒', blurb: 'Grocery & mart' },
   { value: 'restaurant', label: 'Restaurant', icon: '🍽️', blurb: 'Food & drinks' },
+  { value: 'bar', label: 'Bar / Lounge', icon: '🍸', blurb: 'Drinks & nightlife' },
   { value: 'pharmacy', label: 'Pharmacy', icon: '💊', blurb: 'Drugs & care' },
   { value: 'wholesale', label: 'Wholesale', icon: '📦', blurb: 'Bulk & distribution' },
+  { value: 'electronics', label: 'Electronics', icon: '📱', blurb: 'Gadgets & appliances' },
+  { value: 'boutique', label: 'Boutique', icon: '👗', blurb: 'Fashion & clothing' },
   { value: 'services', label: 'Services', icon: '💼', blurb: 'Salon, repair…' },
   { value: 'other', label: 'Other', icon: '✨', blurb: 'Something else' },
 ] as const;

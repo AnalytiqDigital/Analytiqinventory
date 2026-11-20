@@ -11,7 +11,8 @@ export function AppShell(): JSX.Element {
  const [mobileOpen, setMobileOpen] = useState(false);
  const can = useSession((s) => s.can);
  const businessType = useSession((s) => s.user?.businessType);
- const visible = visibleNavItems(businessType, can);
+ const modules = useSession((s) => s.user?.modules);
+ const visible = visibleNavItems(businessType, can, modules);
  useRealtime();
 
  return (

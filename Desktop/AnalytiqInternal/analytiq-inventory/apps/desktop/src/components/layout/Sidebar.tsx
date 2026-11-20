@@ -7,7 +7,8 @@ import { NAV_SECTIONS, visibleNavItems } from './nav';
 export function Sidebar(): JSX.Element {
  const can = useSession((s) => s.can);
  const businessType = useSession((s) => s.user?.businessType);
- const visible = visibleNavItems(businessType, can);
+ const modules = useSession((s) => s.user?.modules);
+ const visible = visibleNavItems(businessType, can, modules);
 
  return (
  <aside className="hidden w-60 shrink-0 flex-col border-r border-slate-200/80 bg-white dark:border-slate-800 dark:bg-slate-900 md:flex">

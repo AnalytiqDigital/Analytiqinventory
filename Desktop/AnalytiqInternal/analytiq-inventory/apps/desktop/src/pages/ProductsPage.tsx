@@ -29,6 +29,8 @@ interface ProductFormValues {
   sellingPrice: string;
   reorderLevel: number;
   openingStock: number;
+  trackBatches: boolean;
+  nearExpiryDays: number;
 }
 
 function toForm(p?: ProductRow): ProductFormValues {
@@ -44,6 +46,8 @@ function toForm(p?: ProductRow): ProductFormValues {
     sellingPrice: p ? (p.sellingPriceKobo / 100).toFixed(2) : '0.00',
     reorderLevel: p?.reorderLevel ?? 0,
     openingStock: 0,
+    trackBatches: p?.trackBatches ?? false,
+    nearExpiryDays: p?.nearExpiryDays ?? 30,
   };
 }
 
@@ -171,6 +175,8 @@ export function ProductsPage(): JSX.Element {
         sellingPriceKobo: sell,
         reorderLevel: values.reorderLevel,
         openingStock: values.isEdit ? 0 : values.openingStock,
+        trackBatches: values.trackBatches,
+        nearExpiryDays: values.nearExpiryDays,
       };
       if (values.isEdit && values.id) {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -580,6 +586,26 @@ export function ProductsPage(): JSX.Element {
                 error={form.formState.errors.openingStock?.message}
               />
             )}
+          </div>
+          <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
+            <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-slate-300"
+                {...form.register('trackBatches')}
+              />
+              Track batches &amp; expiry (pharmacy, provisions, drinks)
+            </label>
+            {form.watch('trackBatches') ? (
+              <div className="mt-2">
+                <Input
+                  label="Alert this many days before expiry"
+                  type="number"
+                  min={0}
+                  {...form.register('nearExpiryDays', { valueAsNumber: true })}
+                />
+              </div>
+            ) : null}
           </div>
           {saveMutation.isError ? <ErrorState message={(saveMutation.error as Error).message} /> : null}
           <div className="flex justify-end gap-2">

@@ -87,6 +87,9 @@ export function buildReceiptHtml(
     totals.push(row('Discount', `-${money(sale.headerDiscountKobo, currency)}`));
   }
   totals.push(row('Tax', money(sale.taxKobo, currency)));
+  if (sale.loyaltyDiscountKobo > 0) {
+    totals.push(row('Loyalty points', `-${money(sale.loyaltyDiscountKobo, currency)}`));
+  }
   totals.push(
     row('<strong>TOTAL</strong>', `<strong>${money(sale.totalKobo, currency)}</strong>`, 'total')
   );
@@ -99,6 +102,12 @@ export function buildReceiptHtml(
     })
     .join('');
   const change = sale.changeKobo > 0 ? row('Change', money(sale.changeKobo, currency)) : '';
+  const loyalty =
+    sale.loyaltyPointsEarned > 0
+      ? `<div class="center">You earned ${sale.loyaltyPointsEarned} loyalty point${
+          sale.loyaltyPointsEarned === 1 ? '' : 's'
+        }</div>`
+      : '';
 
   const status =
     sale.status !== 'completed'
@@ -132,7 +141,7 @@ td { padding: 0; vertical-align: top; }
 <table class="items"><tbody>${items}</tbody></table>
 <table class="totals"><tbody>${totals.join('')}${payments}${change}</tbody></table>
 <div class="center thanks">Thank you for your patronage!</div>
-${status}${footer}
+${status}${loyalty}${footer}
 </body></html>`;
 }
 
@@ -180,7 +189,14 @@ export function sampleTestSale(business: BusinessProfile | null): SaleDetail {
         lineTotalKobo: 50000,
       },
     ],
+    customerId: null,
+    customerName: null,
+    externalRef: null,
+    loyaltyPointsRedeemed: 0,
+    loyaltyDiscountKobo: 0,
+    loyaltyPointsEarned: 0,
     payments: [{ id: 'pay', method: 'cash', amountKobo: 150000, reference: '' }],
+    returns: [],
     reversal: null,
   };
 }

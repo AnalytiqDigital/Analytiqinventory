@@ -16,7 +16,7 @@ interface ApiResult {
 }
 
 interface Route {
-  method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+  method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
   path: (args: unknown[]) => string;
   body?: (args: unknown[]) => unknown;
   fallback?: Json;
@@ -295,6 +295,110 @@ const ROUTES: Record<string, Route> = {
   'import:products': { method: 'POST', path: () => '/api/import/products', body: (a) => a[0] },
   'import:purchases': { method: 'POST', path: () => '/api/import/purchases', body: (a) => a[0] },
   'import:sales': { method: 'POST', path: () => '/api/import/sales', body: (a) => a[0] },
+
+  'modules:install-view': { method: 'GET', path: () => '/api/modules' },
+  'modules:install-set': { method: 'POST', path: () => '/api/modules', body: (a) => a[0] },
+
+  'batches:list': {
+    method: 'GET',
+    path: (a) => endpoint('/api/batches', a[0]),
+    fallback: { items: [], total: 0, expiringCount: 0, expiredCount: 0 },
+  },
+  'batches:intake': { method: 'POST', path: () => '/api/batches', body: (a) => a[0] },
+  'batches:expiry-alerts': {
+    method: 'GET',
+    path: (a) => endpoint('/api/batches/expiry-alerts', { days: a[0] }),
+    fallback: { items: [] },
+  },
+
+  'price-tiers:list': { method: 'GET', path: () => '/api/price-tiers', fallback: { items: [] } },
+  'price-tiers:create': { method: 'POST', path: () => '/api/price-tiers', body: (a) => a[0] },
+  'price-tiers:update': {
+    method: 'PATCH',
+    path: (a) => `/api/price-tiers/${pairArg(a).id}`,
+    body: (a) => pairArg(a).patch,
+  },
+  'price-tiers:delete': { method: 'DELETE', path: (a) => `/api/price-tiers/${idArg(a)}` },
+  'price-tiers:prices': {
+    method: 'GET',
+    path: (a) => `/api/price-tiers/${idArg(a)}/prices`,
+    fallback: { items: [] },
+  },
+  'price-tiers:prices-set': {
+    method: 'PUT',
+    path: (a) => `/api/price-tiers/${encodeURIComponent(payloadArg(a, ['prices']).id)}/prices`,
+    body: (a) => ({ prices: (a[0] as Json).prices }),
+  },
+
+  'loyalty:settings': { method: 'GET', path: () => '/api/loyalty/settings' },
+  'loyalty:settings-set': {
+    method: 'POST',
+    path: () => '/api/loyalty/settings',
+    body: (a) => a[0],
+  },
+  'loyalty:entries': {
+    method: 'GET',
+    path: (a) => `/api/customers/${idArg(a)}/loyalty`,
+    fallback: { items: [], balance: 0 },
+  },
+  'loyalty:adjust': { method: 'POST', path: () => '/api/loyalty/adjust', body: (a) => a[0] },
+  'customers:notes': {
+    method: 'GET',
+    path: (a) => `/api/customers/${idArg(a)}/notes`,
+    fallback: { items: [] },
+  },
+  'customers:note-add': {
+    method: 'POST',
+    path: (a) => `/api/customers/${encodeURIComponent(payloadArg(a, ['note']).id)}/notes`,
+    body: (a) => (a[0] as Json).note,
+  },
+  'customers:visit-summary': {
+    method: 'GET',
+    path: (a) => `/api/customers/${idArg(a)}/summary`,
+    fallback: { summary: null },
+  },
+
+  'returns:lookup': {
+    method: 'GET',
+    path: (a) => endpoint('/api/returns/lookup', { receipt: a[0] }),
+  },
+  'returns:create': { method: 'POST', path: () => '/api/returns', body: (a) => a[0] },
+  'returns:list': {
+    method: 'GET',
+    path: (a) => endpoint('/api/returns', a[0]),
+    fallback: { items: [], total: 0 },
+  },
+
+  'transfers:list': {
+    method: 'GET',
+    path: (a) => endpoint('/api/transfers', a[0]),
+    fallback: { items: [], total: 0 },
+  },
+  'transfers:create': { method: 'POST', path: () => '/api/transfers', body: (a) => a[0] },
+
+  'debtors:list': {
+    method: 'GET',
+    path: (a) => endpoint('/api/debtors', a[0]),
+    fallback: { items: [], totalKobo: 0 },
+  },
+  'debtors:remind': {
+    method: 'POST',
+    path: () => '/api/debtors/remind',
+    body: (a) => a[0],
+  },
+
+  'cloud-backup:settings': { method: 'GET', path: () => '/api/cloud-backup' },
+  'cloud-backup:settings-set': {
+    method: 'POST',
+    path: () => '/api/cloud-backup',
+    body: (a) => a[0],
+  },
+  'cloud-backup:run': { method: 'POST', path: () => '/api/cloud-backup/run' },
+  'cloud-backup:uploads': {
+    method: 'GET',
+    path: () => '/api/cloud-backup/uploads',
+    fallback: { items: [] },
+  },
 
   'backup:list': {
     method: 'GET',
