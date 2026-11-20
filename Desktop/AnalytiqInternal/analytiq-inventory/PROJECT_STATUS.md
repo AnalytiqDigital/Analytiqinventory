@@ -331,6 +331,56 @@ Verification: database 92/92 (8 new), local-server 20/20 (1 new), desktop
 renderer 39/39, validation 20/20, licensing 7/7, cloud-api 25/25, website
 10/10, `pnpm lint` clean, `pnpm typecheck` 15/15.
 
+## Batch 15 — Business pack: modules, batches, tiers, loyalty, returns, transfers, debtors, offsite backup: DONE
+
+Implemented:
+
+- Business-type presets and module installs (`packages/database/src/modules.ts`,
+  migration `0013_business_pack.sql`): nine optional modules on top of the core
+  set, resolved per business type and stored as overrides in `app_settings`.
+  Setup gained Bar/Lounge, Electronics and Boutique types; Settings → **Install
+  Modules** toggles any module and the session's module list drives the menu,
+  route guards and POS features immediately.
+- Batches & expiry (`batches.ts`): batch intake, per-batch remaining stock,
+  status badges (OK/expiring/expired/empty), expiry alerts by window, and
+  First-Expired-First-Out allocation on sales. Products opt in with
+  `trackBatches` + `nearExpiryDays`; purchases accept batch number and expiry
+  per line. Returns restock the exact consumed batches (prefix match on the
+  sale reason, including batched sales).
+- Wholesale price tiers (`priceTiers.ts`): tiers with per-product overrides
+  and optional default tier, customer assignment, tier price applied on the
+  Sell screen when the cashier has not typed a price.
+- Loyalty and simple CRM (`loyalty.ts`): points ledger (earn per spend, redeem
+  as a discount clamped to balance and order value, manual adjust), settings
+  card, receipts show discount and points earned, customer profile with visit
+  summary and notes.
+- Counter returns/exchanges (`returns.ts`): receipt lookup, per-line
+  returnable qty, refund cap, restock, full-return status flip, return history
+  with search — plus a fix so batched sales restock to their original batches.
+- Branch stock transfers (`transfers.ts`): paired `transfer_out`/`transfer_in`
+  ledger rows, batch identity preserved, same-location and negative-stock
+  guards, `TRF-000001` references and history.
+- Debtor reminders (`debtors.ts`): outstanding balances per customer, opt-in
+  selection, dry-run preview when WhatsApp is unconfigured, per-reminder log
+  and last-reminder column.
+- Encrypted offsite backup (`cloudBackup.ts`): AES-256-GCM with scrypt key
+  derivation into `.aqb`, PUT upload with bearer key and `x-analytiq-file`,
+  settings card and recent-upload list. Passphrase never leaves the machine.
+- UI: Batches & Expiry, Returns, Transfers, Price Lists, Debtors, Install
+  Modules pages; loyalty and cloud-backup cards in Settings; product batch
+  toggle; POS tier pricing and point redemption.
+- IPC + LAN parity for every route; renderer LAN client updated.
+- Tests: `batch15.test.ts` 10 tests (DB), 3 new local-server REST tests, nav
+  module-visibility tests (10 total).
+- Docs: `docs/BUSINESS_PACK.md`.
+
+Verification: database 102/102, local-server 23/23, desktop 42/42, validation
+20/20, licensing 7/7, business-logic 2/2, cloud-api 25/25, `pnpm -r lint`
+clean, `pnpm -r typecheck` clean, renderer + Electron bundle build clean.
+The NSIS packaging step still needs an elevated shell/Developer Mode on this
+machine (7-Zip symlink privilege), so the installer was not re-packed in this
+pass.
+
 ## 1.0.0 — Release preparation: IN PROGRESS
 
 Done:

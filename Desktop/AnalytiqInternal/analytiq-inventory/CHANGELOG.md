@@ -1,5 +1,35 @@
 # Changelog
 
+## Unreleased — Batch 15: business pack
+
+- **Install Modules**: the app now installs a different set of optional
+  modules per business type (retail, supermarket, wholesale, pharmacy,
+  restaurant, bar/lounge, electronics, boutique, services) and a manager can
+  switch any module on or off from Settings. The menu, screens and POS update
+  immediately; hidden modules keep their data.
+- **Batches & Expiry**: track batches with expiry dates on chosen products,
+  receive them from Purchases or the new Batches screen, sell First Expired
+  First Out, and see OK / expiring / expired badges with 30/90-day filters.
+- **Price lists**: wholesale and customer price tiers with per-product
+  override prices; a customer's tier is applied automatically on Sell and the
+  cashier can still override.
+- **Loyalty and CRM**: points ledger with configurable earn and redemption
+  rates, redemption as a discount on the sale, points shown on receipts, and a
+  customer profile with visit summary, point adjustments and notes.
+- **Counter returns**: receipt lookup, per-line returnable quantities, capped
+  refunds across partial returns, restock to the original batches, exchange
+  tagging and return history. Batched sales now restock to their exact batch.
+- **Branch transfers**: move stock between branches with paired ledger rows,
+  batch identity preserved, guards against same-branch and negative-stock
+  transfers, and a `TRF-` history.
+- **Debtor reminders**: outstanding balance list with opt-in selection, a
+  dry-run preview when WhatsApp is not configured, and a reminder log.
+- **Encrypted offsite backup**: AES-256-GCM `.aqb` snapshot with a passphrase
+  (scrypt), uploaded to any HTTPS PUT endpoint with a bearer key; restore needs
+  the passphrase, which never leaves the machine.
+- LAN parity for all new routes and migration `0013_business_pack.sql`.
+- Docs: `docs/BUSINESS_PACK.md`.
+
 ## 1.1.0 — Batch 14: staff, permissions, finance and richer reports
 
 - **Staff & Permissions** page: add, edit, deactivate and reactivate staff,
