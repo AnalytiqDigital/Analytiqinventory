@@ -19,20 +19,26 @@ import {
   countStock,
   createBackup,
   createBatchIntake,
+  createBrand,
   createCategory,
   createCustomer,
+  createCustomerGroup,
   createExpense,
   createLocation,
   createPriceTier,
   createProduct,
   createPurchase,
+  createPurchaseReturn,
   createSale,
   createSaleReturn,
   createStaff,
+  createStockAdjustment,
   createStockTransfer,
   createSupplier,
   createTable,
   createTaxCategory,
+  createUnit,
+  createWarranty,
   customerVisitSummary,
   deleteBackup,
   deleteExpense,
@@ -45,6 +51,7 @@ import {
   getCustomer,
   getLevels,
   getLoyaltySettings,
+  getMenuReports,
   getModuleInstallView,
   getProduct,
   getReportsSummary,
@@ -54,14 +61,18 @@ import {
   importProducts,
   importPurchases,
   importSales,
+  importOpeningStock,
+  importContacts,
   ingestRecords,
   isFirstRun,
   isSyncEntity,
   listAutomationMessages,
   listBackups,
   listBatches,
+  listBrands,
   listCategories,
   listCloudUploads,
+  listCustomerGroups,
   listCustomerNotes,
   listCustomerPayments,
   listCustomers,
@@ -74,16 +85,20 @@ import {
   listPriceTiers,
   listProducts,
   listPurchases,
+  listPurchaseReturns,
   listRecordsSince,
   listRoles,
   listSaleReturns,
   listSales,
   listStaff,
+  listStockAdjustments,
   listStockTransfers,
   listSuppliers,
   listTables,
   listTaxCategories,
   listTierPrices,
+  listUnits,
+  listWarranties,
   login,
   logout,
   lookupSaleByReceipt,
@@ -112,7 +127,11 @@ import {
   setTierPrices,
   syncNow,
   toAutomationView,
+  updateBrand,
+  updateCategory,
   updateCustomer,
+  updateCustomerGroup,
+  updateExpense,
   updateLocation,
   updatePriceTier,
   updateProduct,
@@ -121,6 +140,8 @@ import {
   updateSupplier,
   updateTable,
   updateTaxCategory,
+  updateUnit,
+  updateWarranty,
   voidSale,
   type AuthenticatedUser,
   type LocalDb,
@@ -418,6 +439,19 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
           user.businessId,
           user.id,
           user.permissions,
+          request.body ?? {}
+        );
+        return { ok: true, category };
+      });
+
+      scope.patch<{ Params: { id: string } }>('/categories/:id', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        const category = await updateCategory(
+          local,
+          user.businessId,
+          user.id,
+          user.permissions,
+          request.params.id,
           request.body ?? {}
         );
         return { ok: true, category };
@@ -878,6 +912,119 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
         return { ok: true };
       });
 
+      // --- Batch 16: masters, stock adjustments, purchase returns ---
+      scope.get<{ Params: { kind: string } }>('/masters/:kind', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        const kind = request.params.kind;
+        const items =
+          kind === 'brands'
+            ? await listBrands(local, user.businessId)
+            : kind === 'units'
+              ? await listUnits(local, user.businessId)
+              : kind === 'warranties'
+                ? await listWarranties(local, user.businessId)
+                : kind === 'customer-groups'
+                  ? await listCustomerGroups(local, user.businessId)
+                  : null;
+        if (!items) throw Object.assign(new Error('Unknown list type'), { code: 'NOT_FOUND' });
+        return { ok: true, items };
+      });
+
+      scope.post<{ Params: { kind: string } }>('/masters/:kind', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        const kind = request.params.kind;
+        const input = request.body ?? {};
+        const args = [local, user.businessId, user.id, user.permissions, input] as const;
+        const item =
+          kind === 'brands'
+            ? await createBrand(...args)
+            : kind === 'units'
+              ? await createUnit(...args)
+              : kind === 'warranties'
+                ? await createWarranty(...args)
+                : kind === 'customer-groups'
+                  ? await createCustomerGroup(...args)
+                  : null;
+        if (!item) throw Object.assign(new Error('Unknown list type'), { code: 'NOT_FOUND' });
+        return { ok: true, item };
+      });
+
+      scope.patch<{ Params: { kind: string; id: string } }>(
+        '/masters/:kind/:id',
+        async (request) => {
+          const { user, db: local } = userIdOf(request);
+          const kind = request.params.kind;
+          const args = [
+            local,
+            user.businessId,
+            user.id,
+            user.permissions,
+            request.params.id,
+            request.body ?? {},
+          ] as const;
+          const item =
+            kind === 'brands'
+              ? await updateBrand(...args)
+              : kind === 'units'
+                ? await updateUnit(...args)
+                : kind === 'warranties'
+                  ? await updateWarranty(...args)
+                  : kind === 'customer-groups'
+                    ? await updateCustomerGroup(...args)
+                    : null;
+          if (!item) throw Object.assign(new Error('Unknown list type'), { code: 'NOT_FOUND' });
+          return { ok: true, item };
+        }
+      );
+
+      scope.get('/stock-adjustments', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return {
+          ok: true,
+          ...(await listStockAdjustments(local, user.businessId, queryOf(request.query))),
+        };
+      });
+
+      scope.post('/stock-adjustments', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        const result = await createStockAdjustment(
+          local,
+          user.businessId,
+          user.id,
+          user.permissions,
+          request.body ?? {}
+        );
+        scope.realtime.emit(user.businessId, 'inventory.changed', {
+          reason: 'stock.adjustment',
+          id: result.id,
+        });
+        return { ok: true, ...result };
+      });
+
+      scope.get('/purchase-returns', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return {
+          ok: true,
+          ...(await listPurchaseReturns(local, user.businessId, queryOf(request.query))),
+        };
+      });
+
+      scope.post('/purchase-returns', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        const result = await createPurchaseReturn(
+          local,
+          user.businessId,
+          user.id,
+          user.permissions,
+          request.body ?? {}
+        );
+        scope.realtime.emit(user.businessId, 'inventory.changed', {
+          reason: 'purchase.return',
+          id: result.id,
+        });
+        return { ok: true, ...result };
+      });
+
       scope.get('/reports/summary', async (request) => {
         const { user, db: local } = userIdOf(request);
         return {
@@ -888,6 +1035,14 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
             user.permissions,
             queryOf(request.query)
           ),
+        };
+      });
+
+      scope.get('/reports/menu', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return {
+          ok: true,
+          report: getMenuReports(local, user.businessId, user.permissions, queryOf(request.query)),
         };
       });
 
@@ -953,6 +1108,38 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
           });
         }
         return { ok: true, ...result };
+      });
+
+      scope.post('/import/opening-stock', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        const result = await importOpeningStock(
+          local,
+          user.businessId,
+          user.id,
+          user.permissions,
+          request.body ?? {}
+        );
+        if (result.created > 0) {
+          scope.realtime.emit(user.businessId, 'inventory.changed', {
+            reason: 'import.opening-stock',
+            count: result.created,
+          });
+        }
+        return { ok: true, ...result };
+      });
+
+      scope.post('/import/contacts', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return {
+          ok: true,
+          ...(await importContacts(
+            local,
+            user.businessId,
+            user.id,
+            user.permissions,
+            request.body ?? {}
+          )),
+        };
       });
 
       // --- Batch 14: staff, role permissions and expenses ---
@@ -1042,6 +1229,21 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
             user.businessId,
             user.id,
             user.permissions,
+            request.body ?? {}
+          )),
+        };
+      });
+
+      scope.patch<{ Params: { id: string } }>('/finance/expenses/:id', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return {
+          ok: true,
+          ...(await updateExpense(
+            local,
+            user.businessId,
+            user.id,
+            user.permissions,
+            request.params.id,
             request.body ?? {}
           )),
         };
@@ -1274,13 +1476,7 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
 
       scope.delete<{ Params: { id: string } }>('/price-tiers/:id', async (request) => {
         const { user, db: local } = userIdOf(request);
-        await deletePriceTier(
-          local,
-          user.businessId,
-          user.id,
-          user.permissions,
-          request.params.id
-        );
+        await deletePriceTier(local, user.businessId, user.id, user.permissions, request.params.id);
         return { ok: true };
       });
 
@@ -1325,7 +1521,10 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
 
       scope.get<{ Params: { id: string } }>('/customers/:id/loyalty', async (request) => {
         const { user, db: local } = userIdOf(request);
-        return { ok: true, ...(await listLoyaltyEntries(local, user.businessId, request.params.id)) };
+        return {
+          ok: true,
+          ...(await listLoyaltyEntries(local, user.businessId, request.params.id)),
+        };
       });
 
       scope.post('/loyalty/adjust', async (request) => {
@@ -1344,7 +1543,10 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
 
       scope.get<{ Params: { id: string } }>('/customers/:id/notes', async (request) => {
         const { user, db: local } = userIdOf(request);
-        return { ok: true, items: await listCustomerNotes(local, user.businessId, request.params.id) };
+        return {
+          ok: true,
+          items: await listCustomerNotes(local, user.businessId, request.params.id),
+        };
       });
 
       scope.post<{ Params: { id: string } }>('/customers/:id/notes', async (request) => {
@@ -1398,7 +1600,10 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
       scope.get('/returns', async (request) => {
         const { user, db: local } = userIdOf(request);
         requirePermission(new Set(user.permissions), 'sales.view');
-        return { ok: true, ...(await listSaleReturns(local, user.businessId, queryOf(request.query))) };
+        return {
+          ok: true,
+          ...(await listSaleReturns(local, user.businessId, queryOf(request.query))),
+        };
       });
 
       scope.get('/transfers', async (request) => {
@@ -1443,7 +1648,10 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
       scope.get('/cloud-backup', async (request) => {
         const { user, db: local } = userIdOf(request);
         requirePermission(new Set(user.permissions), 'settings.manage');
-        return { ok: true, settings: cloudBackupView(getCloudBackupSettings(local, user.businessId)) };
+        return {
+          ok: true,
+          settings: cloudBackupView(getCloudBackupSettings(local, user.businessId)),
+        };
       });
 
       scope.post('/cloud-backup', async (request) => {

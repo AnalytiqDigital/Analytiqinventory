@@ -103,6 +103,11 @@ const ROUTES: Record<string, Route> = {
 
   'inventory:categories': { method: 'GET', path: () => '/api/categories', fallback: { items: [] } },
   'inventory:category-create': { method: 'POST', path: () => '/api/categories', body: (a) => a[0] },
+  'inventory:category-update': {
+    method: 'PATCH',
+    path: (a) => `/api/categories/${pairArg(a).id}`,
+    body: (a) => pairArg(a).patch,
+  },
   'inventory:products': {
     method: 'GET',
     path: (a) => endpoint('/api/products', a[0]),
@@ -247,10 +252,56 @@ const ROUTES: Record<string, Route> = {
   },
   'purchases:cancel': { method: 'POST', path: (a) => `/api/purchases/${idArg(a)}/cancel` },
 
+  'masters:list': {
+    method: 'GET',
+    path: (a) => `/api/masters/${encodeURIComponent(String(a[0] ?? ''))}`,
+    fallback: { items: [] },
+  },
+  'masters:create': {
+    method: 'POST',
+    path: (a) => `/api/masters/${encodeURIComponent(String(a[0] ?? ''))}`,
+    body: (a) => a[1],
+  },
+  'masters:update': {
+    method: 'PATCH',
+    path: (a) => {
+      const payload = (a[0] ?? {}) as { kind?: unknown; id?: unknown };
+      return `/api/masters/${encodeURIComponent(String(payload.kind ?? ''))}/${encodeURIComponent(
+        String(payload.id ?? '')
+      )}`;
+    },
+    body: (a) => ((a[0] ?? {}) as { patch?: unknown }).patch,
+  },
+  'stock-adjustments:list': {
+    method: 'GET',
+    path: (a) => endpoint('/api/stock-adjustments', a[0]),
+    fallback: { items: [], total: 0 },
+  },
+  'stock-adjustments:create': {
+    method: 'POST',
+    path: () => '/api/stock-adjustments',
+    body: (a) => a[0],
+  },
+  'purchase-returns:list': {
+    method: 'GET',
+    path: (a) => endpoint('/api/purchase-returns', a[0]),
+    fallback: { items: [], total: 0 },
+  },
+  'purchase-returns:create': {
+    method: 'POST',
+    path: () => '/api/purchase-returns',
+    body: (a) => a[0],
+  },
+
   'reports:summary': {
     method: 'GET',
     path: (a) => endpoint('/api/reports/summary', a[0]),
     fallback: { summary: null },
+  },
+  'reports:menu': {
+    method: 'GET',
+    path: (a) => endpoint('/api/reports/menu', a[0]),
+    fallback: { report: null },
   },
 
   'staff:list': { method: 'GET', path: () => '/api/staff', fallback: { items: [] } },
@@ -295,6 +346,12 @@ const ROUTES: Record<string, Route> = {
   'import:products': { method: 'POST', path: () => '/api/import/products', body: (a) => a[0] },
   'import:purchases': { method: 'POST', path: () => '/api/import/purchases', body: (a) => a[0] },
   'import:sales': { method: 'POST', path: () => '/api/import/sales', body: (a) => a[0] },
+  'import:opening-stock': {
+    method: 'POST',
+    path: () => '/api/import/opening-stock',
+    body: (a) => a[0],
+  },
+  'import:contacts': { method: 'POST', path: () => '/api/import/contacts', body: (a) => a[0] },
 
   'modules:install-view': { method: 'GET', path: () => '/api/modules' },
   'modules:install-set': { method: 'POST', path: () => '/api/modules', body: (a) => a[0] },

@@ -8,9 +8,11 @@ works from LAN-client tills.
 
 | What you import | Screen                                      |
 | --------------- | ------------------------------------------- |
-| Products        | **Products → Import CSV**                   |
+| Products        | **Products → Import products CSV**          |
+| Opening stock   | **Products → Import opening stock**         |
 | Purchases       | **Purchases → Import CSV**                  |
 | Sales           | **Sell → Sales history → Import sales CSV** |
+| Contacts        | **Customers → Import contacts**             |
 
 Every dialog has a **Download template** button. Templates are generated from
 the same schemas the server validates with, so a file that matches the template
@@ -83,12 +85,52 @@ refused (`SALE_REFERENCE_EXISTS`).
 Credit rows automatically set the new customer's credit limit to the amount
 owed, so the balance and the limit stay consistent.
 
+## Opening stock
+
+Count sheets from your old system. The imported quantity becomes the **absolute
+on-hand total** for that branch — it is not added to what is already there, so
+re-importing the same file changes nothing.
+
+| Column     | Required         | Notes                                                                   |
+| ---------- | ---------------- | ----------------------------------------------------------------------- |
+| `sku`      | one of the three | Matched first on barcode, then SKU, then exact product name.            |
+| `barcode`  | one of the three | Tried before SKU.                                                       |
+| `name`     | one of the three | Exact name, case-insensitive.                                           |
+| `qty`      | yes              | Whole number, zero or more.                                             |
+| `location` | no               | Branch name; blank uses the default branch. Unknown names are reported. |
+
+Each change is written as an `opening` stock movement (`Opening stock (import)`)
+inside one transaction, and the import is audited as `stock.import`.
+
+## Contacts
+
+Customers and suppliers in one file; the `type` column decides which list the
+row lands in.
+
+| Column    | Required | Notes                                                                   |
+| --------- | -------- | ----------------------------------------------------------------------- |
+| `name`    | yes      | Contact name.                                                           |
+| `type`    | yes\*    | `customer` or `supplier`; default is `customer` when blank.             |
+| `phone`   | no       | Phone number, kept as text.                                             |
+| `email`   | no       | Email address.                                                          |
+| `address` | no       | Free-form address.                                                      |
+| `group`   | no       | Existing customer group name for customers; unknown names are reported. |
+
+\* the column must exist, but an empty value is treated as `customer`.
+
+Rows are validated with the same schemas as the Customers and Suppliers forms,
+so phone/email rules match what the screens accept. A file that mixes types
+needs both `customers.manage` and `suppliers.manage` when the cashier's role is
+restricted.
+
 ## Permissions
 
-| Import    | Permission         |
-| --------- | ------------------ |
-| Products  | `products.manage`  |
-| Purchases | `purchases.manage` |
-| Sales     | `sales.create`     |
+| Import        | Permission                              |
+| ------------- | --------------------------------------- |
+| Products      | `products.manage`                       |
+| Opening stock | `inventory.adjust`                      |
+| Purchases     | `purchases.manage`                      |
+| Sales         | `sales.create`                          |
+| Contacts      | `customers.manage` / `suppliers.manage` |
 
 Cashiers see the sales import only when their role can create sales.

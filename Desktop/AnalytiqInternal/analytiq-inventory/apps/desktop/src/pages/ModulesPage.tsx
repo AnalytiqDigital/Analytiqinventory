@@ -11,11 +11,18 @@ import { useSession } from '../stores/session';
 const MODULE_INFO: Record<OptionalModule, { label: string; blurb: string }> = {
   tables: { label: 'Tables', blurb: 'Dine-in tables for restaurants and bars.' },
   taxCategories: { label: 'Tax categories', blurb: 'VAT and other tax rates per product.' },
-  purchases: { label: 'Purchases', blurb: 'Buy stock from suppliers and receive it into inventory.' },
+  purchases: {
+    label: 'Purchases',
+    blurb: 'Buy stock from suppliers and receive it into inventory.',
+  },
   suppliers: { label: 'Suppliers', blurb: 'Keep supplier records for purchases.' },
   customers: { label: 'Customers & credit', blurb: 'Customer records, credit limits and debtors.' },
+  expenses: { label: 'Expenses', blurb: 'Record rent, salaries and other running costs.' },
   finance: { label: 'Finance', blurb: 'Expenses and net profit alongside sales.' },
-  expiry: { label: 'Batches & expiry', blurb: 'Batch numbers, expiry dates and near-expiry alerts.' },
+  expiry: {
+    label: 'Batches & expiry',
+    blurb: 'Batch numbers, expiry dates and near-expiry alerts.',
+  },
   priceTiers: { label: 'Price lists', blurb: 'Wholesale price tiers per customer.' },
   loyalty: { label: 'Loyalty points', blurb: 'Earn and redeem points on customer sales.' },
   returns: { label: 'Returns', blurb: 'Refund or exchange by receipt at the counter.' },
@@ -33,6 +40,7 @@ const MODULE_ORDER: OptionalModule[] = [
   'purchases',
   'suppliers',
   'taxCategories',
+  'expenses',
   'finance',
 ];
 
@@ -145,14 +153,18 @@ export function ModulesPage(): JSX.Element {
                     </span>
                     <span>
                       <span className="block text-sm font-semibold">{info.label}</span>
-                      <span className="block text-xs text-slate-500 dark:text-slate-400">{info.blurb}</span>
+                      <span className="block text-xs text-slate-500 dark:text-slate-400">
+                        {info.blurb}
+                      </span>
                     </span>
                   </button>
                 );
               })}
             </div>
             {error ? <p className="text-sm text-red-600">{error}</p> : null}
-            {saved ? <p className="text-sm text-emerald-600">Saved. The menu now matches your choice.</p> : null}
+            {saved ? (
+              <p className="text-sm text-emerald-600">Saved. The menu now matches your choice.</p>
+            ) : null}
             <div className="flex justify-end">
               <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
                 {saveMutation.isPending ? 'Saving…' : 'Save modules'}

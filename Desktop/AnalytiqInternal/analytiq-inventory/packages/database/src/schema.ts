@@ -180,6 +180,102 @@ export const categories = sqliteTable(
 
 export type Category = typeof categories.$inferSelect;
 
+// --- Batch 16: shop-floor masters -------------------------------------------
+// Brands, selling units, warranties and customer groups are optional lookups.
+// A product keeps its free-text `unit` (existing data keeps working) and may
+// additionally point at a unit record; the product form offers the units list.
+// Deleting masters is not supported — they are archived so products keep their
+// reference.
+
+export const brands = sqliteTable(
+  'brands',
+  {
+    id: text('id').primaryKey(),
+    businessId: text('business_id')
+      .notNull()
+      .references(() => businesses.id),
+    name: text('name').notNull(),
+    note: text('note').notNull().default(''),
+    isActive: integer('is_active').notNull().default(1),
+    version: integer('version').notNull().default(1),
+    ...timestamps(),
+  },
+  (t) => ({
+    brandsBusinessNameUnique: uniqueIndex('brands_business_name_unique').on(t.businessId, t.name),
+  })
+);
+
+export type Brand = typeof brands.$inferSelect;
+
+export const units = sqliteTable(
+  'units',
+  {
+    id: text('id').primaryKey(),
+    businessId: text('business_id')
+      .notNull()
+      .references(() => businesses.id),
+    name: text('name').notNull(),
+    shortName: text('short_name').notNull().default(''),
+    note: text('note').notNull().default(''),
+    isActive: integer('is_active').notNull().default(1),
+    version: integer('version').notNull().default(1),
+    ...timestamps(),
+  },
+  (t) => ({
+    unitsBusinessNameUnique: uniqueIndex('units_business_name_unique').on(t.businessId, t.name),
+  })
+);
+
+export type Unit = typeof units.$inferSelect;
+
+export const warranties = sqliteTable(
+  'warranties',
+  {
+    id: text('id').primaryKey(),
+    businessId: text('business_id')
+      .notNull()
+      .references(() => businesses.id),
+    name: text('name').notNull(),
+    /** Length in days; 0 means "no fixed term". */
+    durationDays: integer('duration_days').notNull().default(0),
+    note: text('note').notNull().default(''),
+    isActive: integer('is_active').notNull().default(1),
+    version: integer('version').notNull().default(1),
+    ...timestamps(),
+  },
+  (t) => ({
+    warrantiesBusinessNameUnique: uniqueIndex('warranties_business_name_unique').on(
+      t.businessId,
+      t.name
+    ),
+  })
+);
+
+export type Warranty = typeof warranties.$inferSelect;
+
+export const customerGroups = sqliteTable(
+  'customer_groups',
+  {
+    id: text('id').primaryKey(),
+    businessId: text('business_id')
+      .notNull()
+      .references(() => businesses.id),
+    name: text('name').notNull(),
+    note: text('note').notNull().default(''),
+    isActive: integer('is_active').notNull().default(1),
+    version: integer('version').notNull().default(1),
+    ...timestamps(),
+  },
+  (t) => ({
+    customerGroupsBusinessNameUnique: uniqueIndex('customer_groups_business_name_unique').on(
+      t.businessId,
+      t.name
+    ),
+  })
+);
+
+export type CustomerGroup = typeof customerGroups.$inferSelect;
+
 export const products = sqliteTable(
   'products',
   {
@@ -191,6 +287,8 @@ export const products = sqliteTable(
     sku: text('sku'),
     barcode: text('barcode'),
     categoryId: text('category_id').references(() => categories.id),
+    brandId: text('brand_id').references(() => brands.id),
+    warrantyId: text('warranty_id').references(() => warranties.id),
     unit: text('unit').notNull().default('pcs'),
     costPriceKobo: integer('cost_price_kobo').notNull().default(0),
     sellingPriceKobo: integer('selling_price_kobo').notNull().default(0),
@@ -445,6 +543,7 @@ export const customers = sqliteTable(
     note: text('note').notNull().default(''),
     creditLimitKobo: integer('credit_limit_kobo').notNull().default(0),
     priceTierId: text('price_tier_id'),
+    groupId: text('group_id').references(() => customerGroups.id),
     isActive: integer('is_active').notNull().default(1),
     version: integer('version').notNull().default(1),
     ...timestamps(),
@@ -647,8 +746,9 @@ export const automationMessages = sqliteTable('automation_messages', {
 export type AutomationMessageRow = typeof automationMessages.$inferSelect;
 
 // --- Batch 14: finance (expenses) -------------------------------------------
-// Expenses are an append-only money-out ledger. Profit is never stored: the
-// finance reports subtract expenses from sales gross profit at read time.
+// Expenses are an audited money-out ledger (create, update and delete each
+// write an audit row). Profit is never stored: the finance reports subtract
+// expenses from sales gross profit at read time.
 
 export const expenses = sqliteTable(
   'expenses',
@@ -796,10 +896,7 @@ export const loyaltyEntries = sqliteTable(
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
   },
   (t) => ({
-    loyaltyEntriesCustomerIdx: index('loyalty_entries_customer_idx').on(
-      t.customerId,
-      t.createdAt
-    ),
+    loyaltyEntriesCustomerIdx: index('loyalty_entries_customer_idx').on(t.customerId, t.createdAt),
     loyaltyEntriesSaleKind: uniqueIndex('loyalty_entries_sale_kind_unique').on(t.saleId, t.kind),
   })
 );
@@ -946,3 +1043,117 @@ export const backupUploads = sqliteTable(
 );
 
 export type BackupUploadRow = typeof backupUploads.$inferSelect;
+
+// --- Batch 16: stock adjustments and purchase returns -----------------------
+// A stock adjustment is a document: a header plus signed lines. Every line
+// writes one `adjust` stock movement, so the ledger stays the single source of
+// on-hand truth. Purchase returns point back at the received purchase and take
+// stock out; supplier payable is derived as purchases minus payments minus
+// returns, never stored.
+
+export const stockAdjustments = sqliteTable(
+  'stock_adjustments',
+  {
+    id: text('id').primaryKey(),
+    businessId: text('business_id')
+      .notNull()
+      .references(() => businesses.id),
+    locationId: text('location_id')
+      .notNull()
+      .references(() => locations.id),
+    reference: text('reference').notNull(),
+    reason: text('reason').notNull(),
+    note: text('note').notNull().default(''),
+    createdBy: text('created_by'),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  },
+  (t) => ({
+    stockAdjustmentsRefUnique: uniqueIndex('stock_adjustments_business_reference_unique').on(
+      t.businessId,
+      t.reference
+    ),
+    stockAdjustmentsBusinessCreatedIdx: index('stock_adjustments_business_created_idx').on(
+      t.businessId,
+      t.createdAt
+    ),
+  })
+);
+
+export type StockAdjustment = typeof stockAdjustments.$inferSelect;
+
+export const stockAdjustmentItems = sqliteTable(
+  'stock_adjustment_items',
+  {
+    id: text('id').primaryKey(),
+    adjustmentId: text('adjustment_id')
+      .notNull()
+      .references(() => stockAdjustments.id),
+    productId: text('product_id')
+      .notNull()
+      .references(() => products.id),
+    movementId: text('movement_id').references(() => stockMovements.id),
+    qtyDelta: integer('qty_delta').notNull(),
+    note: text('note').notNull().default(''),
+  },
+  (t) => ({
+    stockAdjustmentItemsIdx: index('stock_adjustment_items_adjustment_idx').on(t.adjustmentId),
+  })
+);
+
+export type StockAdjustmentItem = typeof stockAdjustmentItems.$inferSelect;
+
+export const purchaseReturns = sqliteTable(
+  'purchase_returns',
+  {
+    id: text('id').primaryKey(),
+    businessId: text('business_id')
+      .notNull()
+      .references(() => businesses.id),
+    purchaseId: text('purchase_id')
+      .notNull()
+      .references(() => purchases.id),
+    supplierId: text('supplier_id').references(() => suppliers.id),
+    locationId: text('location_id')
+      .notNull()
+      .references(() => locations.id),
+    reference: text('reference').notNull(),
+    reason: text('reason').notNull(),
+    note: text('note').notNull().default(''),
+    totalKobo: integer('total_kobo').notNull().default(0),
+    createdBy: text('created_by'),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  },
+  (t) => ({
+    purchaseReturnsRefUnique: uniqueIndex('purchase_returns_business_reference_unique').on(
+      t.businessId,
+      t.reference
+    ),
+    purchaseReturnsBusinessCreatedIdx: index('purchase_returns_business_created_idx').on(
+      t.businessId,
+      t.createdAt
+    ),
+  })
+);
+
+export type PurchaseReturn = typeof purchaseReturns.$inferSelect;
+
+export const purchaseReturnItems = sqliteTable(
+  'purchase_return_items',
+  {
+    id: text('id').primaryKey(),
+    returnId: text('return_id')
+      .notNull()
+      .references(() => purchaseReturns.id),
+    productId: text('product_id')
+      .notNull()
+      .references(() => products.id),
+    qty: integer('qty').notNull(),
+    unitCostKobo: integer('unit_cost_kobo').notNull(),
+    lineTotalKobo: integer('line_total_kobo').notNull(),
+  },
+  (t) => ({
+    purchaseReturnItemsIdx: index('purchase_return_items_return_idx').on(t.returnId),
+  })
+);
+
+export type PurchaseReturnItem = typeof purchaseReturnItems.$inferSelect;

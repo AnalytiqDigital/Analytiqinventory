@@ -97,4 +97,34 @@ describe('buildImport', () => {
     );
     expect(result.errors[0]?.message).toContain('tender');
   });
+
+  it('maps the opening stock template and branch alias', () => {
+    const result = buildImport('opening-stock', templateCsv('opening-stock'));
+    expect(result.errors).toEqual([]);
+    expect(result.rows[0]).toMatchObject({ sku: 'IND-70', barcode: '', qty: 100, location: '' });
+
+    const aliased = buildImport('opening-stock', 'sku,branch,qty\nIND-70,Main Store,12\n');
+    expect(aliased.errors).toEqual([]);
+    expect(aliased.rows[0]).toMatchObject({ location: 'Main Store', qty: 12 });
+  });
+
+  it('needs a way to identify the product on an opening stock row', () => {
+    const result = buildImport('opening-stock', 'sku,barcode,name,qty\n,,,5\n');
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]?.message).toContain('sku, barcode or product name');
+  });
+
+  it('maps contacts and rejects an unknown type', () => {
+    const ok = buildImport('contacts', templateCsv('contacts'));
+    expect(ok.errors).toEqual([]);
+    expect(ok.rows[0]).toMatchObject({
+      name: 'Ada Obi',
+      type: 'customer',
+      group: 'Wholesale',
+    });
+    expect(ok.rows[1]).toMatchObject({ name: 'Peak Foods', type: 'supplier' });
+
+    const bad = buildImport('contacts', 'name,type\nAcme,partner\n');
+    expect(bad.errors[0]?.message).toContain('customer or supplier');
+  });
 });

@@ -10,7 +10,7 @@ import { PaystackWebhookController } from './paystack-webhook.controller';
 
 const SECRET = 'sk_test_webhook';
 const INPUT = {
-  plan: 'pro' as const,
+  plan: 'standard' as const,
   business: 'Ada Stores',
   name: 'Ada Obi',
   email: 'ada@example.com',
@@ -80,7 +80,7 @@ describe('paystack webhook', () => {
     expect(paid).toMatchObject({ status: 'paid', paidAt: '2026-11-18T12:00:00.000Z' });
     const check = verifyLicenseKey(paid?.licenseKey ?? '', publicKeyPem);
     expect(check.valid).toBe(true);
-    expect(check.payload).toMatchObject({ business: 'Ada Stores', plan: 'pro' });
+    expect(check.payload).toMatchObject({ business: 'Ada Stores', plan: 'standard' });
     const expiry = check.payload?.expires ? Date.parse(check.payload.expires) : 0;
     expect(expiry).toBe(Date.parse('2027-11-18T12:00:00.000Z'));
   });

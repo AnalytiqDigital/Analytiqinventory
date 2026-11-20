@@ -35,6 +35,10 @@ export interface AnalytiqApi {
   authMe: () => Promise<{ user: SessionUser | null }>;
   categories: () => Promise<{ ok: boolean; items?: Category[]; error?: string; code?: string }>;
   categoryCreate: (input: unknown) => Promise<{ ok: boolean; error?: string; code?: string }>;
+  categoryUpdate: (
+    id: string,
+    patch: unknown
+  ) => Promise<{ ok: boolean; category?: Category; error?: string; code?: string }>;
   products: (
     query: unknown
   ) => Promise<{ ok: boolean; items: ProductRow[]; total: number; error?: string; code?: string }>;
@@ -173,6 +177,54 @@ export interface AnalytiqApi {
   ) => Promise<{ ok: boolean; stockLines?: number; error?: string; code?: string }>;
   purchasesCancel: (id: string) => Promise<{ ok: boolean; error?: string; code?: string }>;
 
+  // --- Batch 16: masters, stock adjustments, purchase returns, menu reports ---
+  mastersList: (
+    kind: MasterKind
+  ) => Promise<{ ok: boolean; items?: MasterRow[]; error?: string; code?: string }>;
+  mastersCreate: (
+    kind: MasterKind,
+    input: unknown
+  ) => Promise<{ ok: boolean; item?: MasterRow; error?: string; code?: string }>;
+  mastersUpdate: (
+    kind: MasterKind,
+    id: string,
+    patch: unknown
+  ) => Promise<{ ok: boolean; item?: MasterRow; error?: string; code?: string }>;
+  stockAdjustments: (
+    query: unknown
+  ) => Promise<{
+    ok: boolean;
+    items: StockAdjustmentRow[];
+    total: number;
+    error?: string;
+    code?: string;
+  }>;
+  stockAdjustmentCreate: (
+    input: unknown
+  ) => Promise<{ ok: boolean; id?: string; reference?: string; error?: string; code?: string }>;
+  purchaseReturns: (
+    query: unknown
+  ) => Promise<{
+    ok: boolean;
+    items: PurchaseReturnRow[];
+    total: number;
+    error?: string;
+    code?: string;
+  }>;
+  purchaseReturnCreate: (
+    input: unknown
+  ) => Promise<{
+    ok: boolean;
+    id?: string;
+    reference?: string;
+    totalKobo?: number;
+    error?: string;
+    code?: string;
+  }>;
+  reportsMenu: (
+    query: unknown
+  ) => Promise<{ ok: boolean; report?: MenuReports; error?: string; code?: string }>;
+
   // --- Batch 9: reports and analytics ---
   reportsSummary: (
     query: unknown
@@ -275,6 +327,8 @@ export interface AnalytiqApi {
   importProducts: (input: unknown) => Promise<ImportResponse>;
   importPurchases: (input: unknown) => Promise<ImportResponse>;
   importSales: (input: unknown) => Promise<ImportResponse>;
+  importOpeningStock: (input: unknown) => Promise<ImportResponse>;
+  importContacts: (input: unknown) => Promise<ImportResponse>;
 
   // --- Batch 14: staff, role permissions and expenses ---
   staff: () => Promise<{ ok: boolean; items: StaffMember[]; error?: string; code?: string }>;
@@ -303,6 +357,10 @@ export interface AnalytiqApi {
   }>;
   expenseCreate: (
     input: unknown
+  ) => Promise<{ ok: boolean; expense?: ExpenseRow; error?: string; code?: string }>;
+  expenseUpdate: (
+    id: string,
+    patch: unknown
   ) => Promise<{ ok: boolean; expense?: ExpenseRow; error?: string; code?: string }>;
   expenseDelete: (id: string) => Promise<{ ok: boolean; error?: string; code?: string }>;
 
@@ -420,9 +478,13 @@ export interface AnalytiqApi {
     error?: string;
     code?: string;
   }>;
-  transfers: (
-    query: unknown
-  ) => Promise<{ ok: boolean; items: StockTransferRow[]; total: number; error?: string; code?: string }>;
+  transfers: (query: unknown) => Promise<{
+    ok: boolean;
+    items: StockTransferRow[];
+    total: number;
+    error?: string;
+    code?: string;
+  }>;
   transferCreate: (input: unknown) => Promise<{
     ok: boolean;
     id?: string;
@@ -430,9 +492,13 @@ export interface AnalytiqApi {
     error?: string;
     code?: string;
   }>;
-  debtors: (
-    query: unknown
-  ) => Promise<{ ok: boolean; items: DebtorRow[]; totalKobo: number; error?: string; code?: string }>;
+  debtors: (query: unknown) => Promise<{
+    ok: boolean;
+    items: DebtorRow[];
+    totalKobo: number;
+    error?: string;
+    code?: string;
+  }>;
   debtorRemind: (
     input: unknown
   ) => Promise<{ ok: boolean; result?: DebtorReminderResult; error?: string; code?: string }>;
@@ -845,9 +911,23 @@ export interface CustomerRow {
   creditLimitKobo: number;
   priceTierId: string | null;
   priceTierName: string | null;
+  groupId: string | null;
+  groupName: string | null;
   loyaltyPoints: number;
   isActive: boolean;
   balanceKobo: number;
+  createdAt: string;
+}
+
+export type MasterKind = 'brands' | 'units' | 'warranties' | 'customer-groups';
+
+export interface MasterRow {
+  id: string;
+  name: string;
+  note: string;
+  shortName?: string;
+  durationDays?: number;
+  isActive: boolean;
   createdAt: string;
 }
 
@@ -903,6 +983,148 @@ export interface PurchaseItemRow {
   lineTotalKobo: number;
   batchNo: string;
   expiryDate: string | null;
+}
+
+export interface StockAdjustmentItemRow {
+  id: string;
+  productId: string;
+  productName: string;
+  sku: string | null;
+  qtyDelta: number;
+  note: string;
+}
+
+export interface StockAdjustmentRow {
+  id: string;
+  reference: string;
+  locationId: string;
+  locationName: string;
+  reason: string;
+  note: string;
+  createdBy: string | null;
+  createdByName: string;
+  createdAt: string;
+  items: StockAdjustmentItemRow[];
+}
+
+export interface PurchaseReturnItemRow {
+  id: string;
+  productId: string;
+  productName: string;
+  sku: string | null;
+  qty: number;
+  unitCostKobo: number;
+  lineTotalKobo: number;
+}
+
+export interface PurchaseReturnRow {
+  id: string;
+  reference: string;
+  purchaseId: string;
+  purchaseReference: string;
+  supplierName: string | null;
+  reason: string;
+  note: string;
+  totalKobo: number;
+  createdByName: string;
+  createdAt: string;
+  items: PurchaseReturnItemRow[];
+}
+
+export interface MenuReports {
+  range: { from: string; to: string; locationId: string | null };
+  purchaseSale: {
+    daily: Array<{
+      date: string;
+      salesCount: number;
+      salesKobo: number;
+      purchaseCount: number;
+      purchaseKobo: number;
+    }>;
+    salesCount: number;
+    salesKobo: number;
+    purchaseCount: number;
+    purchaseKobo: number;
+  };
+  tax: {
+    outputKobo: number;
+    inputKobo: number;
+    netKobo: number;
+    daily: Array<{ date: string; outputKobo: number; inputKobo: number }>;
+  };
+  customers: Array<{
+    customerId: string;
+    name: string;
+    phone: string;
+    groupName: string;
+    transactions: number;
+    spendKobo: number;
+    balanceKobo: number;
+  }>;
+  suppliers: Array<{
+    supplierId: string;
+    name: string;
+    purchasesKobo: number;
+    paidKobo: number;
+    returnsKobo: number;
+    balanceKobo: number;
+  }>;
+  receivablesKobo: number;
+  payablesKobo: number;
+  customerGroups: Array<{
+    groupId: string;
+    name: string;
+    customers: number;
+    salesKobo: number;
+    creditKobo: number;
+  }>;
+  stockAdjustments: Array<{
+    id: string;
+    reference: string;
+    date: string;
+    locationName: string;
+    reason: string;
+    lines: number;
+    qtyNet: number;
+  }>;
+  productPurchases: Array<{
+    productId: string;
+    name: string;
+    sku: string;
+    qty: number;
+    costKobo: number;
+  }>;
+  purchasePayments: Array<{
+    id: string;
+    reference: string;
+    supplierName: string;
+    receivedAt: string;
+    totalKobo: number;
+    paidKobo: number;
+    returnsKobo: number;
+    balanceKobo: number;
+  }>;
+  sellPayments: Array<{ method: string; count: number; amountKobo: number }>;
+  registers: Array<{
+    locationId: string;
+    locationName: string;
+    transactions: number;
+    grossKobo: number;
+    taxKobo: number;
+    cashKobo: number;
+    transferKobo: number;
+    posKobo: number;
+    creditKobo: number;
+  }>;
+  salesReps: Array<{
+    userId: string | null;
+    name: string;
+    transactions: number;
+    grossKobo: number;
+    discountKobo: number;
+    taxKobo: number;
+    refundsKobo: number;
+  }>;
 }
 
 export type PaymentMethod = 'cash' | 'transfer' | 'pos' | 'credit';
@@ -981,6 +1203,10 @@ export interface ProductRow {
   barcode: string | null;
   categoryId: string | null;
   categoryName: string | null;
+  brandId: string | null;
+  brandName: string | null;
+  warrantyId: string | null;
+  warrantyName: string | null;
   unit: string;
   costPriceKobo: number;
   sellingPriceKobo: number;

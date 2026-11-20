@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import Image from 'next/image';
 import { licensePlans } from '@analytiq/validation';
 import { DemoRequest } from '../components/DemoRequest';
+import { QuoteRequest } from '../components/QuoteRequest';
 import { formatNaira } from '../lib/format';
 import {
   DEFAULT_INSTALLER_URL,
@@ -61,7 +62,7 @@ const outcomes = [
   {
     stat: 'Reorder',
     title: 'What to buy next',
-    body: 'A low-stock list shows what is running out. Standard and Pro can send it to WhatsApp.',
+    body: 'A low-stock list shows what is running out, and it can send itself to WhatsApp.',
   },
   {
     stat: 'Profit',
@@ -82,8 +83,8 @@ const offlineWorks = [
 const needsInternet = [
   'Buying or renewing a licence, and downloading the installer',
   'Getting app updates',
-  'WhatsApp low-stock alerts and daily summary (Standard and Pro)',
-  'Branch sync between locations (Pro)',
+  'WhatsApp low-stock alerts that you switch on',
+  'The cloud version that links separate locations',
   'Messaging support on WhatsApp',
 ] as const;
 
@@ -93,23 +94,13 @@ const alsoIncluded = [
   'Expenses and finance records',
   'Tax categories',
   'Restaurant tables',
+  'Batches and expiry tracking',
+  'Wholesale price lists',
+  'Loyalty points and customer notes',
+  'Returns and exchanges by receipt',
   'Staff roles and permissions',
-  'Product import from CSV',
-  'Report export to CSV',
-  'WhatsApp alerts on Standard and Pro',
-  'Branch sync on Pro',
-] as const;
-
-const planRows = [
-  { feature: 'Tills', values: ['1', '3', 'Unlimited'] },
-  { feature: 'Business locations', values: ['1', '2', 'Unlimited'] },
-  { feature: 'Staff accounts', values: ['Up to 5', 'Up to 15', 'Unlimited'] },
-  { feature: 'Inventory, POS, receipts and reports', values: ['✓', '✓', '✓'] },
-  { feature: 'Daily automatic backups', values: ['✓', '✓', '✓'] },
-  { feature: 'WhatsApp low-stock alerts and daily summary', values: ['—', '✓', '✓'] },
-  { feature: 'Customer credit and supplier purchasing', values: ['—', '✓', '✓'] },
-  { feature: 'Branch sync and central stock ledger', values: ['—', '—', '✓'] },
-  { feature: 'Support', values: ['WhatsApp', 'WhatsApp', 'Priority WhatsApp'] },
+  'Product import and report export to CSV',
+  'WhatsApp low-stock alerts',
 ] as const;
 
 const setupSteps = [
@@ -157,7 +148,7 @@ const faqs: { question: string; answer: ReactNode }[] = [
   {
     question: 'Are updates and support included?',
     answer:
-      'WhatsApp support is included on every plan. Updates are optional: install the newer version over the old one when you are ready. Your data stays, and we recommend taking a backup first.',
+      'WhatsApp support is included. Updates are optional: install the newer version over the old one when you are ready. Your data stays, and we recommend taking a backup first.',
   },
   {
     question: 'Is installation help included?',
@@ -193,14 +184,21 @@ const faqs: { question: string; answer: ReactNode }[] = [
       'Every report exports to CSV, which opens in Excel or Google Sheets. Your whole database is a standard SQLite file, and every backup is a copy of it that you can move to another drive.',
   },
   {
-    question: 'Can I upgrade from Starter to Standard?',
-    answer:
-      'Yes. Buy the higher plan or message us on WhatsApp and we will arrange it. The new plan’s limits apply from activation.',
+    question: 'Why is a second location a separate quote?',
+    answer: (
+      <>
+        The {formatNaira(licensePlans[0].priceKobo)} package covers one shop location. More than one
+        location runs on our cloud version, which keeps a central stock ledger across branches and
+        needs internet to sync. Every cloud setup is different — number of locations, tills, hosting
+        and migration — so we quote it with you instead of guessing. Use the{' '}
+        <a href="#cloud-quote">cloud quote form</a> and we will reply on WhatsApp.
+      </>
+    ),
   },
   {
-    question: 'How do multiple tills and branches work?',
+    question: 'How do extra tills at the same shop work?',
     answer:
-      'Extra tills can connect to the main computer over your shop’s local network. Separate locations use branch sync on the Pro plan and need internet to send changes between branches. Tills, locations and staff limits are listed in the plan comparison below.',
+      'Extra tills connect to the main computer over your shop’s local network with no extra licence. Separate locations are the cloud version above, which we quote per setup.',
   },
   {
     question: 'What is your refund policy?',
@@ -315,6 +313,7 @@ function Barcode(): JSX.Element {
 }
 
 export default function HomePage() {
+  const plan = licensePlans[0];
   const installer = downloadUrl();
   const demo = whatsappUrl(
     'Hi AnalytIQ, I would like a 20-minute demo of the inventory app on WhatsApp.'
@@ -342,6 +341,11 @@ export default function HomePage() {
                 Book a 20-minute demo
               </a>
             </div>
+            <ul className="hero-pills" aria-label="At a glance">
+              <li>Works offline</li>
+              <li>One package · {formatNaira(plan.priceKobo)}/year</li>
+              <li>Cloud version for 2+ locations</li>
+            </ul>
             <p className="hero-note">
               Windows 10/11 (64-bit) · 4 GB RAM · 500 MB disk · No card needed for the trial
             </p>
@@ -418,6 +422,78 @@ export default function HomePage() {
         </div>
       </section>
 
+      <section className="section section-soft" id="industries">
+        <div className="container">
+          <div className="section-head">
+            <span className="eyebrow">Warehouse · Supermarket · Till</span>
+            <h2>Built for the three places your stock lives</h2>
+            <p>
+              The same records follow every item from the delivery bay, to the shelf, to the
+              customer&apos;s receipt.
+            </p>
+          </div>
+          <div className="industry-grid">
+            <article className="industry-card">
+              <div className="industry-media">
+                <Image
+                  src="/warehouse.png"
+                  alt="Warehouse shelves stacked with cartons while a worker scans stock"
+                  width={1536}
+                  height={1024}
+                  sizes="(max-width: 760px) 100vw, (max-width: 1040px) 50vw, 33vw"
+                />
+                <span className="industry-tag">Warehouse &amp; wholesale</span>
+              </div>
+              <div className="industry-body">
+                <h3>Know what is in every carton</h3>
+                <p>
+                  Receive deliveries from suppliers, record batch numbers and expiry dates, and see
+                  exactly what is left before you promise stock to a customer.
+                </p>
+              </div>
+            </article>
+            <article className="industry-card">
+              <div className="industry-media">
+                <Image
+                  src="/supermarket.png"
+                  alt="Cashier serving a customer at a supermarket checkout"
+                  width={1536}
+                  height={1024}
+                  sizes="(max-width: 760px) 100vw, (max-width: 1040px) 50vw, 33vw"
+                />
+                <span className="industry-tag">Supermarket &amp; provision</span>
+              </div>
+              <div className="industry-body">
+                <h3>Keep the queue moving</h3>
+                <p>
+                  Scan or search, take cash, transfer, POS or customer credit, then print the
+                  receipt while stock drops on its own — all without waiting for a signal.
+                </p>
+              </div>
+            </article>
+            <article className="industry-card">
+              <div className="industry-media">
+                <Image
+                  src="/pos-computer.png"
+                  alt="Point-of-sale computer, receipt printer, scanner and cash drawer on a shop counter"
+                  width={1536}
+                  height={1024}
+                  sizes="(max-width: 760px) 100vw, (max-width: 1040px) 50vw, 33vw"
+                />
+                <span className="industry-tag">POS computer &amp; till</span>
+              </div>
+              <div className="industry-body">
+                <h3>Use the computer you already own</h3>
+                <p>
+                  Any Windows 10 or 11 PC, an Xprinter receipt printer and a USB scanner. Set them
+                  up in Settings, then ring your first sale.
+                </p>
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+
       <section className="section" id="outcomes">
         <div className="container">
           <div className="section-head">
@@ -451,9 +527,55 @@ export default function HomePage() {
             <span className="eyebrow">The screens</span>
             <h2>What the app looks like</h2>
             <p>
-              These panels are illustrations built from AnalytIQ&apos;s screens, with sample data —
-              not screenshots of a customer&apos;s shop. The free trial is the live product.
+              Real screens from the app, followed by illustrated panels with sample data. The free
+              trial is the live product.
             </p>
+          </div>
+
+          <div className="shot-grid">
+            <figure className="shot shot-wide">
+              <div className="shot-media">
+                <Image
+                  src="/app-reports-dashboard.png"
+                  alt="AnalytIQ Reports screen with tiles for gross sales, profit, tax, stock value, low stock and credit"
+                  width={2656}
+                  height={1643}
+                  sizes="(max-width: 1040px) 100vw, 1160px"
+                />
+              </div>
+              <figcaption>
+                <strong>Reports</strong> — sales, profit, tax, stock and credit on one screen, with
+                CSV export. Captured on a fresh install before the first sale.
+              </figcaption>
+            </figure>
+            <figure className="shot">
+              <div className="shot-media">
+                <Image
+                  src="/app-login-market.jpg"
+                  alt="AnalytIQ sign-in screen over a photograph of a Lagos market"
+                  width={1600}
+                  height={992}
+                  sizes="(max-width: 760px) 100vw, (max-width: 1040px) 50vw, 570px"
+                />
+              </div>
+              <figcaption>
+                <strong>Sign in</strong> — the app login screen, dressed for the market.
+              </figcaption>
+            </figure>
+            <figure className="shot">
+              <div className="shot-media">
+                <Image
+                  src="/app-login-supermarket.jpg"
+                  alt="AnalytIQ sign-in screen over a photograph of a supermarket checkout"
+                  width={1600}
+                  height={999}
+                  sizes="(max-width: 760px) 100vw, (max-width: 1040px) 50vw, 570px"
+                />
+              </div>
+              <figcaption>
+                <strong>Sign in</strong> — the same screen on a supermarket lane.
+              </figcaption>
+            </figure>
           </div>
 
           <div className="panel-grid">
@@ -617,7 +739,7 @@ export default function HomePage() {
             </article>
           </div>
           <p className="offline-note">
-            When you reconnect, anything that needs the internet catches up: branch sync sends
+            When you reconnect, anything that needs the internet catches up: the cloud version sends
             changes between locations, and WhatsApp alerts go out on the next scheduled run.
           </p>
         </div>
@@ -754,13 +876,14 @@ export default function HomePage() {
         <div className="container split">
           <div className="illustration-card">
             <Image
-              src="/shop-owner.png"
-              alt="Illustration of a shop owner using AnalytIQ at a boutique counter"
+              src="/supermarket.png"
+              alt="Cashier serving a customer at a supermarket checkout"
               width={1536}
               height={1024}
+              sizes="(max-width: 1040px) 100vw, 45vw"
             />
-            <span className="float-chip chip-top">Stock updated</span>
-            <span className="float-chip chip-bottom">Reorder placed</span>
+            <span className="float-chip chip-top">Sale complete</span>
+            <span className="float-chip chip-bottom">Stock updated</span>
           </div>
           <div className="split-copy">
             <span className="eyebrow">Who it is for</span>
@@ -777,7 +900,7 @@ export default function HomePage() {
               <li>Electronics or phone shop</li>
               <li>Wholesaler</li>
               <li>Restaurant or bar</li>
-              <li>Multi-branch business (Pro)</li>
+              <li>Multi-branch business (cloud quote)</li>
             </ul>
             <a className="text-link" href="/docs/usage">
               See how a day looks in AnalytIQ →
@@ -790,14 +913,26 @@ export default function HomePage() {
         <div className="container">
           <div className="section-head">
             <span className="eyebrow">Pricing</span>
-            <h2>One payment per year, in Naira</h2>
+            <h2>One package. One price.</h2>
             <p>
-              Every plan works offline. Start with the 14-day trial, then pick the limits you need.
+              Everything that runs in the shop is included: {formatNaira(plan.priceKobo)} per year
+              for one location, paid once. Start with the 14-day free trial.
             </p>
           </div>
-          <div className="package-grid">
-            {licensePlans.map((plan) => (
-              <article className="package" key={plan.id}>
+
+          <div className="pricing-grid">
+            <article className="package package-single">
+              <span className="package-badge">Everything included</span>
+              <div className="package-media">
+                <Image
+                  src="/pos-computer.png"
+                  alt="Point-of-sale computer with receipt printer, scanner and cash drawer"
+                  width={1536}
+                  height={1024}
+                  sizes="(max-width: 1040px) 100vw, 52vw"
+                />
+              </div>
+              <div className="package-body">
                 <h3>{plan.name}</h3>
                 <p className="package-tagline">{plan.tagline}</p>
                 <div className="package-price">
@@ -809,47 +944,63 @@ export default function HomePage() {
                     <li key={feature}>{feature}</li>
                   ))}
                 </ul>
-                <a className="btn btn-outline btn-block" href={`/checkout?plan=${plan.id}`}>
-                  Choose {plan.name}
+                <a className="btn btn-primary btn-block" href="/checkout">
+                  Buy the licence
                 </a>
-              </article>
-            ))}
+                <p className="fine-print package-footnote">
+                  Not ready to pay? <a href="/download">Start the 14-day free trial</a> first.
+                </p>
+              </div>
+            </article>
+
+            <aside className="cloud-card">
+              <span className="eyebrow">More than one location?</span>
+              <h3>The cloud version is quoted, not sold off the shelf</h3>
+              <p>
+                Our cloud version links every branch to one stock ledger and a central view of
+                products, prices and transfers. Each setup depends on how many locations and tills
+                you have, so we price it with you.
+              </p>
+              <ul className="check-list">
+                <li>Two or more locations sharing one catalogue</li>
+                <li>Stock transfers and central reporting across branches</li>
+                <li>Onboarding, migration and training planned with you</li>
+              </ul>
+              <a className="btn btn-primary btn-block" href="#cloud-quote">
+                Request a cloud quote
+              </a>
+              <p className="fine-print">
+                A written quote comes back on WhatsApp. No card needed to ask.
+              </p>
+            </aside>
           </div>
 
-          <div className="compare-wrap">
-            <table className="compare">
-              <caption>Compare the plans</caption>
-              <thead>
-                <tr>
-                  <th scope="col">Feature</th>
-                  <th scope="col">Starter</th>
-                  <th scope="col">Standard</th>
-                  <th scope="col">Pro</th>
-                </tr>
-              </thead>
-              <tbody>
-                {planRows.map((row) => (
-                  <tr key={row.feature}>
-                    <th scope="row">{row.feature}</th>
-                    {row.values.map((value, index) => (
-                      <td key={index}>{value}</td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="quote-panel" id="cloud-quote">
+            <div className="quote-copy">
+              <span className="eyebrow">Cloud quote</span>
+              <h3>Tell us about your locations</h3>
+              <p>
+                Fill this in and the details open in WhatsApp, ready to send. We reply during
+                working hours (West Africa Time) with a written quote for your setup.
+              </p>
+              <ul className="check-list">
+                <li>Number of locations and tills</li>
+                <li>How the branches should sync</li>
+                <li>Migration from paper, Excel or another POS</li>
+              </ul>
+            </div>
+            <QuoteRequest />
           </div>
 
           <div className="callout pricing-callout">
             <strong>When your 12 months end:</strong> the app opens on the licence screen and
             selling pauses. Your records stay on the PC. Buy a new 12-month key from this site,
-            paste it in, and you are back in. Priority support means your WhatsApp messages are
-            handled first during working hours.
+            paste it in, and you are back in.
           </div>
 
           <p className="packages-note">
             Pay by card, transfer or USSD through Paystack. Your licence key appears on screen
-            straight after payment. Need help choosing?{' '}
+            straight after payment. Questions about the package?{' '}
             <a href={support} target="_blank" rel="noreferrer">
               Message us on WhatsApp
             </a>

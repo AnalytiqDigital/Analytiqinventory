@@ -11,6 +11,8 @@ const TITLES: Record<ImportKind, string> = {
   products: 'Import products',
   purchases: 'Import purchases',
   sales: 'Import sales',
+  'opening-stock': 'Import opening stock',
+  contacts: 'Import contacts',
 };
 
 const MAX_ROWS = 5000;
@@ -83,7 +85,11 @@ export function ImportDialog({
         ? await ipc.importProducts(payload)
         : kind === 'purchases'
           ? await ipc.importPurchases(payload)
-          : await ipc.importSales(payload);
+          : kind === 'sales'
+            ? await ipc.importSales(payload)
+            : kind === 'opening-stock'
+              ? await ipc.importOpeningStock(payload)
+              : await ipc.importContacts(payload);
     setImporting(false);
     setResult(res);
     if (res.created > 0) onImported();
@@ -98,14 +104,22 @@ export function ImportDialog({
     <Modal open={open} title={TITLES[kind]} onClose={onClose}>
       <div className="space-y-3 text-sm">
         <p className="text-slate-600 dark:text-slate-300">
-          Upload a CSV file with one row per{' '}
-          {kind === 'products' ? 'product' : kind === 'purchases' ? 'purchase line' : 'sale line'}.
-          Amounts are in naira (e.g. 450 or 1,250.50).{' '}
-          {kind === 'sales'
-            ? 'Rows that share a receipt number are imported as one sale.'
-            : kind === 'purchases'
-              ? 'Rows that share a reference become one purchase.'
-              : 'New categories are created automatically.'}
+          {kind === 'opening-stock'
+            ? 'Upload current stock counts. Products are matched by barcode, then SKU, then name; the quantity becomes the on-hand total for that branch (blank branch = default branch).'
+            : kind === 'contacts'
+              ? 'Upload a list of people and businesses. Type must be customer or supplier; customers can join an existing group by name.'
+              : (
+                  <>
+                    Upload a CSV file with one row per{' '}
+                    {kind === 'products' ? 'product' : kind === 'purchases' ? 'purchase line' : 'sale line'}.
+                    Amounts are in naira (e.g. 450 or 1,250.50).{' '}
+                    {kind === 'sales'
+                      ? 'Rows that share a receipt number are imported as one sale.'
+                      : kind === 'purchases'
+                        ? 'Rows that share a reference become one purchase.'
+                        : 'New categories are created automatically.'}
+                  </>
+                )}
         </p>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -197,7 +211,14 @@ export function ImportDialog({
           >
             {result.ok ? (
               <p className="font-semibold">
-                Imported {result.created} {kind === 'products' ? 'product' : 'record'}
+                Imported {result.created}{' '}
+                {kind === 'products'
+                  ? 'product'
+                  : kind === 'contacts'
+                    ? 'contact'
+                    : kind === 'opening-stock'
+                      ? 'stock line'
+                      : 'record'}
                 {result.created === 1 ? '' : 's'}
                 {result.failed > 0 ? ` · ${result.failed} failed` : ''}.
               </p>

@@ -36,6 +36,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(organisation) }}
         />
+        <div className="announce">
+          Offline-first Windows software · 14-day free trial · Support on WhatsApp, call and email
+        </div>
         <header className="site-header">
           <div className="container">
             <a className="brand" href="/">
@@ -51,11 +54,14 @@ export default function RootLayout({ children }: { children: ReactNode }) {
               <a className="nav-hide" href="/#offline">
                 Offline
               </a>
-              <a className="nav-hide" href="/#hardware">
-                Hardware
+              <a className="nav-hide" href="/#industries">
+                Who it is for
               </a>
               <a className="nav-hide" href="/#packages">
                 Pricing
+              </a>
+              <a className="nav-hide" href="/#cloud-quote">
+                Cloud
               </a>
               <a className="nav-hide" href="/docs">
                 Docs
@@ -93,9 +99,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <div className="footer-links">
               <h4>Product</h4>
               <a href="/#features">Features</a>
+              <a href="/#industries">Who it is for</a>
               <a href="/#offline">What works offline</a>
-              <a href="/#hardware">Hardware</a>
               <a href="/#packages">Pricing</a>
+              <a href="/#cloud-quote">Cloud quote</a>
               <a href="/checkout">Buy a licence</a>
             </div>
             <div className="footer-links">

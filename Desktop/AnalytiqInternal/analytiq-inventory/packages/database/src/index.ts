@@ -28,3 +28,7 @@ export * from './returns';
 export * from './transfers';
 export * from './debtors';
 export * from './cloudBackup';
+export * from './masters';
+export * from './stockAdjustments';
+export * from './purchaseReturns';
+export * from './menuReports';

@@ -1,4 +1,4 @@
-import { productSchema, type ProductInput } from '@analytiq/validation';
+import { productSchema, type ImportKind, type ProductInput } from '@analytiq/validation';
 import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -23,6 +23,8 @@ interface ProductFormValues {
   sku: string;
   barcode: string;
   categoryId: string;
+  brandId: string;
+  warrantyId: string;
   taxCategoryId: string;
   imagePath: string;
   unit: string;
@@ -40,6 +42,8 @@ function toForm(p?: ProductRow): ProductFormValues {
     sku: p?.sku ?? '',
     barcode: p?.barcode ?? '',
     categoryId: p?.categoryId ?? '',
+    brandId: p?.brandId ?? '',
+    warrantyId: p?.warrantyId ?? '',
     taxCategoryId: p?.taxCategoryId ?? '',
     imagePath: p?.imagePath ?? '',
     unit: p?.unit ?? 'pcs',
@@ -66,7 +70,7 @@ export function ProductsPage(): JSX.Element {
   const [includeInactive, setIncludeInactive] = useState(false);
   const [page, setPage] = useState(1);
   const [modalOpen, setModalOpen] = useState(false);
-  const [importOpen, setImportOpen] = useState(false);
+  const [importKind, setImportKind] = useState<ImportKind | null>(null);
   const [editing, setEditing] = useState<ProductRow | null>(null);
   const [imageBusy, setImageBusy] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
@@ -110,6 +114,33 @@ export function ProductsPage(): JSX.Element {
     queryFn: fetchTaxCategories,
   });
 
+  const brandsQuery = useQuery({
+    queryKey: ['masters', 'brands'],
+    queryFn: async () => {
+      const res = await ipc.mastersList('brands');
+      if (!res.ok) throw new Error(res.error ?? 'Could not load brands');
+      return res.items;
+    },
+  });
+
+  const warrantiesQuery = useQuery({
+    queryKey: ['masters', 'warranties'],
+    queryFn: async () => {
+      const res = await ipc.mastersList('warranties');
+      if (!res.ok) throw new Error(res.error ?? 'Could not load warranties');
+      return res.items;
+    },
+  });
+
+  const unitsQuery = useQuery({
+    queryKey: ['masters', 'units'],
+    queryFn: async () => {
+      const res = await ipc.mastersList('units');
+      if (!res.ok) return [];
+      return res.items;
+    },
+  });
+
   const form = useForm<ProductFormValues>({
     defaultValues: toForm(),
   });
@@ -120,6 +151,8 @@ export function ProductsPage(): JSX.Element {
         sku: true,
         barcode: true,
         categoryId: true,
+        brandId: true,
+        warrantyId: true,
         taxCategoryId: true,
         imagePath: true,
         costPriceKobo: true,
@@ -165,6 +198,8 @@ export function ProductsPage(): JSX.Element {
         sku: values.sku.trim() === '' ? null : values.sku.trim(),
         barcode: values.barcode.trim() === '' ? null : values.barcode.trim(),
         categoryId: values.categoryId === '' ? null : values.categoryId,
+        brandId: values.brandId === '' ? null : values.brandId,
+        warrantyId: values.warrantyId === '' ? null : values.warrantyId,
         taxCategoryId: values.taxCategoryId === '' ? null : values.taxCategoryId,
         imagePath: values.imagePath,
         unit: values.unit.trim() || 'pcs',
@@ -236,10 +271,18 @@ export function ProductsPage(): JSX.Element {
             <Button
               variant="secondary"
               size="lg"
-              onClick={() => setImportOpen(true)}
+              onClick={() => setImportKind('products')}
             >
               <Upload className="h-4 w-4" />
-              Import CSV
+              Import products CSV
+            </Button>
+            <Button
+              variant="secondary"
+              size="lg"
+              onClick={() => setImportKind('opening-stock')}
+            >
+              <Upload className="h-4 w-4" />
+              Import opening stock
             </Button>
             <Button
               size="lg"
@@ -517,7 +560,17 @@ export function ProductsPage(): JSX.Element {
               <label className="mb-1 block text-xs font-medium" htmlFor="product-unit">
                 Unit
               </label>
-              <Input id="product-unit" {...form.register('unit')} error={form.formState.errors.unit?.message} />
+              <Input
+                id="product-unit"
+                list="product-unit-options"
+                {...form.register('unit')}
+                error={form.formState.errors.unit?.message}
+              />
+              <datalist id="product-unit-options">
+                {(unitsQuery.data ?? []).map((unit) => (
+                  <option key={unit.id} value={unit.name} />
+                ))}
+              </datalist>
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium" htmlFor="product-category">
@@ -534,6 +587,47 @@ export function ProductsPage(): JSX.Element {
                     {c.name}
                   </option>
                 ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium" htmlFor="product-brand">
+                Brand
+              </label>
+              <select
+                id="product-brand"
+                className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-900"
+                {...form.register('brandId')}
+              >
+                <option value="">No brand</option>
+                {(brandsQuery.data ?? [])
+                  .filter((brand) => brand.isActive)
+                  .map((brand) => (
+                    <option key={brand.id} value={brand.id}>
+                      {brand.name}
+                    </option>
+                  ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium" htmlFor="product-warranty">
+                Warranty
+              </label>
+              <select
+                id="product-warranty"
+                className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-900"
+                {...form.register('warrantyId')}
+              >
+                <option value="">No warranty</option>
+                {(warrantiesQuery.data ?? [])
+                  .filter((warranty) => warranty.isActive)
+                  .map((warranty) => (
+                    <option key={warranty.id} value={warranty.id}>
+                      {warranty.name}
+                    </option>
+                  ))}
               </select>
             </div>
           </div>
@@ -624,14 +718,16 @@ export function ProductsPage(): JSX.Element {
       </Modal>
 
       <ImportDialog
-        open={importOpen}
-        kind="products"
-        onClose={() => setImportOpen(false)}
+        open={importKind !== null}
+        kind={importKind ?? 'products'}
+        onClose={() => setImportKind(null)}
         onImported={() => {
           void queryClient.invalidateQueries({ queryKey: ['products'] });
           void queryClient.invalidateQueries({ queryKey: ['categories'] });
           void queryClient.invalidateQueries({ queryKey: ['pos-products'] });
           void queryClient.invalidateQueries({ queryKey: ['dashboard-levels'] });
+          void queryClient.invalidateQueries({ queryKey: ['levels'] });
+          void queryClient.invalidateQueries({ queryKey: ['movements'] });
         }}
       />
     </div>

@@ -1,6 +1,6 @@
 // Batch 14: expenses ledger for the profit statement.
 
-import { expenseCreateSchema, expenseQuerySchema } from '@analytiq/validation';
+import { expenseCreateSchema, expenseQuerySchema, expenseUpdateSchema } from '@analytiq/validation';
 import { and, desc, eq, gte, lte } from 'drizzle-orm';
 import { newId } from './auth';
 import type { LocalDb } from './connection';
@@ -163,6 +163,92 @@ export async function createExpense(
     .from(expenses)
     .leftJoin(users, eq(users.id, expenses.createdBy))
     .where(eq(expenses.id, id))
+    .limit(1);
+  const row = rows[0];
+  if (!row) throw codedError('Expense not found after save', 'EXPENSE_NOT_FOUND');
+  return { expense: toView(row) };
+}
+
+export async function updateExpense(
+  local: LocalDb,
+  businessId: string,
+  actorId: string,
+  grants: string[],
+  expenseId: string,
+  raw: unknown
+): Promise<{ expense: ExpenseView }> {
+  requirePermission(new Set(grants), 'finance.manage');
+  const input = expenseUpdateSchema.parse(raw);
+
+  const [existing] = await local.db
+    .select({
+      id: expenses.id,
+      category: expenses.category,
+      note: expenses.note,
+      amountKobo: expenses.amountKobo,
+      paidAt: expenses.paidAt,
+      locationId: expenses.locationId,
+      version: expenses.version,
+    })
+    .from(expenses)
+    .where(and(eq(expenses.id, expenseId), eq(expenses.businessId, businessId)))
+    .limit(1);
+  if (!existing) throw codedError('Expense not found', 'EXPENSE_NOT_FOUND');
+
+  const locationId =
+    input.locationId === undefined ? existing.locationId : (input.locationId ?? null);
+  if (locationId) {
+    const [location] = await local.db
+      .select({ id: locations.id })
+      .from(locations)
+      .where(and(eq(locations.id, locationId), eq(locations.businessId, businessId)))
+      .limit(1);
+    if (!location) throw codedError('Location not found', 'LOCATION_NOT_FOUND');
+  }
+
+  const next = {
+    category: input.category ?? existing.category,
+    note: input.note ?? existing.note,
+    amountKobo: input.amountKobo ?? existing.amountKobo,
+    paidAt: input.paidAt ?? existing.paidAt,
+  };
+
+  const write = local.raw.transaction(() => {
+    local.db
+      .update(expenses)
+      .set({ ...next, locationId, version: existing.version + 1, updatedAt: new Date() })
+      .where(and(eq(expenses.id, expenseId), eq(expenses.businessId, businessId)))
+      .run();
+    writeAuditSync(local, {
+      businessId,
+      userId: actorId,
+      action: 'expense.update',
+      entity: 'expense',
+      entityId: expenseId,
+      details: {
+        category: next.category,
+        amountKobo: next.amountKobo,
+        previousAmountKobo: existing.amountKobo,
+      },
+    });
+  });
+  write();
+
+  const rows = await local.db
+    .select({
+      id: expenses.id,
+      category: expenses.category,
+      note: expenses.note,
+      amountKobo: expenses.amountKobo,
+      paidAt: expenses.paidAt,
+      locationId: expenses.locationId,
+      createdBy: expenses.createdBy,
+      createdByName: users.name,
+      createdAt: expenses.createdAt,
+    })
+    .from(expenses)
+    .leftJoin(users, eq(users.id, expenses.createdBy))
+    .where(eq(expenses.id, expenseId))
     .limit(1);
   const row = rows[0];
   if (!row) throw codedError('Expense not found after save', 'EXPENSE_NOT_FOUND');

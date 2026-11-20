@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { closeLocalDb, openLocalDb, type LocalDb } from './connection';
-import { createExpense, deleteExpense, listExpenses } from './finance';
+import { createExpense, deleteExpense, listExpenses, updateExpense } from './finance';
 import { createProduct } from './inventory';
 import { runMigrations } from './migrate';
 import { getReportsSummary } from './reports';
@@ -247,6 +247,45 @@ describe('batch 14 staff and finance', () => {
     const after = await listExpenses(local, businessId, GRANTS, {});
     expect(after.items).toHaveLength(1);
     expect(after.totalKobo).toBe(20_000);
+  });
+
+  it('edits an expense and refuses edits without finance.manage', async () => {
+    const { expense } = await createExpense(local, businessId, userId, GRANTS, {
+      category: 'Rent',
+      note: 'Shop rent',
+      amountKobo: 500_000,
+    });
+
+    const { expense: updated } = await updateExpense(
+      local,
+      businessId,
+      userId,
+      GRANTS,
+      expense.id,
+      {
+        amountKobo: 175_000,
+        note: 'Corrected rent',
+      }
+    );
+    expect(updated).toMatchObject({
+      category: 'Rent',
+      note: 'Corrected rent',
+      amountKobo: 175_000,
+    });
+
+    const listed = await listExpenses(local, businessId, GRANTS, {});
+    expect(listed.totalKobo).toBe(175_000);
+
+    await expectCode(
+      updateExpense(local, businessId, userId, ['reports.view'], expense.id, {
+        amountKobo: 1,
+      }),
+      'FORBIDDEN'
+    );
+    await expectCode(
+      updateExpense(local, businessId, userId, GRANTS, 'missing-expense', { amountKobo: 1 }),
+      'EXPENSE_NOT_FOUND'
+    );
   });
 
   it('reports every product and flags low stock with order suggestions', async () => {

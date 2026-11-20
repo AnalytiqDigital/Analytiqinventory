@@ -1049,6 +1049,150 @@ describe('LAN server API', () => {
     );
   });
 
+  it('serves masters, stock adjustments, returns, contact imports and menu reports', async () => {
+    const { token } = await signIn();
+    const productId = await newProduct(token);
+
+    const brandRes = await call('POST', '/api/masters/brands', { name: 'Dangote' }, token);
+    expect(brandRes.statusCode).toBe(200);
+    const brandId = (brandRes.json() as { item: { id: string } }).item.id;
+
+    const brandsRes = await call('GET', '/api/masters/brands', undefined, token);
+    expect(brandsRes.statusCode).toBe(200);
+    expect(
+      (brandsRes.json() as { items: Array<{ name: string }> }).items.map((b) => b.name)
+    ).toContain('Dangote');
+
+    const renamed = await call(
+      'PATCH',
+      `/api/masters/brands/${brandId}`,
+      { name: 'Dangote Group' },
+      token
+    );
+    expect(renamed.statusCode).toBe(200);
+    expect((renamed.json() as { item: { name: string } }).item.name).toBe('Dangote Group');
+
+    for (const [kind, body] of [
+      ['units', { name: 'Carton', shortName: 'ctn' }],
+      ['warranties', { name: '6 months', durationDays: 180 }],
+      ['customer-groups', { name: 'Wholesale', note: 'Bulk buyers' }],
+    ] as const) {
+      const created = await call('POST', `/api/masters/${kind}`, body, token);
+      expect(created.statusCode).toBe(200);
+    }
+
+    const unknown = await call('GET', '/api/masters/nope', undefined, token);
+    expect(unknown.statusCode).toBe(400);
+    expect(unknown.json()).toMatchObject({ ok: false });
+
+    const purchaseRes = await call(
+      'POST',
+      '/api/purchases',
+      { items: [{ productId, qty: 5, unitCostKobo: 32000 }] },
+      token
+    );
+    expect(purchaseRes.statusCode).toBe(200);
+    const purchaseId = (purchaseRes.json() as { id: string }).id;
+
+    const received = await call('POST', `/api/purchases/${purchaseId}/receive`, {}, token);
+    expect(received.statusCode).toBe(200);
+
+    const opening = await call(
+      'POST',
+      '/api/import/opening-stock',
+      { rows: [{ sku: 'IND-70', qty: 20 }] },
+      token
+    );
+    expect(opening.statusCode).toBe(200);
+    expect(opening.json()).toMatchObject({ ok: true, created: 1, failed: 0 });
+
+    const again = await call(
+      'POST',
+      '/api/import/opening-stock',
+      { rows: [{ sku: 'IND-70', qty: 20 }] },
+      token
+    );
+    expect(again.json()).toMatchObject({ ok: true, created: 1, failed: 0 });
+
+    const contacts = await call(
+      'POST',
+      '/api/import/contacts',
+      {
+        rows: [
+          { name: 'Ada Obi', type: 'customer', group: 'Wholesale' },
+          { name: 'Peak Foods', type: 'supplier' },
+        ],
+      },
+      token
+    );
+    expect(contacts.statusCode).toBe(200);
+    expect(contacts.json()).toMatchObject({ ok: true, created: 2, failed: 0 });
+
+    const returned = await call(
+      'POST',
+      '/api/purchase-returns',
+      { purchaseId, reason: 'Damaged in transit', items: [{ productId, qty: 1 }] },
+      token
+    );
+    expect(returned.statusCode).toBe(200);
+    expect(returned.json()).toMatchObject({ ok: true, totalKobo: 32000 });
+
+    const adjusted = await call(
+      'POST',
+      '/api/stock-adjustments',
+      { reason: 'Damaged', items: [{ productId, qtyDelta: -1 }] },
+      token
+    );
+    expect(adjusted.statusCode).toBe(200);
+    expect(adjusted.json()).toMatchObject({ ok: true });
+
+    const overdraw = await call(
+      'POST',
+      '/api/stock-adjustments',
+      { reason: 'Typo', items: [{ productId, qtyDelta: -1000 }] },
+      token
+    );
+    expect(overdraw.statusCode).toBe(400);
+    expect(overdraw.json()).toMatchObject({ ok: false, code: 'NEGATIVE_STOCK' });
+
+    const onHand = await call('GET', '/api/products/by-barcode?code=IND-70', undefined, token);
+    expect((onHand.json() as { product: { onHand: number } }).product.onHand).toBe(18);
+
+    const adjustments = await call('GET', '/api/stock-adjustments', undefined, token);
+    expect(adjustments.statusCode).toBe(200);
+    const adjustmentList = (adjustments.json() as { items: Array<{ reference: string }> }).items;
+    expect(adjustmentList).toHaveLength(1);
+
+    const returns = await call('GET', '/api/purchase-returns', undefined, token);
+    expect(returns.statusCode).toBe(200);
+    expect((returns.json() as { items: unknown[] }).items).toHaveLength(1);
+
+    const menu = await call('GET', '/api/reports/menu', undefined, token);
+    expect(menu.statusCode).toBe(200);
+    const report = (
+      menu.json() as {
+        report: {
+          purchaseSale: { purchaseCount: number; purchaseKobo: number; salesKobo: number };
+          stockAdjustments: Array<{ reason: string }>;
+          purchasePayments: Array<{ totalKobo: number; returnsKobo: number; balanceKobo: number }>;
+          customers: Array<{ name: string; groupName: string }>;
+          productPurchases: Array<{ qty: number; costKobo: number }>;
+        };
+      }
+    ).report;
+    expect(report.purchaseSale.purchaseCount).toBe(1);
+    expect(report.purchaseSale.purchaseKobo).toBe(160000);
+    expect(report.purchaseSale.salesKobo).toBe(0);
+    expect(report.stockAdjustments[0]?.reason).toBe('Damaged');
+    expect(report.purchasePayments[0]).toMatchObject({
+      totalKobo: 160000,
+      returnsKobo: 32000,
+      balanceKobo: 128000,
+    });
+    expect(report.customers[0]).toMatchObject({ name: 'Ada Obi', groupName: 'Wholesale' });
+    expect(report.productPurchases[0]).toMatchObject({ qty: 5, costKobo: 160000 });
+  });
+
   it('manages staff, role permissions and expenses', async () => {
     const { token } = await signIn();
     const productId = await newProduct(token);
@@ -1098,8 +1242,22 @@ describe('LAN server API', () => {
       token
     );
     expect(expense.statusCode).toBe(200);
+    const expenseId = (expense.json() as { expense: { id: string } }).expense.id;
     const listed = await call('GET', '/api/finance/expenses', undefined, token);
     expect((listed.json() as { totalKobo: number }).totalKobo).toBe(500_000);
+
+    const patched = await call(
+      'PATCH',
+      `/api/finance/expenses/${expenseId}`,
+      { amountKobo: 450_000, note: 'Rent corrected' },
+      token
+    );
+    expect(patched.statusCode).toBe(200);
+    expect(
+      (patched.json() as { expense: { amountKobo: number; note: string } }).expense
+    ).toMatchObject({ amountKobo: 450_000, note: 'Rent corrected' });
+    const relisted = await call('GET', '/api/finance/expenses', undefined, token);
+    expect((relisted.json() as { totalKobo: number }).totalKobo).toBe(450_000);
 
     const strip = await call(
       'PATCH',

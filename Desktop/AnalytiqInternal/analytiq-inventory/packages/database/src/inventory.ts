@@ -21,7 +21,7 @@ import { newId } from './auth';
 import type { LocalDb } from './connection';
 import { requirePermission } from './permissions';
 import { writeAuditSync } from './service';
-import { categories, locations, products, stockMovements, taxCategories } from './schema';
+import { brands, categories, locations, products, stockMovements, taxCategories, warranties } from './schema';
 
 export const STOCK_KINDS = [
   'opening',
@@ -32,6 +32,7 @@ export const STOCK_KINDS = [
   'return',
   'transfer_out',
   'transfer_in',
+  'purchase_return',
 ] as const;
 export type StockKind = (typeof STOCK_KINDS)[number];
 
@@ -147,6 +148,57 @@ export async function createCategory(
   return { id, name, description: input.description };
 }
 
+/** Rename or re-describe a category. Archived categories are not a concept:
+ * products keep their reference, so renaming is safe. */
+export async function updateCategory(
+  local: LocalDb,
+  businessId: string,
+  userId: string,
+  grants: string[],
+  categoryId: string,
+  raw: unknown,
+): Promise<CategoryView> {
+  requirePermission(new Set(grants), 'products.manage');
+  const input = z
+    .object({
+      name: z.string().trim().min(2, 'Category name is required').max(120).optional(),
+      description: z.string().trim().max(500).optional(),
+    })
+    .parse(raw);
+  const [existing] = await local.db
+    .select()
+    .from(categories)
+    .where(and(eq(categories.id, categoryId), eq(categories.businessId, businessId)))
+    .limit(1);
+  if (!existing) throw codedError('Category not found', 'CATEGORY_NOT_FOUND');
+  const name = input.name ?? existing.name;
+  if (input.name !== undefined) {
+    const [dup] = await local.db
+      .select({ id: categories.id })
+      .from(categories)
+      .where(and(eq(categories.businessId, businessId), eq(categories.name, name)))
+      .limit(1);
+    if (dup && dup.id !== categoryId) {
+      throw codedError(`Category "${name}" already exists`, 'CATEGORY_EXISTS');
+    }
+  }
+  const description = input.description ?? existing.description;
+  local.db
+    .update(categories)
+    .set({ name, description, updatedAt: new Date() })
+    .where(eq(categories.id, categoryId))
+    .run();
+  writeAuditSync(local, {
+    businessId,
+    userId,
+    action: 'category.update',
+    entity: 'category',
+    entityId: categoryId,
+    details: { name },
+  });
+  return { id: categoryId, name, description };
+}
+
 // --- products ----------------------------------------------------------------
 
 export interface ProductWithStock {
@@ -156,6 +208,10 @@ export interface ProductWithStock {
   barcode: string | null;
   categoryId: string | null;
   categoryName: string | null;
+  brandId: string | null;
+  brandName: string | null;
+  warrantyId: string | null;
+  warrantyName: string | null;
   unit: string;
   costPriceKobo: number;
   sellingPriceKobo: number;
@@ -228,6 +284,10 @@ export async function listProducts(
       barcode: products.barcode,
       categoryId: products.categoryId,
       categoryName: categories.name,
+      brandId: products.brandId,
+      brandName: brands.name,
+      warrantyId: products.warrantyId,
+      warrantyName: warranties.name,
       unit: products.unit,
       costPriceKobo: products.costPriceKobo,
       sellingPriceKobo: products.sellingPriceKobo,
@@ -240,6 +300,8 @@ export async function listProducts(
     })
     .from(products)
     .leftJoin(categories, eq(products.categoryId, categories.id))
+    .leftJoin(brands, eq(products.brandId, brands.id))
+    .leftJoin(warranties, eq(products.warrantyId, warranties.id))
     .where(where)
     .orderBy(products.name)
     .limit(q.pageSize)
@@ -267,6 +329,10 @@ async function getProductRow(local: LocalDb, businessId: string, productId: stri
       barcode: products.barcode,
       categoryId: products.categoryId,
       categoryName: categories.name,
+      brandId: products.brandId,
+      brandName: brands.name,
+      warrantyId: products.warrantyId,
+      warrantyName: warranties.name,
       unit: products.unit,
       costPriceKobo: products.costPriceKobo,
       sellingPriceKobo: products.sellingPriceKobo,
@@ -279,6 +345,8 @@ async function getProductRow(local: LocalDb, businessId: string, productId: stri
     })
     .from(products)
     .leftJoin(categories, eq(products.categoryId, categories.id))
+    .leftJoin(brands, eq(products.brandId, brands.id))
+    .leftJoin(warranties, eq(products.warrantyId, warranties.id))
     .where(and(eq(products.id, productId), eq(products.businessId, businessId)))
     .limit(1);
   return row ?? null;
@@ -331,6 +399,10 @@ export async function productByBarcode(
       barcode: products.barcode,
       categoryId: products.categoryId,
       categoryName: categories.name,
+      brandId: products.brandId,
+      brandName: brands.name,
+      warrantyId: products.warrantyId,
+      warrantyName: warranties.name,
       unit: products.unit,
       costPriceKobo: products.costPriceKobo,
       sellingPriceKobo: products.sellingPriceKobo,
@@ -343,6 +415,8 @@ export async function productByBarcode(
     })
     .from(products)
     .leftJoin(categories, eq(products.categoryId, categories.id))
+    .leftJoin(brands, eq(products.brandId, brands.id))
+    .leftJoin(warranties, eq(products.warrantyId, warranties.id))
     .where(
       and(
         eq(products.businessId, businessId),
@@ -407,6 +481,34 @@ async function assertCategoryInBusiness(
   if (!row) throw codedError('Category not found', 'CATEGORY_NOT_FOUND');
 }
 
+async function assertBrandInBusiness(
+  local: LocalDb,
+  businessId: string,
+  brandId: string | null | undefined,
+): Promise<void> {
+  if (brandId == null) return;
+  const [row] = await local.db
+    .select({ id: brands.id })
+    .from(brands)
+    .where(and(eq(brands.id, brandId), eq(brands.businessId, businessId)))
+    .limit(1);
+  if (!row) throw codedError('Brand not found', 'BRAND_NOT_FOUND');
+}
+
+async function assertWarrantyInBusiness(
+  local: LocalDb,
+  businessId: string,
+  warrantyId: string | null | undefined,
+): Promise<void> {
+  if (warrantyId == null) return;
+  const [row] = await local.db
+    .select({ id: warranties.id })
+    .from(warranties)
+    .where(and(eq(warranties.id, warrantyId), eq(warranties.businessId, businessId)))
+    .limit(1);
+  if (!row) throw codedError('Warranty not found', 'WARRANTY_NOT_FOUND');
+}
+
 export async function createProduct(
   local: LocalDb,
   businessId: string,
@@ -417,6 +519,8 @@ export async function createProduct(
   requirePermission(new Set(grants), 'products.manage');
   const input = productCreateSchema.parse(raw);
   await assertCategoryInBusiness(local, businessId, input.categoryId);
+  await assertBrandInBusiness(local, businessId, input.brandId);
+  await assertWarrantyInBusiness(local, businessId, input.warrantyId);
   await assertTaxCategoryInBusiness(local, businessId, input.taxCategoryId);
   await assertUniqueCode(local, businessId, 'sku', input.sku);
   await assertUniqueCode(local, businessId, 'barcode', input.barcode);
@@ -432,6 +536,8 @@ export async function createProduct(
       sku: input.sku,
       barcode: input.barcode,
       categoryId: input.categoryId ?? null,
+      brandId: input.brandId ?? null,
+      warrantyId: input.warrantyId ?? null,
       unit: input.unit,
       costPriceKobo: input.costPriceKobo,
       sellingPriceKobo: input.sellingPriceKobo,
@@ -488,6 +594,12 @@ export async function updateProduct(
   if (input.categoryId !== undefined) {
     await assertCategoryInBusiness(local, businessId, input.categoryId);
   }
+  if (input.brandId !== undefined) {
+    await assertBrandInBusiness(local, businessId, input.brandId);
+  }
+  if (input.warrantyId !== undefined) {
+    await assertWarrantyInBusiness(local, businessId, input.warrantyId);
+  }
   if (input.taxCategoryId !== undefined) {
     await assertTaxCategoryInBusiness(local, businessId, input.taxCategoryId);
   }
@@ -502,6 +614,8 @@ export async function updateProduct(
     ...(input.sku !== undefined ? { sku: input.sku } : {}),
     ...(input.barcode !== undefined ? { barcode: input.barcode } : {}),
     ...(input.categoryId !== undefined ? { categoryId: input.categoryId ?? null } : {}),
+    ...(input.brandId !== undefined ? { brandId: input.brandId ?? null } : {}),
+    ...(input.warrantyId !== undefined ? { warrantyId: input.warrantyId ?? null } : {}),
     ...(input.unit !== undefined ? { unit: input.unit } : {}),
     ...(input.costPriceKobo !== undefined ? { costPriceKobo: input.costPriceKobo } : {}),
     ...(input.sellingPriceKobo !== undefined ? { sellingPriceKobo: input.sellingPriceKobo } : {}),

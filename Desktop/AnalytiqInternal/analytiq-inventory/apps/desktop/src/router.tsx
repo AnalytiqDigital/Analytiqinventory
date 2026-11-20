@@ -3,23 +3,29 @@ import { AppShell } from './components/layout/AppShell';
 import { LicenseGate } from './components/LicenseGate';
 import { RequireAuth } from './components/RequireAuth';
 import { RequireModule } from './components/RequireModule';
+import { AccountingPage } from './pages/AccountingPage';
 import { BatchesPage } from './pages/BatchesPage';
 import { CustomersPage } from './pages/CustomersPage';
 import { DebtorsPage } from './pages/DebtorsPage';
 import { DashboardPage } from './pages/DashboardPage';
+import { ExpensesPage } from './pages/ExpensesPage';
 import { FinancePage } from './pages/FinancePage';
 import { HelpPage } from './pages/HelpPage';
 import { InventoryPage } from './pages/InventoryPage';
 import { LicensePage } from './pages/LicensePage';
 import { LoginPage } from './pages/LoginPage';
+import { MastersPage } from './pages/MastersPage';
 import { ModulesPage } from './pages/ModulesPage';
 import { PosPage } from './pages/PosPage';
 import { PriceListsPage } from './pages/PriceListsPage';
+import { PrintLabelsPage } from './pages/PrintLabelsPage';
 import { ProductDetailPage } from './pages/ProductDetailPage';
 import { ProductsPage } from './pages/ProductsPage';
+import { PurchaseReturnsPage } from './pages/PurchaseReturnsPage';
 import { PurchasesPage } from './pages/PurchasesPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { ReturnsPage } from './pages/ReturnsPage';
+import { StockAdjustmentsPage } from './pages/StockAdjustmentsPage';
 import { SetupPage } from './pages/SetupPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { StaffPage } from './pages/StaffPage';
@@ -60,18 +66,24 @@ export const router: ReturnType<typeof createHashRouter> = createHashRouter([
               },
               { path: 'products', element: <ProductsPage /> },
               { path: 'products/:id', element: <ProductDetailPage /> },
+              { path: 'labels', element: <PrintLabelsPage /> },
+              { path: 'masters', element: <MastersPage /> },
               {
                 element: <RequireModule module="expiry" />,
                 children: [{ path: 'batches', element: <BatchesPage /> }],
               },
               { path: 'inventory', element: <InventoryPage /> },
+              { path: 'stock-adjustments', element: <StockAdjustmentsPage /> },
               {
                 element: <RequireModule module="transfers" />,
                 children: [{ path: 'transfers', element: <TransfersPage /> }],
               },
               {
                 element: <RequireModule module="purchases" />,
-                children: [{ path: 'purchases', element: <PurchasesPage /> }],
+                children: [
+                  { path: 'purchases', element: <PurchasesPage /> },
+                  { path: 'purchase-returns', element: <PurchaseReturnsPage /> },
+                ],
               },
               {
                 element: <RequireModule module="suppliers" />,
@@ -90,7 +102,12 @@ export const router: ReturnType<typeof createHashRouter> = createHashRouter([
                 children: [{ path: 'debtors', element: <DebtorsPage /> }],
               },
               { path: 'reports', element: <ReportsPage /> },
+              { path: 'accounting', element: <AccountingPage /> },
               { path: 'staff', element: <StaffPage /> },
+              {
+                element: <RequireModule module="expenses" />,
+                children: [{ path: 'expenses', element: <ExpensesPage /> }],
+              },
               { path: 'finance', element: <FinancePage /> },
               { path: 'modules', element: <ModulesPage /> },
               { path: 'settings', element: <SettingsPage /> },

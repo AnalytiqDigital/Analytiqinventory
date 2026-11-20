@@ -10,15 +10,19 @@ optional module on or off later.
 
 Setup asks for the business type. That choice picks a preset:
 
-| Business type             | Optional modules installed                                                                    |
-| ------------------------- | --------------------------------------------------------------------------------------------- |
-| Retail / provision store  | tax categories, purchases, suppliers, customers, finance, expiry, loyalty, returns, transfers |
-| Supermarket / wholesale   | as retail, plus price tiers                                                                   |
-| Pharmacy                  | as retail (no price tiers)                                                                    |
-| Restaurant / bar / lounge | tables, tax categories, purchases, suppliers, customers, finance, loyalty, returns            |
-| Electronics               | as retail plus price tiers                                                                    |
-| Boutique                  | as retail minus expiry                                                                        |
-| Services                  | tax categories, purchases, customers, finance, loyalty, returns                               |
+| Business type             | Optional modules installed                                                                              |
+| ------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Retail / provision store  | tax categories, purchases, suppliers, customers, finance, expenses, expiry, loyalty, returns, transfers |
+| Supermarket / wholesale   | as retail, plus price tiers                                                                             |
+| Pharmacy                  | as retail (no price tiers)                                                                              |
+| Restaurant / bar / lounge | tables, tax categories, purchases, suppliers, customers, finance, expenses, loyalty, returns            |
+| Electronics               | as retail plus price tiers                                                                              |
+| Boutique                  | as retail minus expiry                                                                                  |
+| Services                  | tax categories, purchases, customers, finance, expenses, loyalty, returns                               |
+
+The `expenses` module adds the Manage → Expenses ledger (`/expenses`); it is
+installed for every type and can be switched off without losing data. The
+Finance module keeps the profit statement.
 
 Setup → **Install Modules** lists every module with a one-line description and
 a switch. The switch writes only the differences from the preset, so changing

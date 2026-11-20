@@ -385,6 +385,123 @@ Installer re-packed (`release/AnalytIQ-Inventory-Setup-1.1.0.exe`) after
 pre-seeding the `winCodeSign` cache without the darwin symlinks, which avoids
 the 7-Zip symlink-privilege failure on a non-admin shell.
 
+## Website pricing refresh: DONE
+
+- One public package: `licensePlans` now holds a single `standard` plan at
+  ₦80,000 per year for one shop location; the website, checkout form and
+  cloud-api all read that catalogue. Extra tills on the same shop network stay
+  included. More than one location is the cloud version, quoted per setup.
+- Landing page rebuilt on the mockup's structure: light emerald/cream palette
+  (trust, growth, warmth), announcement bar, warehouse / supermarket / POS
+  computer imagery, a "three places your stock lives" section, a single-package
+  pricing block, a cloud quote card and an embedded quote form.
+- Quote form (`components/QuoteRequest.tsx`, `lib/quote.ts`) asks for business,
+  contact, locations, tills and notes, then opens WhatsApp with the details
+  prefilled. `lib/quote.test.ts` covers message building.
+- Landing copy distinguishes the offline app from the cloud version and the
+  FAQ explains why a second location is quoted.
+- Docs updated: `docs/CHECKOUT.md`, `docs/WEBSITE.md`, `docs/LICENSE_KEYS.md`.
+
+Verification: website 25/25, validation 20/20, cloud-api 25/25; typecheck and
+lint clean for website, cloud-api and validation; `next build` produced 13
+static routes; page snapshot shows every section, the three images and the
+quote form with no console errors. Screenshot capture was blocked because the
+in-app browser window was not visible.
+
+## Dashboard analytics and accounting: DONE
+
+- Dashboard rebuilt around `getReportsSummary()` with two live queries (today,
+  month to date): today's sales, basket and cash/transfer received; month
+  gross profit, net profit, margins, expenses and average basket; credit, low
+  stock and stock value; seven-day trend; payment mix; best-selling products
+  with per-product margin; sales by cashier; and a profit snapshot that links
+  to Accounting. Staff without `reports.view` get the original sales-list
+  tiles and restock card instead, so cashiers are unaffected.
+- Accounting page at `/accounting` (nav under Manage, `reports.view`) with
+  Overview, Profit & loss and Product sales tabs, presets including last month
+  and a custom range, and CSV export.
+- Statement renderers in `apps/desktop/src/lib/statements.ts`: P&L derives
+  loyalty as the remainder of the subtotal (net sales = subtotal − discounts −
+  loyalty), shows tax as collected rather than income, and closes to net
+  profit; product sales lists sold products ranked by revenue with COGS,
+  profit, margin and share, plus a balancing totals row and unsold count.
+- Tests: `statements.test.ts` 7 tests, `AccountingPage.test.tsx` 3 render
+  tests (overview, P&L, product statement) and a nav gating test for
+  `/accounting` (desktop 55/55).
+- Docs: `docs/REPORTING.md` gained dashboard and statement sections;
+  `CHANGELOG.md` updated.
+- Landing page: the "screens" section now opens with three real app captures
+  (Reports plus both sign-in screens) above the illustrated panels.
+
+Verification: desktop 55/55, `pnpm --filter @analytiq/desktop typecheck` clean,
+`pnpm --filter @analytiq/desktop lint` clean, renderer build clean. Website
+25/25, typecheck/lint/`next build` clean; the three optimized images return 200
+in the production preview. Installer not re-packed in this change.
+
+## Expenses module: DONE
+
+- New optional `expenses` module in `OPTIONAL_MODULES`, installed by default
+  for all ten business types and switchable in Settings → Install modules.
+- Expenses page at `/expenses` (Manage, `finance.manage` + module guard):
+  this month / last month / this year / custom range, category filter, note
+  search, selection totals (total spent, entries, average per entry, biggest
+  category), ledger with recorded-by, add/edit/delete and filtered CSV export.
+- Expense editing end to end: `updateExpense()` service with
+  `expense.update` audit, IPC `finance:update-expense`, LAN
+  `PATCH /api/finance/expenses/:id`, preload/global/ipc fallback, and the
+  `expenseUpdateSchema` validator.
+- Finance page keeps the profit statement and the statement CSV; the
+  expenses-by-category block still feeds both screens.
+- Tests: validation 21/21 (expenses default + switch-off), database 103/103
+  (edit, permission refusal, not-found), desktop 61/61 (5 ExpensesPage render
+  tests + nav gating), LAN 23/23 (PATCH + totals). Desktop typecheck, lint,
+  renderer build and electron bundle clean. Installer not re-packed.
+
+## Batch 16 — Shop masters, stock adjustments, purchase returns, labels and report menu: DONE
+
+Implemented:
+
+- Master data (`masters.ts`): shared list/create/update for brands, units,
+  warranties (duration in days) and customer groups, exposed as
+  `masters:list/create/update` (IPC) and `GET/POST /api/masters/:kind`,
+  `PATCH /api/masters/:kind/:id` (LAN). Products gain `brandId` and
+  `warrantyId`; customers gain `groupId`.
+- Stock adjustments (`stockAdjustments.ts`): `ADJ-000001` references, per-line
+  signed quantity, stock-below-zero guard, `stock_adjustment` movement kind,
+  audit entry and a list screen with the new `/stock-adjustments` route.
+- Purchase returns (`purchaseReturns.ts`): returns for received purchases only,
+  per-product quantities capped by the unreturned part of the purchase,
+  weighted unit-cost total, `PRT-000001` references and a `purchase_return`
+  stock movement; `/purchase-returns` screen behind the `purchases` module.
+- Menu reports (`menuReports.ts`, `getMenuReports`): purchase-and-sale daily
+  ledger, output/input/net tax, customer and supplier balances with
+  receivables/payables, customer groups, stock adjustments, product purchases,
+  purchase payments (total, paid, returns, balance), sell payments, registers
+  and sales representatives, in one response for the chosen range.
+- Print labels (`/labels`): EAN-13 checksum, validation and 95-module encoder
+  (`lib/ean13.ts`) rendered as inline SVG inside 50×30 mm print labels; per-row
+  copies, select-all, "only with barcode" filter and hidden-iframe printing.
+- CSV imports: `opening-stock` (absolute per-branch quantity matched by
+  barcode/SKU/name with an `opening` movement; re-import is idempotent) and
+  `contacts` (customers and suppliers with type, contact fields and an existing
+  group), both with templates, IPC, LAN routes and Import Dialog entries.
+  Fixed the opening-stock transaction, which was created but never invoked.
+- Sidebar: grouped collapsible navigation (Main, Sell, Products, Inventory,
+  Purchases, Contacts, Reports, Finance, Setup) with persisted collapse state,
+  permission and module gating per item.
+- Users & Roles screen splits the staff table and role permissions into tabs.
+- Tests: `batch16.test.ts` (4 DB tests: masters CRUD, adjustments guard,
+  purchase return caps, menu report totals), 4 new opening-stock/contact import
+  tests in `imports.test.ts`, 4 new import-csv tests, 4 EAN-13 tests, 13 new
+  desktop render tests (`MenuReportsPanel` 7, print labels 6), 5 new nav gating
+  tests, and one new local-server REST test covering every Batch 16 route.
+- Docs: `docs/SHOP_MASTERS.md`, plus `docs/IMPORT.md` and `docs/REPORTING.md`
+  updated for the new kinds and the report menu.
+
+Verification: validation 21/21, database 111/111, desktop 84/84, local-server
+24/24 (typecheck and lint clean; renderer build checked). Installer not
+re-packed for this batch.
+
 ## 1.0.0 — Release preparation: IN PROGRESS
 
 Done:

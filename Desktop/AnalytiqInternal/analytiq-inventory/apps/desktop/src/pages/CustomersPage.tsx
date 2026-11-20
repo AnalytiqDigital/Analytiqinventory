@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Banknote, NotebookPen, Pencil, Plus, RotateCcw, Sparkles, Trash2, Users } from 'lucide-react';
+import { Banknote, NotebookPen, Pencil, Plus, RotateCcw, Sparkles, Trash2, Upload, Users } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Input } from '../components/ui/input';
@@ -9,6 +9,7 @@ import { TD, TH, THead, TRow, Table } from '../components/ui/table';
 import { EmptyState, ErrorState, LoadingState } from '../components/ui/states';
 import { Modal } from '../components/ui/modal';
 import { Stat } from '../components/ui/stat';
+import { ImportDialog } from '../components/ImportDialog';
 import { RequirePermission } from '../components/RequirePermission';
 import { hasModule } from '../components/layout/nav';
 import { ipc } from '../lib/ipc';
@@ -32,6 +33,7 @@ interface CustomerFormValues {
   note: string;
   creditLimit: string;
   priceTierId: string;
+  groupId: string;
 }
 
 const BLANK: CustomerFormValues = {
@@ -42,6 +44,7 @@ const BLANK: CustomerFormValues = {
   note: '',
   creditLimit: '0.00',
   priceTierId: '',
+  groupId: '',
 };
 
 function toForm(c?: CustomerRow): CustomerFormValues {
@@ -53,6 +56,7 @@ function toForm(c?: CustomerRow): CustomerFormValues {
     note: c?.note ?? '',
     creditLimit: c ? (c.creditLimitKobo / 100).toFixed(2) : '0.00',
     priceTierId: c?.priceTierId ?? '',
+    groupId: c?.groupId ?? '',
   };
 }
 
@@ -63,6 +67,7 @@ export function CustomersPage(): JSX.Element {
   const [includeInactive, setIncludeInactive] = useState(false);
   const [page, setPage] = useState(1);
   const [modalOpen, setModalOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [editing, setEditing] = useState<CustomerRow | null>(null);
   const [values, setValues] = useState<CustomerFormValues>(BLANK);
   const [formError, setFormError] = useState<string | null>(null);
@@ -106,6 +111,15 @@ export function CustomersPage(): JSX.Element {
     },
   });
 
+  const groupsQuery = useQuery({
+    queryKey: ['masters', 'customer-groups'],
+    queryFn: async () => {
+      const res = await ipc.mastersList('customer-groups');
+      if (!res.ok) return [];
+      return (res.items ?? []).filter((group) => group.isActive);
+    },
+  });
+
   const invalidate = (): Promise<unknown> =>
     queryClient.invalidateQueries({ queryKey: ['customers'] });
 
@@ -125,6 +139,7 @@ export function CustomersPage(): JSX.Element {
         note: values.note.trim(),
         creditLimitKobo,
         priceTierId: values.priceTierId || null,
+        groupId: values.groupId || null,
       };
       const res = editing
         ? await ipc.customersUpdate(editing.id, payload)
@@ -183,11 +198,27 @@ export function CustomersPage(): JSX.Element {
           </p>
         </div>
         <RequirePermission permission="customers.manage">
-          <Button onClick={openCreate}>
-            <Plus className="h-4 w-4" /> New customer
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="secondary" onClick={() => setImportOpen(true)}>
+              <Upload className="h-4 w-4" /> Import contacts
+            </Button>
+            <Button onClick={openCreate}>
+              <Plus className="h-4 w-4" /> New customer
+            </Button>
+          </div>
         </RequirePermission>
       </div>
+
+      <ImportDialog
+        open={importOpen}
+        kind="contacts"
+        onClose={() => setImportOpen(false)}
+        onImported={() => {
+          void queryClient.invalidateQueries({ queryKey: ['customers'] });
+          void queryClient.invalidateQueries({ queryKey: ['suppliers'] });
+          void queryClient.invalidateQueries({ queryKey: ['masters'] });
+        }}
+      />
 
       <div className="grid gap-3 sm:grid-cols-3">
         <Stat icon={Users} label="Customers" value={String(total)} tone="brand" />
@@ -434,6 +465,25 @@ export function CustomersPage(): JSX.Element {
                 {(tiersQuery.data ?? []).map((t) => (
                   <option key={t.id} value={t.id}>
                     {t.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
+          {(groupsQuery.data?.length ?? 0) > 0 ? (
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">
+                Customer group
+              </label>
+              <select
+                value={values.groupId}
+                onChange={(e) => setValues((v) => ({ ...v, groupId: e.target.value }))}
+                className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-900"
+              >
+                <option value="">No group</option>
+                {(groupsQuery.data ?? []).map((group) => (
+                  <option key={group.id} value={group.id}>
+                    {group.name}
                   </option>
                 ))}
               </select>

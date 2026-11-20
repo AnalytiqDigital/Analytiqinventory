@@ -14,6 +14,7 @@ function fallbackApi(): AnalytiqApi {
     authMe: () => Promise.resolve({ user: null }),
     categories: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
     categoryCreate: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    categoryUpdate: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
     products: () =>
       Promise.resolve({ ok: false, items: [], total: 0, error: 'Unavailable in browser preview' }),
     productGet: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
@@ -76,6 +77,20 @@ function fallbackApi(): AnalytiqApi {
     purchasesReceive: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
     purchasesCancel: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
 
+    mastersList: () =>
+      Promise.resolve({ ok: false, items: [], error: 'Unavailable in browser preview' }),
+    mastersCreate: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    mastersUpdate: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    stockAdjustments: () =>
+      Promise.resolve({ ok: false, items: [], total: 0, error: 'Unavailable in browser preview' }),
+    stockAdjustmentCreate: () =>
+      Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    purchaseReturns: () =>
+      Promise.resolve({ ok: false, items: [], total: 0, error: 'Unavailable in browser preview' }),
+    purchaseReturnCreate: () =>
+      Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    reportsMenu: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+
     reportsSummary: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
 
     backups: () =>
@@ -137,6 +152,22 @@ function fallbackApi(): AnalytiqApi {
         errors: [],
         error: 'Unavailable in browser preview',
       }),
+    importOpeningStock: () =>
+      Promise.resolve({
+        ok: false,
+        created: 0,
+        failed: 0,
+        errors: [],
+        error: 'Unavailable in browser preview',
+      }),
+    importContacts: () =>
+      Promise.resolve({
+        ok: false,
+        created: 0,
+        failed: 0,
+        errors: [],
+        error: 'Unavailable in browser preview',
+      }),
     staff: () => Promise.resolve({ ok: false, items: [], error: 'Unavailable in browser preview' }),
     staffCreate: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
     staffUpdate: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
@@ -154,6 +185,7 @@ function fallbackApi(): AnalytiqApi {
         error: 'Unavailable in browser preview',
       }),
     expenseCreate: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    expenseUpdate: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
     expenseDelete: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
     printerList: () =>
       Promise.resolve({ ok: false, printers: [], error: 'Unavailable in browser preview' }),

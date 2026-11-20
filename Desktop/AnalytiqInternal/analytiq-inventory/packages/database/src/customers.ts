@@ -21,7 +21,7 @@ import { newId } from './auth';
 import type { LocalDb } from './connection';
 import { requirePermission } from './permissions';
 import { writeAuditSync } from './service';
-import { customerPayments, customers, priceTiers, sales } from './schema';
+import { customerGroups, customerPayments, customers, priceTiers, sales } from './schema';
 
 function codedError(message: string, code: string): Error {
   const err = new Error(message);
@@ -43,6 +43,8 @@ export interface CustomerView {
   creditLimitKobo: number;
   priceTierId: string | null;
   priceTierName: string | null;
+  groupId: string | null;
+  groupName: string | null;
   loyaltyPoints: number;
   isActive: boolean;
   /** Outstanding credit: credit tenders minus payments. */
@@ -74,7 +76,8 @@ function toView(
   row: typeof customers.$inferSelect,
   balanceKobo: number,
   tierName: string | null = null,
-  loyaltyPoints = 0
+  loyaltyPoints = 0,
+  groupName: string | null = null
 ): CustomerView {
   return {
     id: row.id,
@@ -86,6 +89,8 @@ function toView(
     creditLimitKobo: row.creditLimitKobo,
     priceTierId: row.priceTierId ?? null,
     priceTierName: tierName,
+    groupId: row.groupId ?? null,
+    groupName,
     loyaltyPoints,
     isActive: row.isActive === 1,
     balanceKobo,
@@ -96,6 +101,13 @@ function toView(
 function tierNames(local: LocalDb, businessId: string): Map<string, string> {
   const rows = local.raw
     .prepare('SELECT id, name FROM price_tiers WHERE business_id = ?')
+    .all(businessId) as Array<{ id: string; name: string }>;
+  return new Map(rows.map((r) => [r.id, r.name]));
+}
+
+function groupNames(local: LocalDb, businessId: string): Map<string, string> {
+  const rows = local.raw
+    .prepare('SELECT id, name FROM customer_groups WHERE business_id = ?')
     .all(businessId) as Array<{ id: string; name: string }>;
   return new Map(rows.map((r) => [r.id, r.name]));
 }
@@ -125,6 +137,20 @@ async function assertTier(local: LocalDb, businessId: string, tierId: string | n
     .limit(1)
     .all();
   if (!row) throw codedError('Price list not found', 'TIER_NOT_FOUND');
+}
+
+async function assertGroup(
+  local: LocalDb,
+  businessId: string,
+  groupId: string | null | undefined
+): Promise<void> {
+  if (groupId == null) return;
+  const [row] = await local.db
+    .select({ id: customerGroups.id })
+    .from(customerGroups)
+    .where(and(eq(customerGroups.businessId, businessId), eq(customerGroups.id, groupId)))
+    .limit(1);
+  if (!row) throw codedError('Customer group not found', 'CUSTOMER_GROUP_NOT_FOUND');
 }
 
 export async function listCustomers(
@@ -172,6 +198,7 @@ export async function listCustomers(
     .get(businessId, businessId) as { v: number } | undefined;
 
   const names = tierNames(local, businessId);
+  const groups = groupNames(local, businessId);
   const points = pointsMap(local, businessId, rows.map((r) => r.id));
   return {
     items: rows.map((r) =>
@@ -179,7 +206,8 @@ export async function listCustomers(
         r,
         balanceOf(local, businessId, r.id),
         r.priceTierId ? (names.get(r.priceTierId) ?? null) : null,
-        points.get(r.id) ?? 0
+        points.get(r.id) ?? 0,
+        r.groupId ? (groups.get(r.groupId) ?? null) : null
       )
     ),
     total: countRow?.n ?? 0,
@@ -199,12 +227,14 @@ export async function getCustomer(
     .limit(1);
   if (!row) return null;
   const names = tierNames(local, businessId);
+  const groups = groupNames(local, businessId);
   const points = pointsMap(local, businessId, [row.id]);
   return toView(
     row,
     balanceOf(local, businessId, row.id),
     row.priceTierId ? (names.get(row.priceTierId) ?? null) : null,
-    points.get(row.id) ?? 0
+    points.get(row.id) ?? 0,
+    row.groupId ? (groups.get(row.groupId) ?? null) : null
   );
 }
 
@@ -218,6 +248,7 @@ export async function createCustomer(
   requirePermission(new Set(grants), 'customers.manage');
   const input = customerSchema.parse(raw);
   await assertTier(local, businessId, input.priceTierId);
+  await assertGroup(local, businessId, input.groupId);
   const id = newId('cus');
   const timestamp = new Date();
   local.db
@@ -232,6 +263,7 @@ export async function createCustomer(
       note: input.note,
       creditLimitKobo: input.creditLimitKobo,
       priceTierId: input.priceTierId ?? null,
+      groupId: input.groupId ?? null,
       isActive: 1,
       version: 1,
       createdAt: timestamp,
@@ -266,6 +298,7 @@ export async function updateCustomer(
     .limit(1);
   if (!existing) throw codedError('Customer not found', 'CUSTOMER_NOT_FOUND');
   if (patch.priceTierId !== undefined) await assertTier(local, businessId, patch.priceTierId);
+  if (patch.groupId !== undefined) await assertGroup(local, businessId, patch.groupId);
 
   const set: Partial<typeof customers.$inferInsert> = { updatedAt: new Date() };
   if (patch.name !== undefined) set.name = patch.name;
@@ -275,6 +308,7 @@ export async function updateCustomer(
   if (patch.note !== undefined) set.note = patch.note;
   if (patch.creditLimitKobo !== undefined) set.creditLimitKobo = patch.creditLimitKobo;
   if (patch.priceTierId !== undefined) set.priceTierId = patch.priceTierId ?? null;
+  if (patch.groupId !== undefined) set.groupId = patch.groupId ?? null;
   if (patch.isActive !== undefined) set.isActive = patch.isActive ? 1 : 0;
 
   local.db.update(customers).set(set).where(eq(customers.id, customerId)).run();
