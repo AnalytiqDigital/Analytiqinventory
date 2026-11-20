@@ -372,14 +372,18 @@ Implemented:
 - IPC + LAN parity for every route; renderer LAN client updated.
 - Tests: `batch15.test.ts` 10 tests (DB), 3 new local-server REST tests, nav
   module-visibility tests (10 total).
+- Fixed crash `H.find is not a function` on Products/Sell after visiting
+  Settings → Tax categories: the shared `['tax-categories']` cache held two
+  different shapes. All three screens now use one helper
+  (`src/lib/taxCategories.ts`, 2 tests) that always returns `TaxCategory[]`.
 - Docs: `docs/BUSINESS_PACK.md`.
 
-Verification: database 102/102, local-server 23/23, desktop 42/42, validation
+Verification: database 102/102, local-server 23/23, desktop 44/44, validation
 20/20, licensing 7/7, business-logic 2/2, cloud-api 25/25, `pnpm -r lint`
 clean, `pnpm -r typecheck` clean, renderer + Electron bundle build clean.
-The NSIS packaging step still needs an elevated shell/Developer Mode on this
-machine (7-Zip symlink privilege), so the installer was not re-packed in this
-pass.
+Installer re-packed (`release/AnalytIQ-Inventory-Setup-1.1.0.exe`) after
+pre-seeding the `winCodeSign` cache without the darwin symlinks, which avoids
+the 7-Zip symlink-privilege failure on a non-admin shell.
 
 ## 1.0.0 — Release preparation: IN PROGRESS
 

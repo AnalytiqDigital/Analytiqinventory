@@ -31,6 +31,7 @@ import { printSale } from '../lib/printing';
 import { useBarcodeScanner } from '../lib/use-barcode-scanner';
 import { cn } from '../lib/cn';
 import { ProductThumb } from '../lib/product-media';
+import { TAX_CATEGORIES_KEY, fetchTaxCategories } from '../lib/taxCategories';
 import { useSession } from '../stores/session';
 import { usePrinter } from '../stores/printer';
 import type {
@@ -40,7 +41,6 @@ import type {
   ProductRow,
   SaleDetail,
   SaleSummaryRow,
-  TaxCategory,
 } from '../types/global';
 
 type PaymentMethod = 'cash' | 'transfer' | 'pos' | 'credit';
@@ -240,12 +240,8 @@ export function PosPage(): JSX.Element {
   }, [tierPricesQuery.data, priceTiersEnabled]);
 
   const taxQuery = useQuery({
-    queryKey: ['tax-categories'],
-    queryFn: async () => {
-      const res = await ipc.taxCategories();
-      if (!res.ok) throw new Error(res.error ?? 'Could not load tax categories');
-      return (res.items ?? []) as TaxCategory[];
-    },
+    queryKey: TAX_CATEGORIES_KEY,
+    queryFn: fetchTaxCategories,
   });
 
   const businessQuery = useQuery({

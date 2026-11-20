@@ -28,6 +28,10 @@
   (scrypt), uploaded to any HTTPS PUT endpoint with a bearer key; restore needs
   the passphrase, which never leaves the machine.
 - LAN parity for all new routes and migration `0013_business_pack.sql`.
+- **Fix**: opening Products or Sell after the Tax Categories settings screen
+  could crash the window (`find is not a function`) because the shared
+  tax-category cache held two different shapes. All screens now share one query
+  helper that always returns a plain list.
 - Docs: `docs/BUSINESS_PACK.md`.
 
 ## 1.1.0 — Batch 14: staff, permissions, finance and richer reports

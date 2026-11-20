@@ -15,7 +15,8 @@ import { RequirePermission } from '../components/RequirePermission';
 import { ipc } from '../lib/ipc';
 import { formatKobo, parseNairaToKobo } from '../lib/money';
 import { IMAGE_ACCEPT, ProductThumb, generateEan13, readImageFile } from '../lib/product-media';
-import type { Category, ProductRow, TaxCategory } from '../types/global';
+import { TAX_CATEGORIES_KEY, fetchTaxCategories } from '../lib/taxCategories';
+import type { Category, ProductRow } from '../types/global';
 
 interface ProductFormValues {
   name: string;
@@ -105,12 +106,8 @@ export function ProductsPage(): JSX.Element {
 
   // Named tax categories (Food 7.5%, Alcohol 10%, Exempt 0% for a restaurant).
   const taxQuery = useQuery({
-    queryKey: ['tax-categories'],
-    queryFn: async () => {
-      const res = await ipc.taxCategories();
-      if (!res.ok) throw new Error(res.error ?? 'Could not load tax categories');
-      return (res.items ?? []) as TaxCategory[];
-    },
+    queryKey: TAX_CATEGORIES_KEY,
+    queryFn: fetchTaxCategories,
   });
 
   const form = useForm<ProductFormValues>({
