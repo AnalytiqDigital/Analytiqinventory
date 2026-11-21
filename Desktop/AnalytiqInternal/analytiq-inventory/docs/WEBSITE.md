@@ -28,7 +28,7 @@ Set these in Vercel (Project → Settings → Environment Variables) and in
 | -------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `NEXT_PUBLIC_API_URL`      | Yes      | Public origin of the deployed cloud API (`apps/cloud-api`), e.g. `https://api.analytiq.ng`                                                                                      |
 | `NEXT_PUBLIC_DOWNLOAD_URL` | No       | Direct HTTPS link to the Windows installer. Defaults to the public release in `AnalytiqDigital/analytiq-downloads`; set it to `/download` to show the WhatsApp fallback instead |
-| `NEXT_PUBLIC_WHATSAPP`     | No       | Support number, digits only. Defaults to `2348039171767`                                                                                                                        |
+| —                          | —        | Support numbers are set in `lib/site.ts`; they are not environment variables                                                                                                    |
 
 `NEXT_PUBLIC_*` values are embedded at build time: redeploy after changing them.
 `downloadUrl()` ignores a malformed `NEXT_PUBLIC_DOWNLOAD_URL` (anything that is
