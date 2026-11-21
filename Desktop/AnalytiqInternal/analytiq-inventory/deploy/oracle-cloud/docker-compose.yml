@@ -1,0 +1,69 @@
+# AnalytIQ cloud API on an Oracle Cloud Always Free VM.
+#
+# Caddy terminates HTTPS on 80/443 and proxies to the API on the private
+# Docker network. Only Caddy publishes ports; the API and its data stay
+# internal. See README.md for the full runbook.
+
+name: analytiq-cloud
+
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: apps/cloud-api/Dockerfile
+    image: analytiq-cloud-api:local
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PORT: "3002"
+      ORDER_STORE_PATH: /data/orders.json
+      LEAD_STORE_PATH: /data/leads.json
+      LICENSE_PRIVATE_KEY_PATH: /run/secrets/license-private.pem
+    volumes:
+      - analytiq-data:/data
+      - ./secrets:/run/secrets:ro
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3002/health').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  caddy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN in .env, e.g. api.analytiq.ng}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  analytiq-data:
+    name: analytiq-data
+  caddy-data:
+  caddy-config:

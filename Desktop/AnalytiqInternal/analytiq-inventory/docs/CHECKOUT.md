@@ -149,6 +149,18 @@ the website's API client (error mapping, network failure, URL encoding).
 5. Replace the file store with a managed database before running more than one
    API instance.
 
+### Always Free VM (Oracle Cloud + Caddy)
+
+To avoid a managed-host bill, run the same image on an Oracle Cloud Always Free
+VM with Caddy for HTTPS. Compose file, environment template, backup script and
+the full runbook live in
+[`deploy/oracle-cloud`](../deploy/oracle-cloud/README.md). That setup needs no
+code changes: orders and leads stay in the `/data` volume and the Ed25519 key
+is mounted read-only from `deploy/oracle-cloud/secrets/`.
+
+The site still lives on Vercel; only `NEXT_PUBLIC_API_URL` changes to the VM's
+API hostname, and the Paystack webhook points at the same host.
+
 ### Container host (Render, Railway, Fly.io)
 
 `apps/cloud-api/Dockerfile` builds the API from the repository root and

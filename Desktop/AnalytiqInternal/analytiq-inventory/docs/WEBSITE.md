@@ -33,6 +33,9 @@ Set these in Vercel (Project → Settings → Environment Variables) and in
 | —                          | —        | Support numbers are set in `lib/site.ts`; they are not environment variables                                                                                                    |
 
 `NEXT_PUBLIC_*` values are embedded at build time: redeploy after changing them.
+The API behind `NEXT_PUBLIC_API_URL` can be the Render service in `render.yaml`
+or the Oracle Always Free VM described in
+[`deploy/oracle-cloud`](../deploy/oracle-cloud/README.md).
 `downloadUrl()` ignores a malformed `NEXT_PUBLIC_DOWNLOAD_URL` (anything that is
 not an `http(s)` URL or a local path) and falls back to the public release, so a
 stray value cannot produce a broken download link. The published SHA-256 in

@@ -16,6 +16,9 @@ next-env.d.ts
 .env.local
 # Vendor license signing material must never enter the repository.
 .secrets/
+# VM deployment secrets and local backups.
+deploy/oracle-cloud/secrets/
+deploy/oracle-cloud/backups/
 apps/*/data/*.db
 apps/*/data/*.db-journal
 # Cloud orders hold customer contact details and licence keys.

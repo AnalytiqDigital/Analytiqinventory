@@ -1,0 +1,14 @@
+# HTTPS for the cloud API. Caddy obtains and renews the certificate
+# automatically once the DNS A record points at this VM and ports 80/443 are
+# open in both the Oracle security list and the OS firewall.
+{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy api:3002
+
+	header {
+		-Server
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+	}
+}
