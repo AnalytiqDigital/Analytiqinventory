@@ -5,6 +5,7 @@ import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { ErrorState, LoadingState } from '../components/ui/states';
 import { ipc } from '../lib/ipc';
+import { RENEW_URL, RETRIEVE_KEY_URL, renewalNotice } from '../lib/licence';
 import { useSession } from '../stores/session';
 import type { LicenseStatus } from '../types/global';
 
@@ -126,6 +127,22 @@ export function LicensePage(): JSX.Element {
                   </p>
                 ) : null}
 
+                {(() => {
+                  const notice = renewalNotice(status);
+                  if (!notice) return null;
+                  return (
+                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-100">
+                      <div>
+                        <p className="font-semibold">{notice.title}</p>
+                        <p>{notice.body}</p>
+                      </div>
+                      <Button size="sm" onClick={() => void ipc.openExternal(RENEW_URL)}>
+                        {notice.action}
+                      </Button>
+                    </div>
+                  );
+                })()}
+
                 <dl className="grid gap-3 text-sm sm:grid-cols-2">
                   <div>
                     <dt className="text-slate-500">License id</dt>
@@ -191,7 +208,15 @@ export function LicensePage(): JSX.Element {
                 </div>
                 <p className="text-xs text-slate-500">
                   Activation is offline: the key is checked on this computer and never sent
-                  anywhere.
+                  anywhere. Lost the key?{' '}
+                  <button
+                    type="button"
+                    className="font-medium text-brand-600 underline-offset-2 hover:underline"
+                    onClick={() => void ipc.openExternal(RETRIEVE_KEY_URL)}
+                  >
+                    Retrieve it with your order reference
+                  </button>
+                  .
                 </p>
               </>
             )}

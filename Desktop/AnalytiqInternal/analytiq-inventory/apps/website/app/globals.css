@@ -1317,6 +1317,19 @@ a:focus-visible,
   font-size: 0.9rem;
 }
 
+.cloud-card .cloud-anchor {
+  margin: 4px 0 18px;
+  font-size: 0.95rem;
+  color: #d5e0e9;
+}
+
+.cloud-card .cloud-anchor strong {
+  display: block;
+  font-size: 1.5rem;
+  color: #ffffff;
+  letter-spacing: -0.02em;
+}
+
 .cloud-card .check-list li::before {
   color: #b7e4d1;
   background-color: rgba(255, 255, 255, 0.1);

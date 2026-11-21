@@ -21,6 +21,16 @@ services:
         value: https://analytiq-inventory.vercel.app
       - key: ORDER_STORE_PATH
         value: /data/orders.json
+      - key: LEAD_STORE_PATH
+        value: /data/leads.json
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: WHATSAPP_TOKEN
+        sync: false
+      - key: WHATSAPP_PHONE_NUMBER_ID
+        sync: false
       - key: PAYSTACK_SECRET_KEY
         sync: false
       - key: LICENSE_PRIVATE_KEY

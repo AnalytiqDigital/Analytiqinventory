@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  CLOUD_LOCATION_ANCHOR_KOBO,
   DEFAULT_INSTALLER_URL,
   DOWNLOAD_FALLBACK_PATH,
   INSTALLER_VERSION,
@@ -75,5 +76,12 @@ describe('downloadUrl', () => {
     expect(downloadUrl()).toBe(DEFAULT_INSTALLER_URL);
     process.env.NEXT_PUBLIC_DOWNLOAD_URL = 'javascript:alert(1)';
     expect(downloadUrl()).toBe(DEFAULT_INSTALLER_URL);
+  });
+});
+
+describe('cloud price anchor', () => {
+  it('quotes a whole-naira per-location starting price', () => {
+    expect(CLOUD_LOCATION_ANCHOR_KOBO).toBe(12_000_000);
+    expect(CLOUD_LOCATION_ANCHOR_KOBO % 100).toBe(0);
   });
 });

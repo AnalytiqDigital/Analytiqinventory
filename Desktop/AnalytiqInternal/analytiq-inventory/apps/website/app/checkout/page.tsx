@@ -22,6 +22,11 @@ export default function CheckoutPage() {
         <Suspense fallback={<div className="card">Loading checkout…</div>}>
           <CheckoutForm />
         </Suspense>
+        <p className="fine-print" style={{ marginTop: 18 }}>
+          Already paid but lost the key?{' '}
+          <a href="/retrieve-key">Retrieve your licence key</a> with your order reference and
+          checkout email.
+        </p>
       </div>
     </main>
   );

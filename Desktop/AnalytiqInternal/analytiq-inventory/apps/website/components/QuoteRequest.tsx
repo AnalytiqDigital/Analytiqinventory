@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
+import { submitLead } from '../lib/api';
 import { BUSINESS_TYPES } from '../lib/demo';
 import { LOCATION_COUNTS, TILLS_PER_LOCATION, buildQuoteMessage } from '../lib/quote';
 import { whatsappUrl } from '../lib/site';
@@ -23,6 +24,18 @@ export function QuoteRequest() {
 
   function submit(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault();
+    void submitLead({
+      kind: 'quote',
+      name: values.name,
+      business: values.business,
+      businessType: values.businessType,
+      phone: values.phone,
+      email: values.email,
+      tills: values.tills,
+      branches: '',
+      locations: values.locations,
+      notes: values.notes,
+    }).catch(() => undefined);
     window.open(whatsappUrl(buildQuoteMessage(values)), '_blank', 'noopener,noreferrer');
   }
 

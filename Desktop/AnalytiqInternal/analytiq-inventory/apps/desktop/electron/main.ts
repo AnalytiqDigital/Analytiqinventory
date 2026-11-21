@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, safeStorage, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } from 'electron';
 import {
   adjustAccount,
   adjustLoyalty,
@@ -143,9 +143,9 @@ import {
   voidSale,
   type LocalDb,
 } from '@analytiq/database';
-import { activateLicense, getLicenseStatus } from '@analytiq/licensing';
+import { activateLicense, getLicenseStatus, readMeta, writeMeta } from '@analytiq/licensing';
 import path from 'node:path';
-import { mkdirSync, readFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import log from 'electron-log';
 import { registerLanClient } from './lanClient';
 import { registerPrinterHandlers } from './printer';
@@ -1180,6 +1180,57 @@ function backupDirectory(): string {
   return path.join(app.getPath('userData'), 'backups');
 }
 
+// Off-disk copies are a separate, user-chosen folder (USB, external drive or a
+// synced folder). The setting lives in schema_meta so the backup scheduler can
+// read it without a signed-in business.
+const OFFSITE_DIR_KEY = 'backup.offsite_dir';
+const OFFSITE_PROMPTED_KEY = 'backup.offsite_prompted';
+const OFFSITE_LAST_KEY = 'backup.offsite_last';
+
+interface OffsiteBackupStatus {
+  configured: boolean;
+  prompted: boolean;
+  dir: string | null;
+  exists: boolean;
+  sameDrive: boolean;
+  lastCopyAt: string | null;
+}
+
+function offsiteStatus(db: LocalDb): OffsiteBackupStatus {
+  const dir = (readMeta(db, OFFSITE_DIR_KEY) ?? '').trim() || null;
+  return {
+    configured: Boolean(dir),
+    prompted: readMeta(db, OFFSITE_PROMPTED_KEY) === '1',
+    dir,
+    exists: dir ? existsSync(dir) : false,
+    sameDrive: dir
+      ? path.parse(dir).root.toLowerCase() === path.parse(dbPath()).root.toLowerCase()
+      : false,
+    lastCopyAt: readMeta(db, OFFSITE_LAST_KEY),
+  };
+}
+
+function copyBackupOffsite(
+  db: LocalDb,
+  name: string
+): { copied: boolean; dir?: string; error?: string } {
+  const dir = (readMeta(db, OFFSITE_DIR_KEY) ?? '').trim();
+  if (!dir) return { copied: false };
+  const source = path.join(backupDirectory(), name);
+  try {
+    if (!existsSync(source)) return { copied: false, error: 'That snapshot is missing on disk' };
+    mkdirSync(dir, { recursive: true });
+    copyFileSync(source, path.join(dir, name));
+    writeMeta(db, OFFSITE_LAST_KEY, new Date().toISOString());
+    return { copied: true, dir };
+  } catch (err: unknown) {
+    return {
+      copied: false,
+      error: err instanceof Error ? err.message : 'Could not copy the backup',
+    };
+  }
+}
+
 function backupHandlers(): void {
   ipcMain.handle('backup:list', async () => {
     try {
@@ -1194,9 +1245,17 @@ function backupHandlers(): void {
   ipcMain.handle('backup:create', async () => {
     try {
       const { db, user } = await requireUser();
+      const result = createBackup(
+        db,
+        backupDirectory(),
+        user.permissions,
+        user.id,
+        user.businessId
+      );
       return {
         ok: true,
-        ...createBackup(db, backupDirectory(), user.permissions, user.id, user.businessId),
+        ...result,
+        offsite: copyBackupOffsite(db, result.backup.name),
       };
     } catch (err: unknown) {
       return { ok: false, ...safeError(err) };
@@ -1243,6 +1302,58 @@ function backupHandlers(): void {
       const problem = await shell.openPath(dir);
       if (problem) return { ok: false, error: problem, code: 'OPEN_FAILED' };
       return { ok: true };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
+
+  ipcMain.handle('backup:offsite-status', async () => {
+    try {
+      const { db, user } = await requireUser();
+      requirePermission(new Set(user.permissions), 'settings.manage');
+      return { ok: true, status: offsiteStatus(db) };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
+
+  ipcMain.handle('backup:offsite-choose', async () => {
+    try {
+      const { db, user } = await requireUser();
+      requirePermission(new Set(user.permissions), 'settings.manage');
+      const options = {
+        title: 'Choose a folder on another drive',
+        buttonLabel: 'Use this folder',
+        properties: ['openDirectory'] as Array<'openDirectory'>,
+      };
+      const picked = mainWindow
+        ? await dialog.showOpenDialog(mainWindow, options)
+        : await dialog.showOpenDialog(options);
+      if (picked.canceled || picked.filePaths.length === 0) {
+        return { ok: false, canceled: true };
+      }
+      const dir = picked.filePaths[0]!;
+      if (path.resolve(dir) === path.resolve(backupDirectory())) {
+        throw Object.assign(new Error('That is the local backup folder — choose another one'), {
+          code: 'OFFSITE_SAME_FOLDER',
+        });
+      }
+      writeMeta(db, OFFSITE_DIR_KEY, dir);
+      writeMeta(db, OFFSITE_PROMPTED_KEY, '1');
+      const latest = listBackups(backupDirectory())[0];
+      if (latest) copyBackupOffsite(db, latest.name);
+      return { ok: true, status: offsiteStatus(db) };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
+
+  ipcMain.handle('backup:offsite-skip', async () => {
+    try {
+      const { db, user } = await requireUser();
+      requirePermission(new Set(user.permissions), 'settings.manage');
+      writeMeta(db, OFFSITE_PROMPTED_KEY, '1');
+      return { ok: true, status: offsiteStatus(db) };
     } catch (err: unknown) {
       return { ok: false, ...safeError(err) };
     }
@@ -1943,7 +2054,10 @@ function startBackupScheduler(db: LocalDb): void {
     try {
       if (await isFirstRun(db)) return;
       const result = runDailyBackupIfDue(db, dir, 14);
-      if (result) log.info(`Daily backup written: ${result.backup.name}`);
+      if (result) {
+        log.info(`Daily backup written: ${result.backup.name}`);
+        copyBackupOffsite(db, result.backup.name);
+      }
     } catch (err: unknown) {
       log.warn(`Automatic backup failed: ${err instanceof Error ? err.message : String(err)}`);
     }

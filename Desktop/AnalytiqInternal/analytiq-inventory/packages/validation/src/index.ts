@@ -1011,6 +1011,31 @@ export const checkoutSchema = z.object({
 
 export type CheckoutInput = z.infer<typeof checkoutSchema>;
 
+/** Anyone holding the order reference still has to match the buyer's email. */
+export const retrieveKeySchema = z.object({
+  reference: z.string().trim().min(6, 'Enter the order reference').max(80),
+  email: z.string().trim().toLowerCase().email('Enter the email used at checkout').max(200),
+});
+
+export type RetrieveKeyInput = z.infer<typeof retrieveKeySchema>;
+
+export const leadSchema = z.object({
+  kind: z.enum(['demo', 'quote']),
+  name: z.string().trim().min(1, 'Enter your name').max(120),
+  business: z.string().trim().max(160).default(''),
+  businessType: z.string().trim().max(80).default(''),
+  phone: z.string().trim().min(7, 'Enter a phone number').max(40),
+  email: z
+    .union([z.literal(''), z.string().trim().toLowerCase().email('Enter a valid email').max(200)])
+    .default(''),
+  tills: z.string().trim().max(60).default(''),
+  branches: z.string().trim().max(60).default(''),
+  locations: z.string().trim().max(60).default(''),
+  notes: z.string().trim().max(2000).default(''),
+});
+
+export type LeadInput = z.infer<typeof leadSchema>;
+
 // --- Batch 14: staff, permissions and finance -------------------------------
 
 export const staffCreateSchema = z.object({

@@ -8,6 +8,7 @@ import { formatNaira } from '../lib/format';
 import {
   COMPANY_SITE,
   COMPANY_SITE_LABEL,
+  CLOUD_LOCATION_ANCHOR_KOBO,
   DEFAULT_INSTALLER_URL,
   INSTALLER_SHA256,
   INSTALLER_SIZE_LABEL,
@@ -196,8 +197,9 @@ const faqs: { question: string; answer: ReactNode }[] = [
       <>
         The {formatNaira(licensePlans[0].priceKobo)} package covers one shop location. More than one
         location runs on our cloud version, which keeps a central stock ledger across branches and
-        needs internet to sync. Every cloud setup is different — number of locations, tills, hosting
-        and migration — so we quote it with you instead of guessing. Use the{' '}
+        needs internet to sync. Cloud starts at {formatNaira(CLOUD_LOCATION_ANCHOR_KOBO)} per
+        location, per year; the final quote covers the number of locations and tills, onboarding,
+        migration and hosting — so we quote it with you instead of guessing. Use the{' '}
         <a href="#cloud-quote">cloud quote form</a> and we will reply on WhatsApp.
       </>
     ),
@@ -1011,6 +1013,10 @@ export default function HomePage() {
                 products, prices and transfers. Each setup depends on how many locations and tills
                 you have, so we price it with you.
               </p>
+              <p className="cloud-anchor">
+                <strong>From {formatNaira(CLOUD_LOCATION_ANCHOR_KOBO)}</strong> per location, per
+                year
+              </p>
               <ul className="check-list">
                 <li>Two or more locations sharing one catalogue</li>
                 <li>Stock transfers and central reporting across branches</li>
@@ -1020,7 +1026,8 @@ export default function HomePage() {
                 Request a cloud quote
               </a>
               <p className="fine-print">
-                A written quote comes back on WhatsApp. No card needed to ask.
+                The final quote covers locations, tills, onboarding and migration. No card needed to
+                ask.
               </p>
             </aside>
           </div>
@@ -1118,21 +1125,24 @@ export default function HomePage() {
         <div className="container">
           <div className="section-head">
             <span className="eyebrow">Company</span>
-            <h2>Built for Nigerian shops</h2>
+            <h2>About AnalytIQ Digital</h2>
             <p>
-              AnalytIQ Inventory &amp; POS is a product of Analytiq Digital —{' '}
+              Analytiq Digital is a Nigerian technology and digital transformation company based in
+              Abuja, working with businesses and institutions on the data, software, and automation
+              problems that quietly cost the most time and money. AnalytIQ Inventory &amp; POS is
+              one of our products —{' '}
               <a href={COMPANY_SITE} target="_blank" rel="noreferrer">
                 {COMPANY_SITE_LABEL}
               </a>
-              . We build offline-first business software for Nigerian shops.
+              .
             </p>
           </div>
           <div className="company-grid">
             <article className="company-card">
               <h3>Who we are</h3>
               <p>
-                Analytiq Digital. We publish the app, the guides and the licence terms on this
-                site.
+                We build and support the software ourselves, and publish the app, the guides and
+                the licence terms on this site.
               </p>
             </article>
             <article className="company-card">

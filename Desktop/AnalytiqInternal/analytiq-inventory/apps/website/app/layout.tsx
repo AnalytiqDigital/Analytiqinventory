@@ -26,9 +26,11 @@ const organisation = {
   name: 'Analytiq Digital',
   url: COMPANY_SITE,
   sameAs: [YOUTUBE_CHANNEL],
-  description: 'Makers of AnalytIQ Inventory & POS, offline-first shop software for Windows.',
+  description:
+    'A Nigerian technology and digital transformation company based in Abuja, makers of AnalytIQ Inventory & POS.',
   address: {
     '@type': 'PostalAddress',
+    addressLocality: 'Abuja',
     addressCountry: 'NG',
   },
   contactPoint: {
@@ -102,7 +104,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
               </a>
               <p>AnalytIQ Inventory &amp; POS — offline-first software for Windows shops.</p>
               <p>
-                Made by Analytiq Digital, Nigeria. WhatsApp:{' '}
+                Made by Analytiq Digital, Abuja, Nigeria. WhatsApp:{' '}
                 <a href={support} target="_blank" rel="noreferrer">
                   {SUPPORT_WHATSAPP_LABEL}
                 </a>{' '}

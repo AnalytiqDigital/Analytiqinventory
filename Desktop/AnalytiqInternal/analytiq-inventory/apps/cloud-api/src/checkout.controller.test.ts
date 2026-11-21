@@ -12,10 +12,15 @@ import { PaystackClient } from './payments/paystack';
 const CONFIG: CloudConfig = {
   paystackSecretKey: 'sk_test_checkout',
   orderStorePath: 'unused.json',
+  leadStorePath: 'unused-leads.json',
   licensePrivateKeyPem: '',
   licenseDays: 365,
   websiteUrl: 'https://shop.example',
   allowedOrigin: 'https://shop.example',
+  resendApiKey: '',
+  emailFrom: '',
+  whatsappToken: '',
+  whatsappPhoneNumberId: '',
 };
 
 function pendingOrder(overrides: Record<string, unknown> = {}) {
@@ -129,5 +134,45 @@ describe('checkout controller', () => {
     };
     expect(paid.order).toMatchObject({ status: 'paid' });
     expect(typeof paid.order.licenseKey).toBe('string');
+  });
+
+  it('returns the key only when reference and email both match a paid order', async () => {
+    const orders = new OrdersService(new MemoryOrderStore());
+    const pair = generateKeyPairSync('ed25519');
+    const issuer = new LicenseIssuer(
+      pair.privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(),
+      365
+    );
+    const controller = new CheckoutController(orders, fakePaystack([]), CONFIG);
+    const created = await orders.create({
+      plan: 'standard',
+      business: 'Ada Stores',
+      name: 'Ada Obi',
+      email: 'ada@example.com',
+      phone: '08139711767',
+    });
+
+    const unpaid = controller.retrieve({
+      reference: created.reference,
+      email: 'ada@example.com',
+    });
+    await expect(unpaid).rejects.toMatchObject({ message: /could not find/ });
+    expect(await statusOf(unpaid)).toBe(404);
+
+    await orders.settle(created.reference, (order) => issuer.issue(order));
+
+    const wrongEmail = controller.retrieve({
+      reference: created.reference,
+      email: 'someone@example.com',
+    });
+    await expect(wrongEmail).rejects.toMatchObject({ message: /could not find/ });
+    expect(await statusOf(wrongEmail)).toBe(404);
+
+    const recovered = (await controller.retrieve({
+      reference: ` ${created.reference} `,
+      email: 'ADA@example.com',
+    })) as { order: Record<string, unknown> };
+    expect(recovered.order).toMatchObject({ status: 'paid', reference: created.reference });
+    expect(typeof recovered.order.licenseKey).toBe('string');
   });
 });

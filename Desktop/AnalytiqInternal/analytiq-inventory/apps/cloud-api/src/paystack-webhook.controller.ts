@@ -1,5 +1,6 @@
 import { Controller, Headers, HttpCode, Post, Req } from '@nestjs/common';
 import { ApiError } from './common/api-error';
+import { LicenseDelivery } from './delivery/licence-delivery';
 import { LicenseIssuer } from './licensing/license-issuer';
 import type { Order } from './orders/order.store';
 import { OrdersService } from './orders/orders.service';
@@ -24,7 +25,8 @@ export class PaystackWebhookController {
   constructor(
     private readonly orders: OrdersService,
     private readonly issuer: LicenseIssuer,
-    private readonly paystack: PaystackClient
+    private readonly paystack: PaystackClient,
+    private readonly delivery?: LicenseDelivery
   ) {}
 
   /**
@@ -78,6 +80,19 @@ export class PaystackWebhookController {
     // Unknown references are acknowledged so Paystack stops retrying; they may
     // belong to another integration sharing the account.
     if (!settled.order) return { ok: true, ignored: true };
+
+    // Email/WhatsApp delivery must never block the payment acknowledgement.
+    // Failures are stored on the order and can be retried by a later webhook;
+    // the key is always recoverable on the website.
+    if (this.delivery && settled.order.status === 'paid') {
+      try {
+        const record = await this.delivery.deliver(settled.order);
+        await this.orders.recordDelivery(settled.order.reference, record);
+      } catch {
+        // Deliberately ignored: the order is paid and the key already exists.
+      }
+    }
+
     return {
       ok: true,
       status: settled.order.status,

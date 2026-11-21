@@ -3,6 +3,8 @@ import { NavLink, Outlet } from 'react-router-dom';
 import { NAV_GROUPS, visibleNavItems } from './nav';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
+import { LicenseBanner } from './LicenseBanner';
+import { OffsiteBackupPrompt } from './OffsiteBackupPrompt';
 import { useSession } from '../../stores/session';
 import { useRealtime } from '../../hooks/useRealtime';
 import { cn } from '../../lib/cn';
@@ -54,6 +56,8 @@ export function AppShell(): JSX.Element {
  ) : null}
  <div className="flex min-w-0 flex-1 flex-col">
  <Topbar onMenu={() => setMobileOpen(true)} />
+ <LicenseBanner />
+ <OffsiteBackupPrompt />
  <main className="flex-1 overflow-y-auto p-4 sm:p-6">
  <div className="mx-auto w-full max-w-6xl animate-fade-in">
  <Outlet />

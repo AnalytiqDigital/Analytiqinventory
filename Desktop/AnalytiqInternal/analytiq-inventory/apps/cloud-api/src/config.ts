@@ -6,11 +6,18 @@ export const CLOUD_CONFIG = 'CLOUD_CONFIG';
 export interface CloudConfig {
   paystackSecretKey: string;
   orderStorePath: string;
+  leadStorePath: string;
   licensePrivateKeyPem: string;
   /** Fallback lifetime when a plan does not define its own. */
   licenseDays: number;
   websiteUrl: string;
   allowedOrigin: string;
+  /** Resend API key; blank disables automatic email delivery. */
+  resendApiKey: string;
+  emailFrom: string;
+  /** Meta WhatsApp Cloud API credentials; blank disables WhatsApp delivery. */
+  whatsappToken: string;
+  whatsappPhoneNumberId: string;
 }
 
 /** Accepts a PEM inline (with `\n` escapes) or a path to a key file. */
@@ -34,9 +41,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): CloudConfig {
   return {
     paystackSecretKey: env.PAYSTACK_SECRET_KEY?.trim() ?? '',
     orderStorePath: env.ORDER_STORE_PATH?.trim() || join(process.cwd(), 'data', 'orders.json'),
+    leadStorePath: env.LEAD_STORE_PATH?.trim() || join(process.cwd(), 'data', 'leads.json'),
     licensePrivateKeyPem: privateKeyFromEnv(env),
     licenseDays: Number.isFinite(days) && days > 0 ? Math.floor(days) : 365,
     websiteUrl,
     allowedOrigin: env.CORS_ORIGIN?.trim() || websiteUrl,
+    resendApiKey: env.RESEND_API_KEY?.trim() ?? '',
+    emailFrom: env.EMAIL_FROM?.trim() ?? '',
+    whatsappToken: env.WHATSAPP_TOKEN?.trim() ?? '',
+    whatsappPhoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID?.trim() ?? '',
   };
 }

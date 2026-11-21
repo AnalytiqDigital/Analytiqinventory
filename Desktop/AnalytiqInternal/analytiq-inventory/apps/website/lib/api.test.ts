@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CheckoutError, fetchOrder, startCheckout } from './api';
+import { CheckoutError, fetchOrder, retrieveKey, startCheckout, submitLead } from './api';
 
 const ORDER = {
   reference: 'ord_abc123',
@@ -112,5 +112,65 @@ describe('fetchOrder', () => {
     const calls = fetchMock.mock.calls as unknown as Array<[string, RequestInit]>;
     expect(calls[0]?.[0]).toBe('http://localhost:3002/api/checkout/ord%20with%20space');
     expect(order).toEqual(ORDER);
+  });
+});
+
+describe('retrieveKey', () => {
+  it('posts the reference and email and returns the recovered order', async () => {
+    const paid = { ...ORDER, status: 'paid' as const, licenseKey: 'ANQ1.key' };
+    const fetchMock = vi.fn(async () => jsonResponse({ ok: true, order: paid }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const order = await retrieveKey(' ord_abc123 ', 'ADA@example.com');
+    const calls = fetchMock.mock.calls as unknown as Array<[string, RequestInit]>;
+    expect(calls[0]?.[0]).toBe('http://localhost:3002/api/licence/retrieve');
+    expect(JSON.parse(String(calls[0]?.[1].body))).toEqual({
+      reference: ' ord_abc123 ',
+      email: 'ADA@example.com',
+    });
+    expect(order.licenseKey).toBe('ANQ1.key');
+  });
+
+  it('passes the server refusal through as a CheckoutError', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        jsonResponse({ error: 'We could not find a paid order', code: 'ORDER_NOT_FOUND' }, 404)
+      )
+    );
+
+    await expect(retrieveKey('ord_x', 'a@b.co')).rejects.toMatchObject({
+      status: 404,
+      code: 'ORDER_NOT_FOUND',
+    });
+  });
+});
+
+describe('submitLead', () => {
+  it('persists the lead with the form fields', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ ok: true, id: 'lead_1' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const id = await submitLead({
+      kind: 'demo',
+      name: 'Ada Obi',
+      business: 'Ada Stores',
+      businessType: 'Provision store',
+      phone: '08139711767',
+      email: 'ada@example.com',
+      tills: '2 tills',
+      branches: '1 branch',
+      locations: '',
+      notes: '',
+    });
+
+    const calls = fetchMock.mock.calls as unknown as Array<[string, RequestInit]>;
+    expect(calls[0]?.[0]).toBe('http://localhost:3002/api/leads');
+    expect(JSON.parse(String(calls[0]?.[1].body))).toMatchObject({
+      kind: 'demo',
+      name: 'Ada Obi',
+      phone: '08139711767',
+    });
+    expect(id).toBe('lead_1');
   });
 });
