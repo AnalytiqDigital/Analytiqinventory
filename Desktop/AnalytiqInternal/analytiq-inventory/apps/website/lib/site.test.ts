@@ -3,7 +3,9 @@ import {
   DEFAULT_INSTALLER_URL,
   DOWNLOAD_FALLBACK_PATH,
   INSTALLER_VERSION,
+  SUPPORT_PHONE,
   SUPPORT_WHATSAPP,
+  callUrl,
   downloadUrl,
   isInstallerHosted,
   whatsappUrl,
@@ -25,7 +27,7 @@ describe('whatsappUrl', () => {
   it('defaults to the support number from the landing page', () => {
     delete process.env.NEXT_PUBLIC_WHATSAPP;
     expect(whatsappUrl()).toBe(`https://wa.me/${SUPPORT_WHATSAPP}`);
-    expect(SUPPORT_WHATSAPP).toBe('2348124314217');
+    expect(SUPPORT_WHATSAPP).toBe('2348039171767');
   });
 
   it('encodes the prefilled message', () => {
@@ -43,6 +45,13 @@ describe('whatsappUrl', () => {
   it('falls back to the default number when an override has no digits', () => {
     process.env.NEXT_PUBLIC_WHATSAPP = '=';
     expect(whatsappUrl()).toBe(`https://wa.me/${SUPPORT_WHATSAPP}`);
+  });
+});
+
+describe('callUrl', () => {
+  it('dials the support line in international format', () => {
+    expect(SUPPORT_PHONE).toBe('+2348124314217');
+    expect(callUrl()).toBe('tel:+2348124314217');
   });
 });
 

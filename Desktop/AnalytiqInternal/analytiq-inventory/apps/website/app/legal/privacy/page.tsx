@@ -1,5 +1,12 @@
 import type { Metadata } from 'next';
-import { SUPPORT_WHATSAPP_LABEL, whatsappUrl } from '../../../lib/site';
+import {
+  COMPANY_SITE,
+  COMPANY_SITE_LABEL,
+  SUPPORT_PHONE_LABEL,
+  SUPPORT_WHATSAPP_LABEL,
+  callUrl,
+  whatsappUrl,
+} from '../../../lib/site';
 
 export const metadata: Metadata = {
   title: 'Privacy notice — AnalytIQ Inventory & POS',
@@ -85,6 +92,10 @@ export default function PrivacyPage() {
         Analytiq Digital, Abuja, Nigeria. WhatsApp:{' '}
         <a href={whatsappUrl('Hi AnalytIQ, I have a privacy question.')}>
           {SUPPORT_WHATSAPP_LABEL}
+        </a>{' '}
+        · Call: <a href={callUrl()}>{SUPPORT_PHONE_LABEL}</a> ·{' '}
+        <a href={COMPANY_SITE} target="_blank" rel="noreferrer">
+          {COMPANY_SITE_LABEL}
         </a>
         .
       </p>

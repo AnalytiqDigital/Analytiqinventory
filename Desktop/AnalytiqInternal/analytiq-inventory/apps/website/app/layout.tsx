@@ -1,6 +1,15 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
-import { INSTALLER_VERSION, SUPPORT_WHATSAPP_LABEL, whatsappUrl } from '../lib/site';
+import {
+  COMPANY_SITE,
+  COMPANY_SITE_LABEL,
+  INSTALLER_VERSION,
+  SUPPORT_HOURS,
+  SUPPORT_PHONE_LABEL,
+  SUPPORT_WHATSAPP_LABEL,
+  callUrl,
+  whatsappUrl,
+} from '../lib/site';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -13,6 +22,7 @@ const organisation = {
   '@context': 'https://schema.org',
   '@type': 'Organization',
   name: 'Analytiq Digital',
+  url: COMPANY_SITE,
   description: 'Makers of AnalytIQ Inventory & POS, offline-first shop software for Windows.',
   address: {
     '@type': 'PostalAddress',
@@ -22,7 +32,7 @@ const organisation = {
   contactPoint: {
     '@type': 'ContactPoint',
     contactType: 'customer support',
-    telephone: `+${SUPPORT_WHATSAPP_LABEL.replace(/\D/g, '')}`,
+    telephone: '+2348039171767',
     availableLanguage: ['en'],
   },
 };
@@ -37,7 +47,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           dangerouslySetInnerHTML={{ __html: JSON.stringify(organisation) }}
         />
         <div className="announce">
-          Offline-first Windows software · 14-day free trial · Support on WhatsApp, call and email
+          Offline-first Windows software · 14-day free trial · Support on WhatsApp and phone, {SUPPORT_HOURS}
         </div>
         <header className="site-header">
           <div className="container">
@@ -93,7 +103,16 @@ export default function RootLayout({ children }: { children: ReactNode }) {
                 Made by Analytiq Digital, Abuja, Nigeria. WhatsApp:{' '}
                 <a href={support} target="_blank" rel="noreferrer">
                   {SUPPORT_WHATSAPP_LABEL}
+                </a>{' '}
+                · Call:{' '}
+                <a href={callUrl()}>{SUPPORT_PHONE_LABEL}</a>
+              </p>
+              <p>
+                A product of{' '}
+                <a href={COMPANY_SITE} target="_blank" rel="noreferrer">
+                  {COMPANY_SITE_LABEL}
                 </a>
+                .
               </p>
               <p className="footer-muted">
                 © {new Date().getFullYear()} Analytiq Digital · Version {INSTALLER_VERSION}

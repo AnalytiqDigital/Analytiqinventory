@@ -4,7 +4,9 @@ import {
   INSTALLER_SHA256,
   INSTALLER_SIZE_LABEL,
   INSTALLER_VERSION,
+  SUPPORT_PHONE_LABEL,
   SUPPORT_WHATSAPP_LABEL,
+  callUrl,
   downloadUrl,
   isInstallerHosted,
   whatsappUrl,
@@ -42,9 +44,19 @@ export default function DownloadPage() {
           </div>
 
           {hosted ? (
-            <a className="btn btn-primary" href={installer}>
-              Download AnalytIQ for Windows
-            </a>
+            <>
+              <a className="btn btn-primary" href={installer}>
+                Download AnalytIQ for Windows
+              </a>
+              <p className="fine-print" style={{ marginTop: 12 }}>
+                The download is a ZIP file. Extract it, then run{' '}
+                <code>
+                  AnalytIQ-Inventory-Setup-{INSTALLER_VERSION}.exe
+                </code>{' '}
+                inside. On slow or expensive data, message us on WhatsApp and we can send the
+                installer or arrange a flash-drive copy.
+              </p>
+            </>
           ) : (
             <>
               <div className="callout amber">
@@ -68,6 +80,9 @@ export default function DownloadPage() {
               rel="noreferrer"
             >
               WhatsApp support
+            </a>
+            <a className="btn btn-outline" href={callUrl()}>
+              Call {SUPPORT_PHONE_LABEL}
             </a>
           </div>
 

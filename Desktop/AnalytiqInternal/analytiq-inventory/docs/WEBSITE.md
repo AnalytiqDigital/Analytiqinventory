@@ -28,7 +28,7 @@ Set these in Vercel (Project → Settings → Environment Variables) and in
 | -------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `NEXT_PUBLIC_API_URL`      | Yes      | Public origin of the deployed cloud API (`apps/cloud-api`), e.g. `https://api.analytiq.ng`                                                                                      |
 | `NEXT_PUBLIC_DOWNLOAD_URL` | No       | Direct HTTPS link to the Windows installer. Defaults to the public release in `AnalytiqDigital/analytiq-downloads`; set it to `/download` to show the WhatsApp fallback instead |
-| `NEXT_PUBLIC_WHATSAPP`     | No       | Support number, digits only. Defaults to `2348124314217`                                                                                                                        |
+| `NEXT_PUBLIC_WHATSAPP`     | No       | Support number, digits only. Defaults to `2348039171767`                                                                                                                        |
 
 `NEXT_PUBLIC_*` values are embedded at build time: redeploy after changing them.
 `downloadUrl()` ignores a malformed `NEXT_PUBLIC_DOWNLOAD_URL` (anything that is
@@ -98,7 +98,7 @@ browser; browsing the landing page and docs works without it.
 - [ ] Landing page loads on the Vercel preview URL; no console errors.
 - [ ] The package button opens `/checkout`; the cloud quote form opens WhatsApp
       with the location details prefilled.
-- [ ] WhatsApp buttons open `https://wa.me/2348124314217` with a prefilled message.
+- [ ] WhatsApp buttons open `https://wa.me/2348039171767` with a prefilled message.
 - [ ] `/docs/installation` and `/docs/usage` render; the download button points
       at the public AnalytIQ downloads release (or `NEXT_PUBLIC_DOWNLOAD_URL`).
 - [ ] `/legal/terms`, `/legal/privacy` and `/legal/refund` render and are linked
