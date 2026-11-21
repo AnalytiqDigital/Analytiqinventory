@@ -12,6 +12,9 @@ export const INSTALLER_SHA256 =
   '9dcaa5e06d9136b9f5a85404eb6ef8974263f9c53f009da8d93b6afe3f7d3bb6';
 export const INSTALLER_SIZE_LABEL = '95 MB';
 
+export const YOUTUBE_CHANNEL = 'https://www.youtube.com/@Analytiqdigital';
+export const YOUTUBE_CHANNEL_LABEL = 'AnalytIQ Digital Academy';
+
 /** YouTube video id (the part after watch?v=). Empty until the tutorial is uploaded. */
 export const TUTORIAL_YOUTUBE_ID = '';
 

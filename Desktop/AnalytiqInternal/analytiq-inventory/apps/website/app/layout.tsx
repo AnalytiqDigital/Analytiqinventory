@@ -7,6 +7,8 @@ import {
   SUPPORT_HOURS,
   SUPPORT_PHONE_LABEL,
   SUPPORT_WHATSAPP_LABEL,
+  YOUTUBE_CHANNEL,
+  YOUTUBE_CHANNEL_LABEL,
   callUrl,
   whatsappUrl,
 } from '../lib/site';
@@ -23,6 +25,7 @@ const organisation = {
   '@type': 'Organization',
   name: 'Analytiq Digital',
   url: COMPANY_SITE,
+  sameAs: [YOUTUBE_CHANNEL],
   description: 'Makers of AnalytIQ Inventory & POS, offline-first shop software for Windows.',
   address: {
     '@type': 'PostalAddress',
@@ -131,6 +134,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
               <h4>Help</h4>
               <a href="/docs/installation">Installation guide</a>
               <a href="/docs/usage">How to use AnalytIQ</a>
+              <a href={YOUTUBE_CHANNEL} target="_blank" rel="noreferrer">
+                {YOUTUBE_CHANNEL_LABEL} on YouTube
+              </a>
               <a href="/download">Download</a>
               <a href="/#faq">FAQ</a>
               <a href="/#support">Support</a>

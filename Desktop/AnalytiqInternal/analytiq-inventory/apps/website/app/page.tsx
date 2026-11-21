@@ -16,6 +16,8 @@ import {
   SUPPORT_PHONE_LABEL,
   SUPPORT_WHATSAPP_LABEL,
   TUTORIAL_YOUTUBE_ID,
+  YOUTUBE_CHANNEL,
+  YOUTUBE_CHANNEL_LABEL,
   callUrl,
   downloadUrl,
   whatsappUrl,
@@ -717,6 +719,11 @@ export default function HomePage() {
           </div>
           <p className="video-note">
             Prefer reading? The <a href="/docs/usage">usage guide</a> covers the same steps.
+            Walkthroughs are published on our{' '}
+            <a href={YOUTUBE_CHANNEL} target="_blank" rel="noreferrer">
+              {YOUTUBE_CHANNEL_LABEL} YouTube channel
+            </a>
+            .
           </p>
         </div>
       </section>
