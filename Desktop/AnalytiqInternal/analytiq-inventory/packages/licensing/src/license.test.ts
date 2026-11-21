@@ -2,14 +2,17 @@ import { generateKeyPairSync } from 'node:crypto';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { closeLocalDb, openLocalDb, runMigrations, type LocalDb } from '@analytiq/database';
 import {
   activateLicense,
+  activateLicenseOnline,
   deactivateLicense,
+  deactivateLicenseOnline,
   getInstallId,
   getLicenseStatus,
   issueLicense,
+  readMeta,
   TRIAL_DAYS,
   verifyLicenseKey,
 } from './index';
@@ -34,6 +37,7 @@ describe('offline license keys', () => {
 
   afterEach(() => {
     closeLocalDb(local);
+    vi.unstubAllGlobals();
   });
 
   function issue(days = 0, device: string | null = null, now = new Date()) {
@@ -163,5 +167,117 @@ describe('offline license keys', () => {
     expect(status.state).toBe('invalid');
     expect(status.usable).toBe(false);
     expect(status.reason).toMatch(/no license key configured/i);
+  });
+
+  it('binds an unbound key to this computer once, through the registry', async () => {
+    const calls: Array<{ url: string; body: Record<string, unknown> }> = [];
+    vi.stubGlobal(
+      'fetch',
+      (async (input: RequestInfo | URL, init?: RequestInit) => {
+        calls.push({ url: String(input), body: JSON.parse(String(init?.body)) });
+        return Response.json({ ok: true, state: 'active' });
+      }) as typeof fetch
+    );
+    const { key } = issue(365);
+
+    const status = await activateLicenseOnline(local, key, {
+      publicKey: publicKeyPem,
+      serverUrl: 'https://shop.test/',
+    });
+
+    expect(status.state).toBe('active');
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.url).toBe('https://shop.test/api/licence/activate');
+    expect(calls[0]?.body).toEqual({ key, installId: getInstallId(local) });
+    expect(readMeta(local, 'license.key')).toBe(key);
+  });
+
+  it('refuses a key that is already in use on another computer', async () => {
+    vi.stubGlobal(
+      'fetch',
+      (async () =>
+        Response.json(
+          { ok: false, error: 'already used elsewhere', code: 'LICENSE_IN_USE' },
+          { status: 409 }
+        )) as typeof fetch
+    );
+    const { key } = issue(365);
+
+    const error = await activateLicenseOnline(local, key, { publicKey: publicKeyPem }).catch(
+      (reason: unknown) => reason
+    );
+
+    expect(error).toMatchObject({ code: 'LICENSE_IN_USE', message: 'already used elsewhere' });
+    expect(readMeta(local, 'license.key')).toBeNull();
+  });
+
+  it('fails closed when the activation server cannot be reached', async () => {
+    vi.stubGlobal(
+      'fetch',
+      (async () => {
+        throw new TypeError('fetch failed');
+      }) as typeof fetch
+    );
+    const { key } = issue(365);
+
+    const error = await activateLicenseOnline(local, key, { publicKey: publicKeyPem }).catch(
+      (reason: unknown) => reason
+    );
+
+    expect(error).toMatchObject({ code: 'ACTIVATION_OFFLINE' });
+    expect(readMeta(local, 'license.key')).toBeNull();
+  });
+
+  it('activates a device-bound key without a network call', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const { key } = issue(365, getInstallId(local));
+
+    const status = await activateLicenseOnline(local, key, { publicKey: publicKeyPem });
+
+    expect(status.state).toBe('active');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('releases the binding before clearing a stored key', async () => {
+    const calls: Array<{ url: string; body: Record<string, unknown> }> = [];
+    vi.stubGlobal(
+      'fetch',
+      (async (input: RequestInfo | URL, init?: RequestInit) => {
+        calls.push({ url: String(input), body: JSON.parse(String(init?.body)) });
+        return Response.json({ ok: true, state: 'released' });
+      }) as typeof fetch
+    );
+    const { key } = issue(365);
+    activateLicense(local, key, { publicKey: publicKeyPem });
+
+    await deactivateLicenseOnline(local, {
+      publicKey: publicKeyPem,
+      serverUrl: 'https://shop.test',
+    });
+
+    expect(calls[0]?.url).toBe('https://shop.test/api/licence/deactivate');
+    expect(calls[0]?.body).toEqual({ key, installId: getInstallId(local) });
+    expect(readMeta(local, 'license.key')).toBeNull();
+  });
+
+  it('keeps the key when another computer holds the binding', async () => {
+    vi.stubGlobal(
+      'fetch',
+      (async () =>
+        Response.json(
+          { ok: false, error: 'held elsewhere', code: 'LICENSE_DEVICE_MISMATCH' },
+          { status: 409 }
+        )) as typeof fetch
+    );
+    const { key } = issue(365);
+    activateLicense(local, key, { publicKey: publicKeyPem });
+
+    const error = await deactivateLicenseOnline(local, { publicKey: publicKeyPem }).catch(
+      (reason: unknown) => reason
+    );
+
+    expect(error).toMatchObject({ code: 'LICENSE_DEVICE_MISMATCH' });
+    expect(readMeta(local, 'license.key')).toBe(key);
   });
 });

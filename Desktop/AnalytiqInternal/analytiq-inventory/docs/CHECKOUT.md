@@ -149,6 +149,21 @@ the website's API client (error mapping, network failure, URL encoding).
 5. Replace the file store with a managed database before running more than one
    API instance.
 
+### Vercel, no server and no database
+
+The website can run the checkout by itself: the route handlers in
+`apps/website/app/api` start Paystack, verify the paid transaction, and sign the
+key directly from it. Orders live in Paystack (the dashboard is the ledger) and
+Google Apps Script emails the key from the vendor's Gmail address, so no order
+file, Redis or VM is involved. Keys are deterministic per transaction, so the
+success page and `/retrieve-key` recover the same key even if a webhook is
+missed. See [`deploy/vercel`](../deploy/vercel/README.md) for the copy-paste
+setup.
+
+Leave `NEXT_PUBLIC_API_URL` unset in that mode so the browser calls the site's
+own `/api` routes. Setting it points the same site back at a separately hosted
+API (the Docker/cloud deployment below).
+
 ### Always Free VM (Oracle Cloud + Caddy)
 
 To avoid a managed-host bill, run the same image on an Oracle Cloud Always Free
@@ -160,6 +175,11 @@ is mounted read-only from `deploy/oracle-cloud/secrets/`.
 
 The site still lives on Vercel; only `NEXT_PUBLIC_API_URL` changes to the VM's
 API hostname, and the Paystack webhook points at the same host.
+
+Google Cloud's Always Free `e2-micro` is a similar option, but its public IPv4
+address is billed (about $3.65/month) and is not part of the free tier. The
+same stack and a beginner runbook live in
+[`deploy/google-cloud`](../deploy/google-cloud/README.md).
 
 ### Container host (Render, Railway, Fly.io)
 

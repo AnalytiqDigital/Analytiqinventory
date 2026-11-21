@@ -6,6 +6,7 @@
   "types": "./dist/index.js",
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "build:key": "tsc -p tsconfig.key.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint src --ext .ts",
     "test": "vitest run",

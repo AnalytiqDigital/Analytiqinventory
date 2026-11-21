@@ -156,7 +156,12 @@ import {
   type AuthenticatedUser,
   type LocalDb,
 } from '@analytiq/database';
-import { activateLicense, getLicenseStatus, LICENSE_PUBLIC_KEY } from '@analytiq/licensing';
+import {
+  activateLicenseOnline,
+  deactivateLicenseOnline,
+  getLicenseStatus,
+  LICENSE_PUBLIC_KEY,
+} from '@analytiq/licensing';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -178,6 +183,8 @@ export interface ServerOptions {
   tls?: { key: string | Buffer; cert: string | Buffer };
   /** Overrides the embedded vendor public key; used by tests and white-label builds. */
   licensePublicKey?: string;
+  /** Website origin that records first-use activation; defaults to the public site. */
+  activationUrl?: string;
   /** Shared secret branches present on every /sync call. Empty disables sync. */
   syncKey?: string;
 }
@@ -199,6 +206,7 @@ const LICENSE_EXEMPT = new Set([
   '/api/auth/me',
   '/api/license/status',
   '/api/license/activate',
+  '/api/license/deactivate',
 ]);
 
 // Per-IP throttle in front of password checks. The database already locks an
@@ -429,10 +437,24 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
         }
         return {
           ok: true,
-          status: activateLicense(local, key, {
+          status: await activateLicenseOnline(local, key, {
             publicKey: scope.licensePublicKey,
             actor: { userId: user.id, businessId: user.businessId },
+            serverUrl: options.activationUrl,
           }),
+        };
+      });
+
+      scope.post('/license/deactivate', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        requirePermission(new Set(user.permissions), 'settings.manage');
+        await deactivateLicenseOnline(local, {
+          publicKey: scope.licensePublicKey,
+          serverUrl: options.activationUrl,
+        });
+        return {
+          ok: true,
+          status: getLicenseStatus(local, { publicKey: scope.licensePublicKey }),
         };
       });
 

@@ -11,5 +11,6 @@ apps/cloud-api/data
 .ebcache
 .secrets
 deploy/oracle-cloud/secrets
+deploy/google-cloud/secrets
 **/.env
 .git

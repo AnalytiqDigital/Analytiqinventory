@@ -54,9 +54,9 @@ export default function RetrieveKeyForm() {
   if (order) {
     const licenceDays = findLicensePlan(order.planId)?.days ?? 365;
     const issuedAt = new Date(order.paidAt ?? order.createdAt);
-    const expiresOn = new Date(
-      issuedAt.getTime() + licenceDays * 24 * 60 * 60 * 1000
-    ).toISOString();
+    const expiresOn =
+      order.expiresAt ??
+      new Date(issuedAt.getTime() + licenceDays * 24 * 60 * 60 * 1000).toISOString();
     const note = deliveryNote(order);
 
     return (

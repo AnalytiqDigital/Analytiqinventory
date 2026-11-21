@@ -24,7 +24,8 @@ ANQ1.<payload>.<signature>
 
 - `ANQ1` — format marker. Anything else is rejected before parsing.
 - `payload` — base64url JSON: `{ v, id, business, plan, issued, expires, device }`.
-  `expires: null` means perpetual; `device: null` means any installation.
+  `expires: null` means perpetual; `device: null` means the key is not
+  pre-bound (the first activation binds it — see below).
 - `signature` — base64url Ed25519 signature over the raw payload bytes.
 
 The app verifies the signature with the embedded public key, then checks:
@@ -33,6 +34,34 @@ The app verifies the signature with the embedded public key, then checks:
    install's id (`schema_meta['license.install_id']`).
 2. **Expiry** — a key is valid through the end of its expiry day (UTC), then
    reported as `expired`.
+
+## One key, one computer
+
+Keys issued for a purchase are not bound to a device in the payload. Instead,
+the first successful activation records `licence id → installation id` in the
+**activation registry** (a Google Sheet behind the website's Apps Script, see
+`deploy/vercel/README.md`). The app asks the website once:
+
+- first computer → binding recorded, key stored locally;
+- another computer → refused with `LICENSE_IN_USE`;
+- no internet (or the registry is not configured) → refused with
+  `ACTIVATION_OFFLINE` / `ACTIVATION_UNAVAILABLE`. Activation is the only step
+  that needs the network; afterwards the app is fully offline.
+
+To move computers, **Settings → Licence → Deactivate this computer** releases
+the binding and removes the local key. If the old machine is gone, support
+clears the **Install id** cell in the **AnalytIQ activations** sheet after
+confirming the customer on WhatsApp or phone. Keys issued with `--device` (the
+vendor CLI) are bound in the payload itself and activate offline; the registry
+is not consulted for them.
+
+The app calls `https://www.analytiq.ng` by default. To test against another
+site (preview deploy, staging), build with `ANALYTIQ_ACTIVATION_URL` set to that
+origin; the LAN server's `activationUrl` option overrides it per process.
+
+Honest limit: this is a client-side check. A determined user can block the
+network or patch the app. It stops the common case — one buyer sharing a key
+with a second shop — not a motivated attacker.
 
 Licensing state is stored in `schema_meta`, the global key/value table:
 
@@ -100,10 +129,10 @@ node packages/licensing/scripts/issue.mjs --business "Ada's Supermart" --json > 
 
 ## Activating a key
 
-In the app: **Settings → License → Manage license**, paste the key as an
-administrator and choose **Activate this computer**. The screen shows the
-activation state, plan, expiry, license id and this installation's id (with a
-copy button, so a device-bound key can be requested).
+In the app: **Settings → Licence → Manage licence**, paste the key as an
+administrator and choose **Activate this computer**. The copy must be online for
+this step. The screen shows the activation state, plan, expiry, license id and
+this installation's id.
 
 The activation screen is reachable when the copy is unlicensed or expired. It
 requires the `settings.manage` permission (administrators only).
@@ -128,7 +157,7 @@ bypass it:
 
 | File                                     | Purpose                                                   |
 | ---------------------------------------- | --------------------------------------------------------- |
-| `packages/licensing/src/index.ts`        | Sign, verify, activate, trial and status logic            |
+| `packages/licensing/src/index.ts`        | Sign, verify, activate, trial, registry binding and status logic            |
 | `packages/licensing/src/publicKey.ts`    | Embedded public key (placeholder until `keygen.mjs` runs) |
 | `packages/licensing/scripts/keygen.mjs`  | Generate the vendor keypair once                          |
 | `packages/licensing/scripts/issue.mjs`   | Issue a key from the private key                          |

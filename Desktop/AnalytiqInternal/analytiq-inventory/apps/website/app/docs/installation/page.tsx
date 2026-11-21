@@ -112,8 +112,8 @@ export default function InstallationPage() {
               </li>
               <li>Paste the licence key from your payment confirmation page.</li>
               <li>
-                Choose <strong>Activate</strong>. Activation is offline — no internet is needed on
-                the shop computer.
+                Choose <strong>Activate</strong>. Keep the computer online for this one step — the
+                key locks to this computer, then the app works fully offline.
               </li>
             </ol>
             <p>

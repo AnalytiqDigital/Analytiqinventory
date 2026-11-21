@@ -3,7 +3,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { hashPassword, newId } from '@analytiq/database';
 import { issueLicense } from '@analytiq/licensing';
 import { buildServer } from './server';
@@ -758,6 +758,8 @@ describe('LAN server API', () => {
         plan: 'pro',
         privateKeyPem: privatePem,
       });
+      // First activation checks the licence registry; keep the test offline.
+      vi.stubGlobal('fetch', (async () => Response.json({ ok: true, state: 'active' })) as typeof fetch);
       const activated = await post('/api/license/activate', { key: issued.key }, token);
       expect(activated.statusCode).toBe(200);
       expect(
@@ -776,7 +778,12 @@ describe('LAN server API', () => {
       const tampered = await post('/api/license/activate', { key: `${issued.key}x` }, token);
       expect(tampered.statusCode).toBe(400);
       expect(tampered.json()).toMatchObject({ ok: false, code: 'LICENSE_INVALID' });
+
+      const released = await post('/api/license/deactivate', undefined, token);
+      expect(released.statusCode).toBe(200);
+      expect((released.json() as { status: { usable: boolean } }).status.usable).toBe(false);
     } finally {
+      vi.unstubAllGlobals();
       await licensed.close();
     }
   });

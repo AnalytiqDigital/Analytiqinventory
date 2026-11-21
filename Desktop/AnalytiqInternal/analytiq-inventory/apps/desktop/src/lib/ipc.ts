@@ -108,6 +108,8 @@ function fallbackApi(): AnalytiqApi {
 
     licenseStatus: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
     licenseActivate: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    licenseDeactivate: () =>
+      Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
 
     updateCheck: () =>
       Promise.resolve({

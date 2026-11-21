@@ -229,3 +229,126 @@ export function activateLicense(
 export function deactivateLicense(local: LocalDb): void {
   local.raw.prepare('DELETE FROM schema_meta WHERE key = ?').run(META_KEY);
 }
+
+/**
+ * One key, one computer. Keys issued without a device are bound to the first
+ * installation that activates them (recorded by the licence registry), so the
+ * same key cannot license a second machine. The registry call happens once;
+ * the key then works offline. Keys already bound to a device at issue time
+ * skip the network entirely.
+ */
+export const ACTIVATION_SERVER = 'https://www.analytiq.ng';
+
+const ACTIVATION_OFFLINE_MESSAGE =
+  'Cannot reach the AnalytIQ activation server. Connect to the internet and try again — a licence key can only be used on one computer.';
+const ACTIVATION_UNAVAILABLE_MESSAGE =
+  'Activation is temporarily unavailable. Try again in a moment or contact AnalytIQ support.';
+const LICENSE_IN_USE_MESSAGE =
+  'This licence key is already activated on another computer. Deactivate it there first, or contact AnalytIQ support.';
+
+export interface ActivationNetworkOptions extends StatusOptions {
+  /** Website origin that runs /api/licence/activate. */
+  serverUrl?: string;
+  fetchImpl?: typeof fetch;
+  timeoutMs?: number;
+}
+
+function messageOf(body: unknown): string | null {
+  if (!body || typeof body !== 'object') return null;
+  const value = (body as { error?: unknown }).error;
+  return typeof value === 'string' && value.trim() ? value : null;
+}
+
+function codeOf(body: unknown): string | null {
+  if (!body || typeof body !== 'object') return null;
+  const value = (body as { code?: unknown }).code;
+  return typeof value === 'string' && value.trim() ? value : null;
+}
+
+async function postActivation(
+  path: string,
+  payload: Record<string, unknown>,
+  options: ActivationNetworkOptions
+): Promise<Response> {
+  const base = (
+    options.serverUrl ??
+    process.env.ANALYTIQ_ACTIVATION_URL ??
+    ACTIVATION_SERVER
+  ).replace(/\/+$/, '');
+  try {
+    return await (options.fetchImpl ?? fetch)(`${base}${path}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(options.timeoutMs ?? 15_000),
+    });
+  } catch {
+    throw codedError(ACTIVATION_OFFLINE_MESSAGE, 'ACTIVATION_OFFLINE');
+  }
+}
+
+async function refusal(response: Response): Promise<never> {
+  let body: unknown = null;
+  try {
+    body = await response.json();
+  } catch {
+    // Non-JSON bodies fall through to the generic messages below.
+  }
+  const code = codeOf(body);
+  if (code === 'LICENSE_IN_USE' || (response.status === 409 && code === null)) {
+    throw codedError(messageOf(body) ?? LICENSE_IN_USE_MESSAGE, 'LICENSE_IN_USE');
+  }
+  if (code === 'LICENSE_EXPIRED' || code === 'LICENSE_DEVICE_MISMATCH' || code === 'LICENSE_INVALID') {
+    throw codedError(messageOf(body) ?? 'That license key could not be activated', code);
+  }
+  throw codedError(messageOf(body) ?? ACTIVATION_UNAVAILABLE_MESSAGE, 'ACTIVATION_UNAVAILABLE');
+}
+
+export async function activateLicenseOnline(
+  local: LocalDb,
+  rawKey: string,
+  options: ActivationNetworkOptions = {}
+): Promise<LicenseStatus> {
+  const now = options.now ?? new Date();
+  const key = rawKey.trim();
+  const check = verifyLicenseKey(key, options.publicKey ?? LICENSE_PUBLIC_KEY);
+  if (!check.valid || !check.payload) {
+    throw codedError(check.reason ?? 'License key is not valid', 'LICENSE_INVALID');
+  }
+  if (check.payload.device) return activateLicense(local, key, options);
+  if (expired(check.payload, now)) {
+    throw codedError('The license key has expired', 'LICENSE_EXPIRED');
+  }
+
+  const response = await postActivation(
+    '/api/licence/activate',
+    { key, installId: getInstallId(local) },
+    options
+  );
+  if (!response.ok) await refusal(response);
+  return activateLicense(local, key, options);
+}
+
+export async function deactivateLicenseOnline(
+  local: LocalDb,
+  options: ActivationNetworkOptions = {}
+): Promise<void> {
+  const rawKey = readMeta(local, META_KEY);
+  if (!rawKey) {
+    deactivateLicense(local);
+    return;
+  }
+  const check = verifyLicenseKey(rawKey, options.publicKey ?? LICENSE_PUBLIC_KEY);
+  if (!check.valid || !check.payload || check.payload.device) {
+    deactivateLicense(local);
+    return;
+  }
+
+  const response = await postActivation(
+    '/api/licence/deactivate',
+    { key: rawKey.trim(), installId: getInstallId(local) },
+    options
+  );
+  if (!response.ok) await refusal(response);
+  deactivateLicense(local);
+}

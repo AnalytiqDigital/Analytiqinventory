@@ -1019,6 +1019,14 @@ export const retrieveKeySchema = z.object({
 
 export type RetrieveKeyInput = z.infer<typeof retrieveKeySchema>;
 
+/** First activation: the signed key plus the install id it is bound to. */
+export const activationSchema = z.object({
+  key: z.string().trim().min(32, 'Paste the licence key').max(4000),
+  installId: z.string().trim().min(8, 'Installation id is required').max(128),
+});
+
+export type ActivationInput = z.infer<typeof activationSchema>;
+
 export const leadSchema = z.object({
   kind: z.enum(['demo', 'quote']),
   name: z.string().trim().min(1, 'Enter your name').max(120),

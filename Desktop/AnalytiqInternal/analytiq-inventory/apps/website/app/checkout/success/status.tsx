@@ -14,6 +14,7 @@ export default function SuccessStatus() {
   const search = useSearchParams();
   const reference = search.get('reference') ?? search.get('trxref') ?? '';
   const [order, setOrder] = useState<OrderView | null>(null);
+  const [lost, setLost] = useState(false);
   const [failure, setFailure] = useState('');
   const [attempts, setAttempts] = useState(0);
   const [copied, setCopied] = useState(false);
@@ -37,6 +38,10 @@ export default function SuccessStatus() {
         }
       } catch (error) {
         if (cancelled) return;
+        if (error instanceof CheckoutError && error.code === 'ORDER_NOT_FOUND') {
+          setLost(true);
+          return;
+        }
         setFailure(
           error instanceof CheckoutError
             ? error.message
@@ -91,6 +96,26 @@ export default function SuccessStatus() {
   }
 
   if (!order) {
+    if (lost) {
+      return (
+        <div className="success-card">
+          <div className="status-dot">!</div>
+          <h1>We could not find that order</h1>
+          <p className="lede">
+            No paid order matches this link. If you have just paid, wait a moment and refresh. If
+            the key is still missing, recover it with your reference and checkout email.
+          </p>
+          <div className="success-actions">
+            <a className="btn btn-primary" href="/retrieve-key">
+              Retrieve your licence key
+            </a>
+            <a className="btn btn-outline" href="/checkout">
+              Start again
+            </a>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="success-card">
         <div className="spinner" aria-hidden="true" />
@@ -155,7 +180,9 @@ export default function SuccessStatus() {
 
   const licenceDays = findLicensePlan(order.planId)?.days ?? 365;
   const issuedAt = new Date(order.paidAt ?? order.createdAt);
-  const expiresOn = new Date(issuedAt.getTime() + licenceDays * 24 * 60 * 60 * 1000).toISOString();
+  const expiresOn =
+    order.expiresAt ??
+    new Date(issuedAt.getTime() + licenceDays * 24 * 60 * 60 * 1000).toISOString();
   const delivered: string[] = [];
   if (order.delivery?.email?.state === 'sent') delivered.push(`email to ${order.email}`);
   if (order.delivery?.whatsapp?.state === 'sent') delivered.push('WhatsApp');
@@ -220,7 +247,10 @@ export default function SuccessStatus() {
         </li>
         <li>Open AnalytIQ and finish the short setup wizard.</li>
         <li>Go to Settings → Licence.</li>
-        <li>Paste the key and choose Activate. Activation works offline.</li>
+        <li>
+          Paste the key and choose Activate. Keep the computer online for this one step — the key
+          locks to this computer, then works offline.
+        </li>
         <li>
           Keep the key with your records. To move computers later, deactivate on the old one first.
         </li>

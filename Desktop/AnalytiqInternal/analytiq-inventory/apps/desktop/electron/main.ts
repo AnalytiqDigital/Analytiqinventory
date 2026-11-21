@@ -143,7 +143,13 @@ import {
   voidSale,
   type LocalDb,
 } from '@analytiq/database';
-import { activateLicense, getLicenseStatus, readMeta, writeMeta } from '@analytiq/licensing';
+import {
+  activateLicenseOnline,
+  deactivateLicenseOnline,
+  getLicenseStatus,
+  readMeta,
+  writeMeta,
+} from '@analytiq/licensing';
 import path from 'node:path';
 import { copyFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import log from 'electron-log';
@@ -335,10 +341,21 @@ function licenseHandlers(): void {
       }
       return {
         ok: true,
-        status: activateLicense(db, key, {
+        status: await activateLicenseOnline(db, key, {
           actor: { userId: user.id, businessId: user.businessId },
         }),
       };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
+
+  ipcMain.handle('license:deactivate', async () => {
+    try {
+      const { db, user } = await authenticateSession();
+      requirePermission(new Set(user.permissions), 'settings.manage');
+      await deactivateLicenseOnline(db);
+      return { ok: true, status: getLicenseStatus(db) };
     } catch (err: unknown) {
       return { ok: false, ...safeError(err) };
     }
