@@ -6,12 +6,17 @@ import { DemoRequest } from '../components/DemoRequest';
 import { QuoteRequest } from '../components/QuoteRequest';
 import { formatNaira } from '../lib/format';
 import {
+  COMPANY_SITE,
+  COMPANY_SITE_LABEL,
   DEFAULT_INSTALLER_URL,
   INSTALLER_SHA256,
   INSTALLER_SIZE_LABEL,
   INSTALLER_VERSION,
+  SUPPORT_HOURS,
+  SUPPORT_PHONE_LABEL,
   SUPPORT_WHATSAPP_LABEL,
   TUTORIAL_YOUTUBE_ID,
+  callUrl,
   downloadUrl,
   whatsappUrl,
 } from '../lib/site';
@@ -1014,7 +1019,8 @@ export default function HomePage() {
 
           <p className="packages-note">
             Pay by card, transfer or USSD through Paystack. Your licence key appears on screen
-            straight after payment. Questions about the package?{' '}
+            straight after payment — save it. If the page closes before you do, message support with
+            your Paystack reference and we will resend it. Questions about the package?{' '}
             <a href={support} target="_blank" rel="noreferrer">
               Message us on WhatsApp
             </a>
@@ -1029,8 +1035,9 @@ export default function HomePage() {
             <span className="eyebrow">Support &amp; onboarding</span>
             <h2>From payment to your first sale</h2>
             <p>
-              Support is on WhatsApp at {SUPPORT_WHATSAPP_LABEL}. We reply during working hours,
-              West Africa Time (Monday–Saturday).
+              Support is on WhatsApp at {SUPPORT_WHATSAPP_LABEL} or call {SUPPORT_PHONE_LABEL}. We
+              reply {SUPPORT_HOURS}; installation and activation issues are answered the same
+              working day.
             </p>
           </div>
           <div className="support-grid">
@@ -1059,6 +1066,9 @@ export default function HomePage() {
               >
                 Message support on WhatsApp
               </a>
+              <a className="btn btn-outline btn-block" href={callUrl()}>
+                Call {SUPPORT_PHONE_LABEL}
+              </a>
             </aside>
           </div>
           <p className="fine-print version-line">
@@ -1079,8 +1089,11 @@ export default function HomePage() {
             <span className="eyebrow">Company</span>
             <h2>Made in Abuja for Nigerian shops</h2>
             <p>
-              Analytiq Digital builds offline-first business software. AnalytIQ Inventory &amp; POS
-              is our shop counter product.
+              AnalytIQ Inventory &amp; POS is a product of Analytiq Digital —{' '}
+              <a href={COMPANY_SITE} target="_blank" rel="noreferrer">
+                {COMPANY_SITE_LABEL}
+              </a>
+              . We build offline-first business software for Nigerian shops.
             </p>
           </div>
           <div className="company-grid">
@@ -1094,11 +1107,14 @@ export default function HomePage() {
             <article className="company-card">
               <h3>Contact</h3>
               <p>
-                WhatsApp and calls: {SUPPORT_WHATSAPP_LABEL}. Working hours, West Africa Time,
-                Monday–Saturday.
+                WhatsApp: {SUPPORT_WHATSAPP_LABEL} · Calls: {SUPPORT_PHONE_LABEL}.{' '}
+                {SUPPORT_HOURS}.
               </p>
               <a className="text-link" href={support} target="_blank" rel="noreferrer">
                 Open WhatsApp →
+              </a>{' '}
+              <a className="text-link" href={callUrl()}>
+                Call support →
               </a>
             </article>
             <article className="company-card">
@@ -1109,7 +1125,8 @@ export default function HomePage() {
                 <a href="/legal/refund">Refund policy</a>
               </p>
               <p className="footer-muted">
-                We do not receive your sales data unless you turn on WhatsApp alerts or branch sync.
+                Your shop records stay on your PC. WhatsApp alerts send a message through WhatsApp,
+                and branch sync sends data only to the endpoint you configure.
               </p>
             </article>
           </div>

@@ -1,5 +1,12 @@
 import type { Metadata } from 'next';
-import { SUPPORT_WHATSAPP_LABEL, whatsappUrl } from '../../../lib/site';
+import {
+  COMPANY_SITE,
+  COMPANY_SITE_LABEL,
+  SUPPORT_PHONE_LABEL,
+  SUPPORT_WHATSAPP_LABEL,
+  callUrl,
+  whatsappUrl,
+} from '../../../lib/site';
 
 export const metadata: Metadata = {
   title: 'Refund policy — AnalytIQ Inventory & POS',
@@ -67,6 +74,10 @@ export default function RefundPage() {
         Analytiq Digital, Abuja, Nigeria. WhatsApp:{' '}
         <a href={whatsappUrl('Hi AnalytIQ, I would like to request a refund.')}>
           {SUPPORT_WHATSAPP_LABEL}
+        </a>{' '}
+        · Call: <a href={callUrl()}>{SUPPORT_PHONE_LABEL}</a> ·{' '}
+        <a href={COMPANY_SITE} target="_blank" rel="noreferrer">
+          {COMPANY_SITE_LABEL}
         </a>
         .
       </p>

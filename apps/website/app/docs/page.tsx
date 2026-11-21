@@ -1,6 +1,11 @@
 import type { Metadata } from 'next';
 import { DocsNav } from '../../components/DocsNav';
-import { SUPPORT_WHATSAPP_LABEL, whatsappUrl } from '../../lib/site';
+import {
+  SUPPORT_PHONE_LABEL,
+  SUPPORT_WHATSAPP_LABEL,
+  callUrl,
+  whatsappUrl,
+} from '../../lib/site';
 
 export const metadata: Metadata = {
   title: 'Docs — AnalytIQ Inventory & POS',
@@ -69,8 +74,9 @@ export default function DocsPage() {
               <strong>Need a hand?</strong> Message us on WhatsApp at{' '}
               <a href={whatsappUrl('Hi AnalytIQ, I need help.')} target="_blank" rel="noreferrer">
                 {SUPPORT_WHATSAPP_LABEL}
-              </a>
-              . We can walk you through installation or a stock take.
+              </a>{' '}
+              or <a href={callUrl()}>call {SUPPORT_PHONE_LABEL}</a>. We can walk you through
+              installation or a stock take.
             </div>
 
             <div className="docs-next">

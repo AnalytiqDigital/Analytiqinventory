@@ -1,5 +1,12 @@
 import type { Metadata } from 'next';
-import { SUPPORT_WHATSAPP_LABEL, whatsappUrl } from '../../../lib/site';
+import {
+  COMPANY_SITE,
+  COMPANY_SITE_LABEL,
+  SUPPORT_PHONE_LABEL,
+  SUPPORT_WHATSAPP_LABEL,
+  callUrl,
+  whatsappUrl,
+} from '../../../lib/site';
 
 export const metadata: Metadata = {
   title: 'Terms of use — AnalytIQ Inventory & POS',
@@ -69,10 +76,11 @@ export default function TermsPage() {
 
       <h2>6. Support</h2>
       <p>
-        Support is available on WhatsApp at {SUPPORT_WHATSAPP_LABEL} during working hours, West
-        Africa Time, Monday to Saturday. Support covers installation, activation, restoring backups
-        and defects in the software. It does not cover hardware, Windows or network problems outside
-        the software.
+        Support is available on WhatsApp at {SUPPORT_WHATSAPP_LABEL} and by phone at{' '}
+        {SUPPORT_PHONE_LABEL}, Monday to Saturday, 9:00–18:00 West Africa Time. Installation and
+        activation issues are answered the same working day. Support covers installation,
+        activation, restoring backups and defects in the software. It does not cover hardware,
+        Windows or network problems outside the software.
       </p>
 
       <h2>7. Warranty</h2>
@@ -109,6 +117,10 @@ export default function TermsPage() {
         Analytiq Digital, Abuja, Nigeria. WhatsApp:{' '}
         <a href={whatsappUrl('Hi AnalytIQ, I have a question about the licence terms.')}>
           {SUPPORT_WHATSAPP_LABEL}
+        </a>{' '}
+        · Call: <a href={callUrl()}>{SUPPORT_PHONE_LABEL}</a> ·{' '}
+        <a href={COMPANY_SITE} target="_blank" rel="noreferrer">
+          {COMPANY_SITE_LABEL}
         </a>
         .
       </p>

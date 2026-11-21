@@ -182,20 +182,22 @@ export function HelpPage(): JSX.Element {
           </CardHeader>
           <CardContent className="space-y-2 text-sm text-slate-600 dark:text-slate-300">
             <p>
-              Your licence key is entered once under Licence. Keep the key email safe — you will
-              need it if the app is reinstalled.
+              Your licence key is entered once under Licence. Keep the key safe — you will need it
+              if the app is reinstalled.
             </p>
             <p>
               WhatsApp support:{' '}
-              <span className="font-medium">+234 812 431 4217</span>. Send a short description of
-              the problem and attach the diagnostics below.
+              <span className="font-medium">0803 917 1767</span> · Calls:{' '}
+              <span className="font-medium">0812 431 4217</span>. Send a short description of the
+              problem and attach the diagnostics below. Support hours: Monday–Saturday, 9:00–18:00
+              WAT.
             </p>
             <Button
               variant="secondary"
               size="sm"
               onClick={() =>
                 void ipc.openExternal(
-                  'https://wa.me/2348124314217?text=Hi%20AnalytIQ%2C%20I%20need%20help%20with%20the%20app.'
+                  'https://wa.me/2348039171767?text=Hi%20AnalytIQ%2C%20I%20need%20help%20with%20the%20app.'
                 )
               }
             >

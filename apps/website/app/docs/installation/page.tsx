@@ -1,6 +1,13 @@
 import type { Metadata } from 'next';
 import { DocsNav } from '../../../components/DocsNav';
-import { downloadUrl, SUPPORT_WHATSAPP_LABEL, whatsappUrl } from '../../../lib/site';
+import {
+  INSTALLER_VERSION,
+  SUPPORT_PHONE_LABEL,
+  SUPPORT_WHATSAPP_LABEL,
+  callUrl,
+  downloadUrl,
+  whatsappUrl,
+} from '../../../lib/site';
 
 export const metadata: Metadata = {
   title: 'Installation guide — AnalytIQ',
@@ -32,13 +39,20 @@ export default function InstallationPage() {
 
             <h2 id="download">1. Download the installer</h2>
             <p>
-              Download <code>AnalytIQ-Inventory-Setup.exe</code> from the button below. The file is
-              around 95 MB and installs for the current Windows user.
+              Click the button below to download{' '}
+              <code>AnalytIQ-Inventory-{INSTALLER_VERSION}-Windows.zip</code> (about 95 MB), then
+              extract it. Inside is <code>AnalytIQ-Inventory-Setup-{INSTALLER_VERSION}.exe</code> —
+              the file you run. The download page shows the SHA-256 checksum so you can confirm the
+              file is intact.
             </p>
             <p>
               <a className="btn btn-primary" href={installer}>
                 Download for Windows
               </a>
+            </p>
+            <p>
+              On slow or expensive data, or if you need the installer on a flash drive, message
+              support on WhatsApp ({SUPPORT_WHATSAPP_LABEL}) or call {SUPPORT_PHONE_LABEL}.
             </p>
 
             <h2 id="smartscreen">2. Allow the installer to run</h2>
@@ -105,7 +119,8 @@ export default function InstallationPage() {
             <p>
               Your key is locked to this computer. To move to another PC later, choose{' '}
               <strong>Deactivate</strong> on the old machine first, then activate the same key on
-              the new one.
+              the new one. If the old computer will not start, message support with your licence key
+              and we will release it from our side.
             </p>
 
             <h2 id="hardware">6. Connect your printer and scanner</h2>
@@ -159,6 +174,9 @@ export default function InstallationPage() {
                 rel="noreferrer"
               >
                 WhatsApp support
+              </a>
+              <a className="btn btn-outline" href={callUrl()}>
+                Call {SUPPORT_PHONE_LABEL}
               </a>
             </div>
           </div>
