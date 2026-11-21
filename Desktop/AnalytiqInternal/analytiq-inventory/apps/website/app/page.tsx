@@ -1118,7 +1118,7 @@ export default function HomePage() {
         <div className="container">
           <div className="section-head">
             <span className="eyebrow">Company</span>
-            <h2>Made in Abuja for Nigerian shops</h2>
+            <h2>Built for Nigerian shops</h2>
             <p>
               AnalytIQ Inventory &amp; POS is a product of Analytiq Digital —{' '}
               <a href={COMPANY_SITE} target="_blank" rel="noreferrer">
@@ -1131,8 +1131,8 @@ export default function HomePage() {
             <article className="company-card">
               <h3>Who we are</h3>
               <p>
-                Analytiq Digital, Abuja, Nigeria. We publish the app, the guides and the licence
-                terms on this site.
+                Analytiq Digital. We publish the app, the guides and the licence terms on this
+                site.
               </p>
             </article>
             <article className="company-card">

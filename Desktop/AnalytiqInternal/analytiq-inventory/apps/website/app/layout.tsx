@@ -29,7 +29,6 @@ const organisation = {
   description: 'Makers of AnalytIQ Inventory & POS, offline-first shop software for Windows.',
   address: {
     '@type': 'PostalAddress',
-    addressLocality: 'Abuja',
     addressCountry: 'NG',
   },
   contactPoint: {
@@ -103,7 +102,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
               </a>
               <p>AnalytIQ Inventory &amp; POS — offline-first software for Windows shops.</p>
               <p>
-                Made by Analytiq Digital, Abuja, Nigeria. WhatsApp:{' '}
+                Made by Analytiq Digital, Nigeria. WhatsApp:{' '}
                 <a href={support} target="_blank" rel="noreferrer">
                   {SUPPORT_WHATSAPP_LABEL}
                 </a>{' '}
