@@ -8,6 +8,7 @@ import { formatNaira } from '../lib/format';
 import {
   COMPANY_SITE,
   COMPANY_SITE_LABEL,
+  CLOUD_LOCATION_ANCHOR_KOBO,
   DEFAULT_INSTALLER_URL,
   INSTALLER_SHA256,
   INSTALLER_SIZE_LABEL,
@@ -16,6 +17,8 @@ import {
   SUPPORT_PHONE_LABEL,
   SUPPORT_WHATSAPP_LABEL,
   TUTORIAL_YOUTUBE_ID,
+  YOUTUBE_CHANNEL,
+  YOUTUBE_CHANNEL_LABEL,
   callUrl,
   downloadUrl,
   whatsappUrl,
@@ -194,8 +197,9 @@ const faqs: { question: string; answer: ReactNode }[] = [
       <>
         The {formatNaira(licensePlans[0].priceKobo)} package covers one shop location. More than one
         location runs on our cloud version, which keeps a central stock ledger across branches and
-        needs internet to sync. Every cloud setup is different — number of locations, tills, hosting
-        and migration — so we quote it with you instead of guessing. Use the{' '}
+        needs internet to sync. Cloud starts at {formatNaira(CLOUD_LOCATION_ANCHOR_KOBO)} per
+        location, per year; the final quote covers the number of locations and tills, onboarding,
+        migration and hosting — so we quote it with you instead of guessing. Use the{' '}
         <a href="#cloud-quote">cloud quote form</a> and we will reply on WhatsApp.
       </>
     ),
@@ -700,7 +704,9 @@ export default function HomePage() {
             ) : (
               <div className="video-placeholder">
                 <span className="video-play" aria-hidden="true">
-                  ▶
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M8 5.2v13.6L19 12 8 5.2z" />
+                  </svg>
                 </span>
                 <strong>The tutorial video is on its way</strong>
                 <p>
@@ -715,6 +721,11 @@ export default function HomePage() {
           </div>
           <p className="video-note">
             Prefer reading? The <a href="/docs/usage">usage guide</a> covers the same steps.
+            Walkthroughs are published on our{' '}
+            <a href={YOUTUBE_CHANNEL} target="_blank" rel="noreferrer">
+              {YOUTUBE_CHANNEL_LABEL} YouTube channel
+            </a>
+            .
           </p>
         </div>
       </section>
@@ -733,7 +744,18 @@ export default function HomePage() {
             <article className="offline-col works">
               <h3>
                 <span className="mark ok" aria-hidden="true">
-                  ✓
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M5 12.5l4.5 4.5L19 7.5" />
+                  </svg>
                 </span>{' '}
                 Works offline
               </h3>
@@ -746,7 +768,18 @@ export default function HomePage() {
             <article className="offline-col needs">
               <h3>
                 <span className="mark wait" aria-hidden="true">
-                  !
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.4"
+                    strokeLinecap="round"
+                  >
+                    <path d="M12 6.5v7" />
+                    <circle cx="12" cy="17.5" r="1.2" fill="currentColor" stroke="none" />
+                  </svg>
                 </span>{' '}
                 Needs internet
               </h3>
@@ -980,6 +1013,10 @@ export default function HomePage() {
                 products, prices and transfers. Each setup depends on how many locations and tills
                 you have, so we price it with you.
               </p>
+              <p className="cloud-anchor">
+                <strong>From {formatNaira(CLOUD_LOCATION_ANCHOR_KOBO)}</strong> per location, per
+                year
+              </p>
               <ul className="check-list">
                 <li>Two or more locations sharing one catalogue</li>
                 <li>Stock transfers and central reporting across branches</li>
@@ -989,7 +1026,8 @@ export default function HomePage() {
                 Request a cloud quote
               </a>
               <p className="fine-print">
-                A written quote comes back on WhatsApp. No card needed to ask.
+                The final quote covers locations, tills, onboarding and migration. No card needed to
+                ask.
               </p>
             </aside>
           </div>
@@ -1087,21 +1125,24 @@ export default function HomePage() {
         <div className="container">
           <div className="section-head">
             <span className="eyebrow">Company</span>
-            <h2>Made in Abuja for Nigerian shops</h2>
+            <h2>About AnalytIQ Digital</h2>
             <p>
-              AnalytIQ Inventory &amp; POS is a product of Analytiq Digital —{' '}
+              Analytiq Digital is a Nigerian technology and digital transformation company based in
+              Abuja, working with businesses and institutions on the data, software, and automation
+              problems that quietly cost the most time and money. AnalytIQ Inventory &amp; POS is
+              one of our products —{' '}
               <a href={COMPANY_SITE} target="_blank" rel="noreferrer">
                 {COMPANY_SITE_LABEL}
               </a>
-              . We build offline-first business software for Nigerian shops.
+              .
             </p>
           </div>
           <div className="company-grid">
             <article className="company-card">
               <h3>Who we are</h3>
               <p>
-                Analytiq Digital, Abuja, Nigeria. We publish the app, the guides and the licence
-                terms on this site.
+                We build and support the software ourselves, and publish the app, the guides and
+                the licence terms on this site.
               </p>
             </article>
             <article className="company-card">

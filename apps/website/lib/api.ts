@@ -1,4 +1,15 @@
-import type { CheckoutInput, LicensePlanId } from '@analytiq/validation';
+import type { CheckoutInput, LeadInput, LicensePlanId } from '@analytiq/validation';
+
+export interface DeliveryAttempt {
+  state: 'sent' | 'failed' | 'skipped';
+  at: string;
+  detail?: string;
+}
+
+export interface DeliveryRecord {
+  email?: DeliveryAttempt;
+  whatsapp?: DeliveryAttempt;
+}
 
 export interface OrderView {
   reference: string;
@@ -12,6 +23,7 @@ export interface OrderView {
   licenseKey: string | null;
   createdAt: string;
   paidAt: string | null;
+  delivery?: DeliveryRecord | null;
 }
 
 export interface CheckoutResponse {
@@ -94,4 +106,27 @@ export async function fetchOrder(reference: string): Promise<OrderView> {
     `/api/checkout/${encodeURIComponent(reference)}`
   );
   return body.order;
+}
+
+/** Key recovery needs both the order reference and the checkout email. */
+export async function retrieveKey(reference: string, email: string): Promise<OrderView> {
+  const body = await request<{ ok: true; order: OrderView }>('/api/licence/retrieve', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ reference, email }),
+  });
+  return body.order;
+}
+
+/**
+ * Persist a demo/quote request server-side. The forms still open WhatsApp;
+ * this call is fire-and-forget so a slow API never blocks the hand-off.
+ */
+export async function submitLead(input: LeadInput): Promise<string> {
+  const body = await request<{ ok: true; id: string }>('/api/leads', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  return body.id;
 }

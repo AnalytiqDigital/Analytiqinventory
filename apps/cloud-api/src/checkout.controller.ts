@@ -1,5 +1,10 @@
 import { Body, Controller, Get, Inject, Param, Post } from '@nestjs/common';
-import { checkoutSchema, findLicensePlan, licensePlans } from '@analytiq/validation';
+import {
+  checkoutSchema,
+  findLicensePlan,
+  licensePlans,
+  retrieveKeySchema,
+} from '@analytiq/validation';
 import { ApiError, parseInput } from './common/api-error';
 import { CLOUD_CONFIG, type CloudConfig } from './config';
 import type { Order } from './orders/order.store';
@@ -18,6 +23,7 @@ export function orderView(order: Order): Record<string, unknown> {
     status: order.status,
     // Ready to copy only after Paystack confirms the payment.
     licenseKey: order.status === 'paid' ? order.licenseKey : null,
+    delivery: order.delivery ?? null,
     createdAt: order.createdAt,
     paidAt: order.paidAt,
   };
@@ -58,6 +64,30 @@ export class CheckoutController {
   async status(@Param('reference') reference: string): Promise<Record<string, unknown>> {
     const order = await this.orders.get(reference);
     if (!order) throw new ApiError(404, 'That order does not exist', 'ORDER_NOT_FOUND');
+    return { ok: true, order: orderView(order) };
+  }
+
+  /**
+   * Key recovery. The reference is unguessable and must match the email used
+   * at checkout; the same 404 covers unknown, unpaid and mismatched orders so
+   * the endpoint cannot be used to test references.
+   */
+  @Post('licence/retrieve')
+  async retrieve(@Body() body: unknown): Promise<Record<string, unknown>> {
+    const input = parseInput(retrieveKeySchema, body);
+    const order = await this.orders.get(input.reference);
+    if (
+      !order ||
+      order.status !== 'paid' ||
+      !order.licenseKey ||
+      order.email.toLowerCase() !== input.email
+    ) {
+      throw new ApiError(
+        404,
+        'We could not find a paid order with that reference and email',
+        'ORDER_NOT_FOUND'
+      );
+    }
     return { ok: true, order: orderView(order) };
   }
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
+import { submitLead } from '../lib/api';
 import { BUSINESS_TYPES, BRANCH_COUNTS, TILL_COUNTS, buildDemoMessage } from '../lib/demo';
 import { whatsappUrl } from '../lib/site';
 
@@ -21,6 +22,18 @@ export function DemoRequest() {
 
   function submit(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault();
+    void submitLead({
+      kind: 'demo',
+      name: values.name,
+      business: values.business,
+      businessType: values.businessType,
+      phone: values.phone,
+      email: values.email,
+      tills: values.tills,
+      branches: values.branches,
+      locations: '',
+      notes: '',
+    }).catch(() => undefined);
     window.open(whatsappUrl(buildDemoMessage(values)), '_blank', 'noopener,noreferrer');
   }
 

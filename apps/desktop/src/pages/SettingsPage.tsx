@@ -28,6 +28,7 @@ import { ConfirmDialog, ErrorState, LoadingState } from '../components/ui/states
 import { Stat } from '../components/ui/stat';
 import { useSession } from '../stores/session';
 import { CloudBackupCard, LoyaltySettingsCard } from '../components/settings/BusinessPackCards';
+import { BackupOffsiteCard } from '../components/settings/BackupOffsiteCard';
 import { RestaurantSettingsCard } from '../components/settings/RestaurantSettingsCard';
 import { hasModule } from '../components/layout/nav';
 import { ipc } from '../lib/ipc';
@@ -991,6 +992,7 @@ export function SettingsPage(): JSX.Element {
 
       <LoyaltySettingsCard />
       <CloudBackupCard />
+      <BackupOffsiteCard />
 
       <Card>
         <CardHeader className="flex flex-wrap items-center justify-between gap-2">

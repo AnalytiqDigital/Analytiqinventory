@@ -1,5 +1,36 @@
 # Changelog
 
+## 1.2.1 — 21 November 2026
+
+Follow-up to the 1.2.0 audit. 1.2.0 remains the tested baseline; this build
+carries the fixes and the corrected support number.
+
+- **Licence expiry warning**: from seven days before a licence (or trial) ends,
+  a banner at the top of the app names the date and offers a **Renew licence**
+  button. The licence screen shows the same notice. Keys stay valid through
+  the expiry day; without renewal the app locks at expiry as before.
+- **First-run backup prompt**: on first launch the app asks for an off-disk
+  backup folder (USB drive, network share or cloud-synced folder). Choosing
+  "Not now" is remembered; Settings → Backups shows whether the folder is set,
+  on the same drive as the database, still reachable, and when a copy was last
+  written. Manual and nightly backups copy to that folder; same-drive choices
+  warn that a disk failure would take both copies.
+- **Key delivery**: after a successful Paystack payment the cloud API emails
+  the key (Resend) and, when a phone number was given, sends it on WhatsApp
+  (Meta Cloud API). Each channel is recorded on the order and failures never
+  block the webhook. Both channels are optional and skipped when unconfigured.
+- **Retrieve my key**: a new `/retrieve-key` page gives the key and installer
+  link to anyone with the order reference and the checkout email. The success
+  page links to it and says whether a copy was emailed or sent on WhatsApp.
+- **Lead capture**: demo and cloud-quote forms now also POST to `/api/leads`
+  before opening WhatsApp, so a request is kept even if the message is never
+  sent.
+- **Cloud price anchor**: the landing page cloud card and FAQ now show a
+  starting price (from ₦120,000 per location per year) alongside the note that
+  the final quote depends on locations, tills, onboarding and migration.
+- **Support number**: the desktop Help screen now shows WhatsApp
+  **0813 971 1767**, matching the website and installer README.
+
 ## Unreleased — Batch 17: cash & bank ledgers and restaurant service flow
 
 - **Cash & Bank** (`/accounts`, Finance): create cash drawer, bank, POS and

@@ -99,6 +99,12 @@ function fallbackApi(): AnalytiqApi {
     backupRestore: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
     backupDelete: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
     backupReveal: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    offsiteBackupStatus: () =>
+      Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    chooseOffsiteBackup: () =>
+      Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    skipOffsiteBackup: () =>
+      Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
 
     licenseStatus: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
     licenseActivate: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),

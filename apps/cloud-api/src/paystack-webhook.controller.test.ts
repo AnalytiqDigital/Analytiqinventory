@@ -21,10 +21,15 @@ function config(privateKey = ''): CloudConfig {
   return {
     paystackSecretKey: SECRET,
     orderStorePath: 'unused.json',
+    leadStorePath: 'unused-leads.json',
     licensePrivateKeyPem: privateKey,
     licenseDays: 365,
     websiteUrl: 'https://shop.example',
     allowedOrigin: 'https://shop.example',
+    resendApiKey: '',
+    emailFrom: '',
+    whatsappToken: '',
+    whatsappPhoneNumberId: '',
   };
 }
 

@@ -156,6 +156,9 @@ export default function SuccessStatus() {
   const licenceDays = findLicensePlan(order.planId)?.days ?? 365;
   const issuedAt = new Date(order.paidAt ?? order.createdAt);
   const expiresOn = new Date(issuedAt.getTime() + licenceDays * 24 * 60 * 60 * 1000).toISOString();
+  const delivered: string[] = [];
+  if (order.delivery?.email?.state === 'sent') delivered.push(`email to ${order.email}`);
+  if (order.delivery?.whatsapp?.state === 'sent') delivered.push('WhatsApp');
 
   return (
     <div className="success-card">
@@ -177,6 +180,15 @@ export default function SuccessStatus() {
           {copied ? 'Copied' : 'Copy licence key'}
         </button>
       </div>
+
+      <p className="fine-print">
+        {delivered.length > 0
+          ? `A copy of this key was sent by ${delivered.join(' and ')}. `
+          : null}
+        You can always recover it at{' '}
+        <a href="/retrieve-key">the key retrieval page</a> with this reference and your checkout
+        email.
+      </p>
 
       <div className="download-box">
         <h2>Download the app</h2>

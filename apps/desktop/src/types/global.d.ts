@@ -256,6 +256,25 @@ export interface AnalytiqApi {
     name: string
   ) => Promise<{ ok: boolean; removed?: string; error?: string; code?: string }>;
   backupReveal: () => Promise<{ ok: boolean; error?: string; code?: string }>;
+  offsiteBackupStatus: () => Promise<{
+    ok: boolean;
+    status?: OffsiteBackupStatus;
+    error?: string;
+    code?: string;
+  }>;
+  chooseOffsiteBackup: () => Promise<{
+    ok: boolean;
+    canceled?: boolean;
+    status?: OffsiteBackupStatus;
+    error?: string;
+    code?: string;
+  }>;
+  skipOffsiteBackup: () => Promise<{
+    ok: boolean;
+    status?: OffsiteBackupStatus;
+    error?: string;
+    code?: string;
+  }>;
 
   // --- Batch 10: offline license ---
   licenseStatus: () => Promise<{
@@ -837,6 +856,15 @@ export interface BackupRow {
   name: string;
   sizeBytes: number;
   createdAt: string;
+}
+
+export interface OffsiteBackupStatus {
+  configured: boolean;
+  prompted: boolean;
+  dir: string | null;
+  exists: boolean;
+  sameDrive: boolean;
+  lastCopyAt: string | null;
 }
 
 export interface ReportsSummary {

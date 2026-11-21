@@ -8,6 +8,7 @@ payment confirmation, download page and the installation/usage docs.
 | `/`                  | Landing page (features, dashboard, hardware, packages, demo) |
 | `/checkout`          | Plan choice + Paystack checkout form                         |
 | `/checkout/success`  | Licence key, installer download and WhatsApp install help    |
+| `/retrieve-key`      | Key recovery from order reference + checkout email          |
 | `/download`          | Installer page, system requirements and SHA-256 checksum     |
 | `/legal/terms`       | Terms of use and licence terms (EULA)                        |
 | `/legal/privacy`     | Privacy notice (NDPA)                                        |
@@ -16,8 +17,9 @@ payment confirmation, download page and the installation/usage docs.
 | `/docs/installation` | Install, SmartScreen, licence activation, hardware, backups  |
 | `/docs/usage`        | Daily selling, stock, credit, reports, finance, staff        |
 
-The landing page and docs are static. Only the checkout form and success poller
-are client-side and need the cloud API.
+The landing page and docs are static. Only the checkout form, success poller and
+key-retrieval form are client-side and need the cloud API. The demo and quote
+forms post to `/api/leads` in the background while they open WhatsApp.
 
 ## Environment variables
 
@@ -55,8 +57,8 @@ buyers because the source repository is private. Override
   rate-limited when the link is shared.
 
 A ready-to-upload bundle is produced at
-`apps/desktop/release/AnalytIQ-Inventory-1.1.0-Windows.zip` (91 MB). Zip uploads
-are friendlier to browsers and antivirus scans than a bare `.exe`.
+`apps/desktop/release/AnalytIQ-Inventory-1.2.1-Windows.zip`. Zip uploads are
+friendlier to browsers and antivirus scans than a bare `.exe`.
 
 Setting `NEXT_PUBLIC_DOWNLOAD_URL=/download` restores the WhatsApp fallback
 shown while the file is not hosted anywhere.
@@ -98,15 +100,17 @@ browser; browsing the landing page and docs works without it.
 - [ ] Landing page loads on the Vercel preview URL; no console errors.
 - [ ] The package button opens `/checkout`; the cloud quote form opens WhatsApp
       with the location details prefilled.
-- [ ] WhatsApp buttons open `https://wa.me/2348039171767` with a prefilled message.
+- [ ] WhatsApp buttons open `https://wa.me/2348139711767` with a prefilled message.
 - [ ] `/docs/installation` and `/docs/usage` render; the download button points
       at the public AnalytIQ downloads release (or `NEXT_PUBLIC_DOWNLOAD_URL`).
 - [ ] `/legal/terms`, `/legal/privacy` and `/legal/refund` render and are linked
       from the footer.
 - [ ] The SHA-256 on `/download` matches the hosted ZIP
-      (`sha256sum AnalytIQ-Inventory-1.1.0-Windows.zip`).
+      (`sha256sum AnalytIQ-Inventory-1.2.1-Windows.zip`).
 - [ ] A Paystack test payment returns to `/checkout/success?reference=…` and shows
       the key, the installer download and the WhatsApp help button.
+- [ ] `/retrieve-key` returns the key for that reference + email and refuses a
+      wrong email.
 - [ ] After sales: replace the placeholder support copy if the number changes.
 
 ## Local preview

@@ -33,7 +33,9 @@ price cannot drift apart.
 | GET    | `/health`                        | Liveness                                                                         |
 | GET    | `/api/plans`                     | Public plan catalogue                                                            |
 | POST   | `/api/checkout`                  | Validates the form, creates a pending order, returns Paystack `authorizationUrl` |
-| GET    | `/api/checkout/:reference`       | Order status; `licenseKey` is `null` until paid                                  |
+| GET    | `/api/checkout/:reference`       | Order status and delivery state; `licenseKey` is `null` until paid               |
+| POST   | `/api/licence/retrieve`          | `{ reference, email }` → paid order + key; 404 unless both match                 |
+| POST   | `/api/leads`                     | Demo/cloud-quote request captured alongside the WhatsApp hand-off                |
 | POST   | `/api/payments/paystack/webhook` | Paystack → server; HMAC-SHA512 verified                                          |
 | GET    | `/docs`                          | Swagger UI                                                                       |
 
@@ -57,6 +59,11 @@ See `apps/cloud-api/.env.example`.
 | `WEBSITE_URL`              | Where Paystack returns the buyer                                                                         |
 | `CORS_ORIGIN`              | Origin allowed to call the API (defaults to `WEBSITE_URL`)                                               |
 | `ORDER_STORE_PATH`         | JSON order file (default `./data/orders.json`, git-ignored)                                              |
+| `LEAD_STORE_PATH`          | JSON lead file for demo/quote requests (default `./data/leads.json`)                                     |
+| `RESEND_API_KEY`           | Resend API key for emailing the key after payment; blank skips the email channel                         |
+| `EMAIL_FROM`               | Verified sender, e.g. `AnalytIQ <keys@analytiq.ng>`                                                      |
+| `WHATSAPP_TOKEN`           | Meta WhatsApp Cloud API token; blank skips the WhatsApp channel                                          |
+| `WHATSAPP_PHONE_NUMBER_ID` | WhatsApp Cloud API phone-number id                                                                       |
 | `LICENSE_PRIVATE_KEY_PATH` | Ed25519 PEM used to sign keys                                                                            |
 | `LICENSE_PRIVATE_KEY`      | Inline PEM alternative (`\n` escapes allowed)                                                            |
 | `LICENSE_DAYS`             | Fallback lifetime if a plan has no `days`                                                                |
@@ -88,6 +95,11 @@ Settlement is idempotent:
    `{ ok: true, ignored: true }` so Paystack stops retrying.
 5. If the issuer has no usable private key the webhook fails (500) so Paystack
    retries; the order stays pending and no half-issued key exists.
+6. After issuing, the API tries to deliver the key by email (Resend) and
+   WhatsApp. Delivery runs after settlement, is recorded on the order
+   (`delivery.email` / `delivery.whatsapp` with `sent` / `failed` / `skipped`),
+   and never fails the webhook — the success page and `/retrieve-key` remain
+   the guaranteed paths.
 
 ## Website flow
 
@@ -101,12 +113,16 @@ Settlement is idempotent:
 4. Paystack redirects back to `/checkout/success?reference=…`; the page polls
    `GET /api/checkout/:reference` every 3 s (up to ~2 minutes) and shows:
    - the licence key with a copy button,
+   - whether the key was also sent by email/WhatsApp,
    - the Windows installer download button (`NEXT_PUBLIC_DOWNLOAD_URL`, or the
      `/download` page when the installer is not hosted yet),
    - activation steps and a WhatsApp install-help button.
+5. `/retrieve-key` takes the order reference plus the checkout email and shows
+   the same key, copy button and installer link. A wrong email or an unpaid
+   order returns `ORDER_NOT_FOUND`.
 
-If the customer closes the tab, the key is still issued by the webhook. Support
-can look it up by reference in the order file.
+If the customer closes the tab, the key is still issued by the webhook and can
+be recovered at `/retrieve-key` or from the `delivery` record in the order file.
 
 ## Tests
 

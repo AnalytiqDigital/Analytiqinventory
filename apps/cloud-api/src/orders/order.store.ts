@@ -4,6 +4,18 @@ import type { LicensePlanId } from '@analytiq/validation';
 
 export type OrderStatus = 'pending' | 'paid' | 'failed';
 
+export type DeliveryChannel = 'email' | 'whatsapp';
+export type DeliveryState = 'sent' | 'failed' | 'skipped';
+
+export interface DeliveryAttempt {
+  state: DeliveryState;
+  at: string;
+  /** Why a channel was skipped or failed; never includes the key. */
+  detail?: string;
+}
+
+export type DeliveryRecord = Partial<Record<DeliveryChannel, DeliveryAttempt>>;
+
 export interface Order {
   /** Unguessable id shared with Paystack and the success page. */
   reference: string;
@@ -16,6 +28,8 @@ export interface Order {
   status: OrderStatus;
   /** Set once paid; the customer copies it into Settings → License. */
   licenseKey: string | null;
+  /** Last attempt per delivery channel, so webhook retries can resume. */
+  delivery?: DeliveryRecord;
   createdAt: string;
   paidAt: string | null;
 }

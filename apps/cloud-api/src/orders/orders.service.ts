@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { findLicensePlan, type CheckoutInput } from '@analytiq/validation';
 import { ApiError } from '../common/api-error';
-import type { Order, OrderStore } from './order.store';
+import type { DeliveryRecord, Order, OrderStore } from './order.store';
 
 export interface SettleResult {
   /** Null when Paystack reports a reference this API never issued. */
@@ -40,6 +40,20 @@ export class OrdersService {
 
   async get(reference: string): Promise<Order | undefined> {
     return this.store.get(reference);
+  }
+
+  /** Merge delivery outcomes into a paid order without touching the key. */
+  recordDelivery(reference: string, record: DeliveryRecord): Promise<Order | undefined> {
+    return this.exclusive(async () => {
+      const order = await this.store.get(reference);
+      if (!order) return undefined;
+      const updated: Order = {
+        ...order,
+        delivery: { ...order.delivery, ...record },
+      };
+      await this.store.put(updated);
+      return updated;
+    });
   }
 
   /**

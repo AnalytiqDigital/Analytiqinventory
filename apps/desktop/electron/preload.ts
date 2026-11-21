@@ -289,6 +289,25 @@ const api = {
     ipcRenderer.invoke('backup:delete', name),
   backupReveal: (): Promise<{ ok: boolean; error?: string; code?: string }> =>
     ipcRenderer.invoke('backup:reveal'),
+  offsiteBackupStatus: (): Promise<{
+    ok: boolean;
+    status?: unknown;
+    error?: string;
+    code?: string;
+  }> => ipcRenderer.invoke('backup:offsite-status'),
+  chooseOffsiteBackup: (): Promise<{
+    ok: boolean;
+    canceled?: boolean;
+    status?: unknown;
+    error?: string;
+    code?: string;
+  }> => ipcRenderer.invoke('backup:offsite-choose'),
+  skipOffsiteBackup: (): Promise<{
+    ok: boolean;
+    status?: unknown;
+    error?: string;
+    code?: string;
+  }> => ipcRenderer.invoke('backup:offsite-skip'),
 
   // --- Batch 10: offline license ---
   licenseStatus: (): Promise<{ ok: boolean; status?: unknown; error?: string; code?: string }> =>
