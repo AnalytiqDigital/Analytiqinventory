@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
-import { SUPPORT_WHATSAPP_LABEL, whatsappUrl } from '../lib/site';
+import { INSTALLER_VERSION, SUPPORT_WHATSAPP_LABEL, whatsappUrl } from '../lib/site';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -57,6 +57,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
               <a className="nav-hide" href="/#industries">
                 Who it is for
               </a>
+              <a className="nav-hide" href="/#tutorial">
+                Tutorial
+              </a>
               <a className="nav-hide" href="/#packages">
                 Pricing
               </a>
@@ -93,7 +96,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
                 </a>
               </p>
               <p className="footer-muted">
-                © {new Date().getFullYear()} Analytiq Digital · Version 1.1.0
+                © {new Date().getFullYear()} Analytiq Digital · Version {INSTALLER_VERSION}
               </p>
             </div>
             <div className="footer-links">
