@@ -700,7 +700,9 @@ export default function HomePage() {
             ) : (
               <div className="video-placeholder">
                 <span className="video-play" aria-hidden="true">
-                  ▶
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M8 5.2v13.6L19 12 8 5.2z" />
+                  </svg>
                 </span>
                 <strong>The tutorial video is on its way</strong>
                 <p>
@@ -733,7 +735,18 @@ export default function HomePage() {
             <article className="offline-col works">
               <h3>
                 <span className="mark ok" aria-hidden="true">
-                  ✓
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M5 12.5l4.5 4.5L19 7.5" />
+                  </svg>
                 </span>{' '}
                 Works offline
               </h3>
@@ -746,7 +759,18 @@ export default function HomePage() {
             <article className="offline-col needs">
               <h3>
                 <span className="mark wait" aria-hidden="true">
-                  !
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.4"
+                    strokeLinecap="round"
+                  >
+                    <path d="M12 6.5v7" />
+                    <circle cx="12" cy="17.5" r="1.2" fill="currentColor" stroke="none" />
+                  </svg>
                 </span>{' '}
                 Needs internet
               </h3>
