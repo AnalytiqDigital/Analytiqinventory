@@ -20,7 +20,7 @@ const CONFIG: CloudConfig = {
 
 function pendingOrder(overrides: Record<string, unknown> = {}) {
   return {
-    plan: 'starter',
+    plan: 'standard',
     business: 'Ada Stores',
     name: 'Ada Obi',
     email: 'ada@example.com',
@@ -79,8 +79,8 @@ describe('checkout controller', () => {
     expect(body.authorizationUrl).toBe('https://checkout.paystack.test/abc');
     expect(body.order).toMatchObject({
       status: 'pending',
-      planName: 'Starter',
-      amountKobo: 2_500_000,
+      planName: 'AnalytIQ Inventory & POS',
+      amountKobo: 8_000_000,
       licenseKey: null,
     });
     expect(body.order.reference).toMatch(/^ord_[0-9a-f]{24}$/);
@@ -89,10 +89,10 @@ describe('checkout controller', () => {
     expect(sent[0]?.url).toBe('https://api.paystack.co/transaction/initialize');
     expect(sent[0]?.body).toMatchObject({
       email: 'ada@example.com',
-      amount: 2_500_000,
+      amount: 8_000_000,
       reference: body.order.reference,
       callback_url: 'https://shop.example/checkout/success',
-      metadata: { plan: 'starter', business: 'Ada Stores' },
+      metadata: { plan: 'standard', business: 'Ada Stores' },
     });
   });
 
@@ -116,7 +116,7 @@ describe('checkout controller', () => {
     expect(await statusOf(missing)).toBe(404);
 
     const created = await orders.create({
-      plan: 'pro',
+      plan: 'standard',
       business: 'Ada Stores',
       name: '',
       email: 'ada@example.com',

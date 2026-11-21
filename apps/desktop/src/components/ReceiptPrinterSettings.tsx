@@ -16,10 +16,14 @@ export function ReceiptPrinterSettings(): JSX.Element {
   const paperWidthMm = usePrinter((s) => s.paperWidthMm);
   const autoPrint = usePrinter((s) => s.autoPrint);
   const copies = usePrinter((s) => s.copies);
+  const kitchenTicket = usePrinter((s) => s.kitchenTicket);
+  const kitchenPrinterName = usePrinter((s) => s.kitchenPrinterName);
   const setPrinterName = usePrinter((s) => s.setPrinterName);
   const setPaperWidth = usePrinter((s) => s.setPaperWidth);
   const setAutoPrint = usePrinter((s) => s.setAutoPrint);
   const setCopies = usePrinter((s) => s.setCopies);
+  const setKitchenTicket = usePrinter((s) => s.setKitchenTicket);
+  const setKitchenPrinterName = usePrinter((s) => s.setKitchenPrinterName);
 
   const [testing, setTesting] = useState(false);
   const [result, setResult] = useState<string | null>(null);
@@ -148,6 +152,38 @@ export function ReceiptPrinterSettings(): JSX.Element {
           />
           Print the receipt automatically after each sale
         </label>
+
+        <label className="flex items-center gap-2 font-medium text-slate-700 dark:text-slate-200">
+          <input
+            type="checkbox"
+            className="h-4 w-4 rounded border-slate-300"
+            checked={kitchenTicket}
+            onChange={(event) => setKitchenTicket(event.target.checked)}
+          />
+          Print a kitchen order ticket after each sale
+        </label>
+
+        {kitchenTicket ? (
+          <label className="block space-y-1 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            Kitchen printer
+            <select
+              className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-normal normal-case tracking-normal text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+              value={kitchenPrinterName}
+              onChange={(event) => setKitchenPrinterName(event.target.value)}
+            >
+              <option value="">Same as receipt printer</option>
+              {printers.map((printer) => (
+                <option key={printer.name} value={printer.name}>
+                  {printer.displayName || printer.name}
+                  {printer.isDefault ? ' (default)' : ''}
+                </option>
+              ))}
+              {kitchenPrinterName && !printers.some((p) => p.name === kitchenPrinterName) ? (
+                <option value={kitchenPrinterName}>{kitchenPrinterName} (not detected now)</option>
+              ) : null}
+            </select>
+          </label>
+        ) : null}
 
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="secondary" size="sm" onClick={() => void testPrint()} disabled={testing}>

@@ -31,6 +31,19 @@ print to it, the app cannot either.
 Settings are stored per Windows user on that computer, so each till can use a
 different printer and paper width.
 
+### Kitchen order tickets
+
+For kitchens, tick **Print a kitchen order ticket after each sale** and, when
+the kitchen has its own printer, pick it under **Kitchen printer** (leave it on
+**Same as receipt printer** otherwise).
+
+- The ticket contains the receipt number, time, order type (Dine-in /
+  Takeaway / Delivery), table, waiter and quantity × item — no prices.
+- It prints after the customer receipt, uses the same roll width, and one copy
+  is always sent.
+- If the kitchen printer fails, the ticket opens in the system print dialog
+  instead so the order is not lost.
+
 ### How printing works
 
 - After each completed sale the receipt is rendered as HTML at the configured

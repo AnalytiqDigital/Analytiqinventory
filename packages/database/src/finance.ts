@@ -1,12 +1,13 @@
 // Batch 14: expenses ledger for the profit statement.
 
-import { expenseCreateSchema, expenseQuerySchema } from '@analytiq/validation';
+import { expenseCreateSchema, expenseQuerySchema, expenseUpdateSchema } from '@analytiq/validation';
 import { and, desc, eq, gte, lte } from 'drizzle-orm';
 import { newId } from './auth';
 import type { LocalDb } from './connection';
 import { requirePermission } from './permissions';
 import { writeAuditSync } from './service';
-import { expenses, locations, users } from './schema';
+import { postExpenseSync, reverseExpensePostingsSync } from './accounts';
+import { accounts, expenses, locations, users } from './schema';
 
 export interface ExpenseView {
   id: string;
@@ -15,6 +16,8 @@ export interface ExpenseView {
   amountKobo: number;
   paidAt: string;
   locationId: string | null;
+  accountId: string | null;
+  accountName: string;
   createdBy: string | null;
   createdByName: string;
   createdAt: string;
@@ -33,6 +36,8 @@ function toView(row: {
   amountKobo: number;
   paidAt: Date;
   locationId: string | null;
+  accountId: string | null;
+  accountName: string | null;
   createdBy: string | null;
   createdByName: string | null;
   createdAt: Date;
@@ -44,6 +49,8 @@ function toView(row: {
     amountKobo: row.amountKobo,
     paidAt: row.paidAt.toISOString(),
     locationId: row.locationId ?? null,
+    accountId: row.accountId ?? null,
+    accountName: row.accountName ?? '',
     createdBy: row.createdBy ?? null,
     createdByName: row.createdByName ?? '',
     createdAt: row.createdAt.toISOString(),
@@ -72,12 +79,15 @@ export async function listExpenses(
       amountKobo: expenses.amountKobo,
       paidAt: expenses.paidAt,
       locationId: expenses.locationId,
+      accountId: expenses.accountId,
+      accountName: accounts.name,
       createdBy: expenses.createdBy,
       createdByName: users.name,
       createdAt: expenses.createdAt,
     })
     .from(expenses)
     .leftJoin(users, eq(users.id, expenses.createdBy))
+    .leftJoin(accounts, eq(accounts.id, expenses.accountId))
     .where(and(...filters))
     .orderBy(desc(expenses.paidAt), desc(expenses.createdAt))
     .limit(query.limit);
@@ -137,13 +147,22 @@ export async function createExpense(
         updatedAt: now,
       })
       .run();
+    const accountId = postExpenseSync(local, businessId, {
+      expenseId: id,
+      amountKobo: input.amountKobo,
+      accountId: input.accountId ?? null,
+      category: input.category,
+      userId: actorId,
+      createdAt: paidAt,
+    });
+    local.db.update(expenses).set({ accountId }).where(eq(expenses.id, id)).run();
     writeAuditSync(local, {
       businessId,
       userId: actorId,
       action: 'expense.create',
       entity: 'expense',
       entityId: id,
-      details: { category: input.category, amountKobo: input.amountKobo },
+      details: { category: input.category, amountKobo: input.amountKobo, accountId },
     });
   });
   write();
@@ -156,13 +175,135 @@ export async function createExpense(
       amountKobo: expenses.amountKobo,
       paidAt: expenses.paidAt,
       locationId: expenses.locationId,
+      accountId: expenses.accountId,
+      accountName: accounts.name,
       createdBy: expenses.createdBy,
       createdByName: users.name,
       createdAt: expenses.createdAt,
     })
     .from(expenses)
     .leftJoin(users, eq(users.id, expenses.createdBy))
+    .leftJoin(accounts, eq(accounts.id, expenses.accountId))
     .where(eq(expenses.id, id))
+    .limit(1);
+  const row = rows[0];
+  if (!row) throw codedError('Expense not found after save', 'EXPENSE_NOT_FOUND');
+  return { expense: toView(row) };
+}
+
+export async function updateExpense(
+  local: LocalDb,
+  businessId: string,
+  actorId: string,
+  grants: string[],
+  expenseId: string,
+  raw: unknown
+): Promise<{ expense: ExpenseView }> {
+  requirePermission(new Set(grants), 'finance.manage');
+  const input = expenseUpdateSchema.parse(raw);
+
+  const [existing] = await local.db
+    .select({
+      id: expenses.id,
+      category: expenses.category,
+      note: expenses.note,
+      amountKobo: expenses.amountKobo,
+      paidAt: expenses.paidAt,
+      locationId: expenses.locationId,
+      accountId: expenses.accountId,
+      version: expenses.version,
+    })
+    .from(expenses)
+    .where(and(eq(expenses.id, expenseId), eq(expenses.businessId, businessId)))
+    .limit(1);
+  if (!existing) throw codedError('Expense not found', 'EXPENSE_NOT_FOUND');
+
+  const locationId =
+    input.locationId === undefined ? existing.locationId : (input.locationId ?? null);
+  if (locationId) {
+    const [location] = await local.db
+      .select({ id: locations.id })
+      .from(locations)
+      .where(and(eq(locations.id, locationId), eq(locations.businessId, businessId)))
+      .limit(1);
+    if (!location) throw codedError('Location not found', 'LOCATION_NOT_FOUND');
+  }
+
+  const next = {
+    category: input.category ?? existing.category,
+    note: input.note ?? existing.note,
+    amountKobo: input.amountKobo ?? existing.amountKobo,
+    paidAt: input.paidAt ?? existing.paidAt,
+  };
+  const nextAccountId =
+    input.accountId === undefined ? existing.accountId : (input.accountId ?? null);
+
+  const write = local.raw.transaction(() => {
+    const accountChanged = nextAccountId !== existing.accountId;
+    const amountChanged = next.amountKobo !== existing.amountKobo;
+    let accountId = existing.accountId;
+    if (accountChanged || amountChanged) {
+      // Compensating entries keep the ledger honest instead of rewriting history.
+      reverseExpensePostingsSync(
+        local,
+        businessId,
+        expenseId,
+        `Expense edited: ${existing.category}`,
+        actorId
+      );
+      accountId = postExpenseSync(local, businessId, {
+        expenseId,
+        amountKobo: next.amountKobo,
+        accountId: nextAccountId,
+        category: next.category,
+        userId: actorId,
+        createdAt: new Date(),
+      });
+    }
+    local.db
+      .update(expenses)
+      .set({
+        ...next,
+        locationId,
+        accountId,
+        version: existing.version + 1,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(expenses.id, expenseId), eq(expenses.businessId, businessId)))
+      .run();
+    writeAuditSync(local, {
+      businessId,
+      userId: actorId,
+      action: 'expense.update',
+      entity: 'expense',
+      entityId: expenseId,
+      details: {
+        category: next.category,
+        amountKobo: next.amountKobo,
+        previousAmountKobo: existing.amountKobo,
+      },
+    });
+  });
+  write();
+
+  const rows = await local.db
+    .select({
+      id: expenses.id,
+      category: expenses.category,
+      note: expenses.note,
+      amountKobo: expenses.amountKobo,
+      paidAt: expenses.paidAt,
+      locationId: expenses.locationId,
+      accountId: expenses.accountId,
+      accountName: accounts.name,
+      createdBy: expenses.createdBy,
+      createdByName: users.name,
+      createdAt: expenses.createdAt,
+    })
+    .from(expenses)
+    .leftJoin(users, eq(users.id, expenses.createdBy))
+    .leftJoin(accounts, eq(accounts.id, expenses.accountId))
+    .where(eq(expenses.id, expenseId))
     .limit(1);
   const row = rows[0];
   if (!row) throw codedError('Expense not found after save', 'EXPENSE_NOT_FOUND');
@@ -185,6 +326,13 @@ export async function deleteExpense(
   if (!existing) throw codedError('Expense not found', 'EXPENSE_NOT_FOUND');
 
   const write = local.raw.transaction(() => {
+    reverseExpensePostingsSync(
+      local,
+      businessId,
+      expenseId,
+      `Expense deleted: ${existing.category}`,
+      actorId
+    );
     local.db.delete(expenses).where(eq(expenses.id, expenseId)).run();
     writeAuditSync(local, {
       businessId,

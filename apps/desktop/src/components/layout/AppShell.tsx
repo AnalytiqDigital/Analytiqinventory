@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { NAV_SECTIONS, visibleNavItems } from './nav';
+import { NAV_GROUPS, visibleNavItems } from './nav';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 import { useSession } from '../../stores/session';
@@ -11,7 +11,8 @@ export function AppShell(): JSX.Element {
  const [mobileOpen, setMobileOpen] = useState(false);
  const can = useSession((s) => s.can);
  const businessType = useSession((s) => s.user?.businessType);
- const visible = visibleNavItems(businessType, can);
+ const modules = useSession((s) => s.user?.modules);
+ const visible = visibleNavItems(businessType, can, modules);
  useRealtime();
 
  return (
@@ -21,12 +22,14 @@ export function AppShell(): JSX.Element {
  <div className="fixed inset-0 z-40 animate-fade-in md:hidden" role="dialog" aria-label="Navigation">
  <div className="absolute inset-0 bg-black/50" onClick={() => setMobileOpen(false)} />
  <nav className="absolute left-0 top-0 h-full w-72 animate-slide-up overflow-y-auto bg-white p-4 dark:bg-slate-900" aria-label="Mobile">
- {NAV_SECTIONS.map((section) => {
- const items = visible.filter((i) => i.section === section);
+ {NAV_GROUPS.map((section) => {
+ const items = visible.filter((i) => i.group === section);
  if (items.length === 0) return null;
  return (
  <div key={section} className="mb-3">
+ {section === 'Main' ? null : (
  <p className="px-3 pb-1 text-[10px] font-bold uppercase tracking-widest text-slate-400">{section}</p>
+ )}
  {items.map((item) => (
  <NavLink
  key={item.to}

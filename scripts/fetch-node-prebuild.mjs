@@ -7,7 +7,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 
 // better-sqlite3 is installed under the desktop app's workspace, not the repo root.
-const require = createRequire(new URL('../apps/desktop/package.json', import.meta.url));
+const require = createRequire(new URL('../packages/database/package.json', import.meta.url));
 const pkgDir = path.dirname(require.resolve('better-sqlite3/package.json'));
 const bin = path.join(path.dirname(pkgDir), 'prebuild-install/bin.js');
 const releaseDir = path.join(pkgDir, 'build/Release');

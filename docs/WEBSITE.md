@@ -96,7 +96,8 @@ browser; browsing the landing page and docs works without it.
 ## Verification checklist
 
 - [ ] Landing page loads on the Vercel preview URL; no console errors.
-- [ ] Package buttons open `/checkout?plan=starter|standard|pro`.
+- [ ] The package button opens `/checkout`; the cloud quote form opens WhatsApp
+      with the location details prefilled.
 - [ ] WhatsApp buttons open `https://wa.me/2348124314217` with a prefilled message.
 - [ ] `/docs/installation` and `/docs/usage` render; the download button points
       at the public AnalytIQ downloads release (or `NEXT_PUBLIC_DOWNLOAD_URL`).

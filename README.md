@@ -35,25 +35,26 @@ analytiq-inventory/
 
 ## Documentation
 
-| Area                   | Doc                                                                         |
-| ---------------------- | --------------------------------------------------------------------------- |
-| POS, stock, purchasing | `docs/POS.md`, `docs/PRODUCTS_INVENTORY.md`, `docs/CUSTOMERS_PURCHASING.md` |
-| Reports                | `docs/REPORTING.md`                                                         |
-| Expenses and profit    | `docs/FINANCE.md`                                                           |
-| Staff and permissions  | `docs/STAFF.md`                                                             |
-| Buyer setup sheet      | `docs/BUYER_SETUP.md`                                                       |
-| LAN / multi-till       | `docs/LAN_SETUP.md`                                                         |
-| Branch sync            | `docs/SYNC.md`                                                              |
-| Backups and restore    | `docs/BACKUPS.md`                                                           |
-| Offline licence keys   | `docs/LICENSE_KEYS.md`                                                      |
-| Online checkout        | `docs/CHECKOUT.md`                                                          |
-| Website and Vercel     | `docs/WEBSITE.md`                                                           |
-| WhatsApp / AI alerts   | `docs/AUTOMATION.md`                                                        |
-| CSV import             | `docs/IMPORT.md`                                                            |
-| Printers and scanners  | `docs/PRINTERS.md`                                                          |
-| Installer and updates  | `docs/UPDATES.md`                                                           |
-| Release checklist      | `docs/RELEASE_CHECKLIST.md`                                                 |
-| Security rules         | `docs/SECURITY.md`                                                          |
+| Area                                        | Doc                                                                         |
+| ------------------------------------------- | --------------------------------------------------------------------------- |
+| POS, stock, purchasing                      | `docs/POS.md`, `docs/PRODUCTS_INVENTORY.md`, `docs/CUSTOMERS_PURCHASING.md` |
+| Reports                                     | `docs/REPORTING.md`                                                         |
+| Expenses and profit                         | `docs/FINANCE.md`                                                           |
+| Staff and permissions                       | `docs/STAFF.md`                                                             |
+| Batches, tiers, loyalty, returns, transfers | `docs/BUSINESS_PACK.md`                                                     |
+| Buyer setup sheet                           | `docs/BUYER_SETUP.md`                                                       |
+| LAN / multi-till                            | `docs/LAN_SETUP.md`                                                         |
+| Branch sync                                 | `docs/SYNC.md`                                                              |
+| Backups and restore                         | `docs/BACKUPS.md`                                                           |
+| Offline licence keys                        | `docs/LICENSE_KEYS.md`                                                      |
+| Online checkout                             | `docs/CHECKOUT.md`                                                          |
+| Website and Vercel                          | `docs/WEBSITE.md`                                                           |
+| WhatsApp / AI alerts                        | `docs/AUTOMATION.md`                                                        |
+| CSV import                                  | `docs/IMPORT.md`                                                            |
+| Printers and scanners                       | `docs/PRINTERS.md`                                                          |
+| Installer and updates                       | `docs/UPDATES.md`                                                           |
+| Release checklist                           | `docs/RELEASE_CHECKLIST.md`                                                 |
+| Security rules                              | `docs/SECURITY.md`                                                          |
 
 ## Prerequisites
 
@@ -125,7 +126,7 @@ required on Windows), point `ELECTRON_BUILDER_CACHE` at a pre-extracted cache �
 The installer is **unsigned** until a code-signing certificate is configured
 (`pnpm dist:signed`). Windows still installs it: SmartScreen shows
 "Windows protected your PC" → **More info** → **Run anyway**, and UAC shows
-*Unknown publisher*. The customer-facing steps are in `docs/BUYER_SETUP.md`.
+_Unknown publisher_. The customer-facing steps are in `docs/BUYER_SETUP.md`.
 
 ## Selling a licence
 

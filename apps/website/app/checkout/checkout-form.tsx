@@ -1,7 +1,6 @@
 'use client';
 
-import { checkoutSchema, findLicensePlan, licensePlans } from '@analytiq/validation';
-import { useSearchParams } from 'next/navigation';
+import { checkoutSchema, licensePlans } from '@analytiq/validation';
 import { useState, type FormEvent } from 'react';
 import { CheckoutError, startCheckout } from '../../lib/api';
 import { formatNaira } from '../../lib/format';
@@ -14,15 +13,12 @@ interface FieldErrors {
 }
 
 export default function CheckoutForm() {
-  const search = useSearchParams();
-  const requested = findLicensePlan(search.get('plan') ?? '');
-  const [planId, setPlanId] = useState(requested?.id ?? 'standard');
   const [form, setForm] = useState({ business: '', name: '', email: '', phone: '' });
   const [errors, setErrors] = useState<FieldErrors>({});
   const [failure, setFailure] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const plan = findLicensePlan(planId) ?? licensePlans[1];
+  const plan = licensePlans[0];
 
   function update(field: Field, value: string): void {
     setForm((current) => ({ ...current, [field]: value }));
@@ -34,7 +30,7 @@ export default function CheckoutForm() {
     event.preventDefault();
     setFailure('');
 
-    const parsed = checkoutSchema.safeParse({ plan: planId, ...form });
+    const parsed = checkoutSchema.safeParse({ plan: plan.id, ...form });
     if (!parsed.success) {
       const next: FieldErrors = {};
       for (const issue of parsed.error.issues) {
@@ -64,25 +60,20 @@ export default function CheckoutForm() {
       <div className="card">
         <form onSubmit={submit} noValidate>
           <fieldset style={{ border: 0, padding: 0, margin: '0 0 26px' }}>
-            <legend style={{ fontWeight: 600, marginBottom: 12 }}>Choose a plan</legend>
+            <legend style={{ fontWeight: 600, marginBottom: 12 }}>Your package</legend>
             <div className="plan-choice" style={{ marginBottom: 0 }}>
-              {licensePlans.map((option) => (
-                <label key={option.id} className={option.id === planId ? 'selected' : ''}>
-                  <input
-                    type="radio"
-                    name="plan"
-                    value={option.id}
-                    checked={option.id === planId}
-                    onChange={() => setPlanId(option.id)}
-                  />
-                  <span className="choice-main">
-                    <span className="choice-name">{option.name}</span>
-                    <span className="choice-sub">{option.tagline}</span>
-                  </span>
-                  <span className="choice-price">{formatNaira(option.priceKobo)}/year</span>
-                </label>
-              ))}
+              <label className="selected">
+                <span className="choice-main">
+                  <span className="choice-name">{plan.name}</span>
+                  <span className="choice-sub">{plan.tagline}</span>
+                </span>
+                <span className="choice-price">{formatNaira(plan.priceKobo)}/year</span>
+              </label>
             </div>
+            <p className="fine-print" style={{ marginTop: 10 }}>
+              Running more than one location? That is our cloud version —{' '}
+              <a href="/#cloud-quote">request a quote</a> instead.
+            </p>
           </fieldset>
 
           {failure ? (

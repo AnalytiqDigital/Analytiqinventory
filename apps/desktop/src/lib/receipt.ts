@@ -20,6 +20,12 @@ const PAYMENT_LABELS: Record<string, string> = {
   credit: 'Credit',
 };
 
+const ORDER_TYPE_LABELS: Record<string, string> = {
+  dine_in: 'Dine-in',
+  takeaway: 'Takeaway',
+  delivery: 'Delivery',
+};
+
 const ESCAPES: Record<string, string> = {
   '&': '&amp;',
   '<': '&lt;',
@@ -65,6 +71,9 @@ export function buildReceiptHtml(
   const who = [sale.locationName, sale.cashierName].filter(Boolean).join(' · ');
   if (who) meta.push(`<div>${escapeHtml(who)}</div>`);
   if (sale.tableName) meta.push(`<div class="bold">${escapeHtml(sale.tableName)}</div>`);
+  const orderType = ORDER_TYPE_LABELS[sale.orderType] ?? '';
+  if (orderType) meta.push(`<div>${escapeHtml(orderType)}</div>`);
+  if (sale.waiterName) meta.push(`<div>Waiter: ${escapeHtml(sale.waiterName)}</div>`);
 
   const items = sale.items
     .map((item) => {
@@ -87,6 +96,15 @@ export function buildReceiptHtml(
     totals.push(row('Discount', `-${money(sale.headerDiscountKobo, currency)}`));
   }
   totals.push(row('Tax', money(sale.taxKobo, currency)));
+  if (sale.serviceChargeKobo > 0) {
+    totals.push(row('Service charge', money(sale.serviceChargeKobo, currency)));
+  }
+  if (sale.tipKobo > 0) {
+    totals.push(row('Tip', money(sale.tipKobo, currency)));
+  }
+  if (sale.loyaltyDiscountKobo > 0) {
+    totals.push(row('Loyalty points', `-${money(sale.loyaltyDiscountKobo, currency)}`));
+  }
   totals.push(
     row('<strong>TOTAL</strong>', `<strong>${money(sale.totalKobo, currency)}</strong>`, 'total')
   );
@@ -99,6 +117,12 @@ export function buildReceiptHtml(
     })
     .join('');
   const change = sale.changeKobo > 0 ? row('Change', money(sale.changeKobo, currency)) : '';
+  const loyalty =
+    sale.loyaltyPointsEarned > 0
+      ? `<div class="center">You earned ${sale.loyaltyPointsEarned} loyalty point${
+          sale.loyaltyPointsEarned === 1 ? '' : 's'
+        }</div>`
+      : '';
 
   const status =
     sale.status !== 'completed'
@@ -132,7 +156,54 @@ td { padding: 0; vertical-align: top; }
 <table class="items"><tbody>${items}</tbody></table>
 <table class="totals"><tbody>${totals.join('')}${payments}${change}</tbody></table>
 <div class="center thanks">Thank you for your patronage!</div>
-${status}${footer}
+${status}${loyalty}${footer}
+</body></html>`;
+}
+
+/**
+ * Kitchen order ticket: quantities and item names only, in the kitchen's own
+ * print size, so the pass can read it at a glance.
+ */
+export function buildKitchenTicketHtml(
+  sale: SaleDetail,
+  options: ReceiptOptions = {}
+): string {
+  const width = options.widthMm ?? 80;
+  const fontSize = width <= 58 ? '11px' : '13px';
+  const contentWidth = width - 4;
+
+  const meta: string[] = [
+    `<div class="title">KITCHEN ORDER TICKET</div>`,
+    `<div class="big">${escapeHtml(sale.receiptNo)}</div>`,
+    `<div>${escapeHtml(new Date(sale.createdAt).toLocaleString())}</div>`,
+  ];
+  const orderType = ORDER_TYPE_LABELS[sale.orderType] ?? '';
+  if (orderType) meta.push(`<div class="big">${escapeHtml(orderType)}</div>`);
+  if (sale.tableName) meta.push(`<div class="big">${escapeHtml(sale.tableName)}</div>`);
+  if (sale.waiterName) meta.push(`<div>Waiter: ${escapeHtml(sale.waiterName)}</div>`);
+
+  const items = sale.items
+    .map(
+      (item) =>
+        `<tr><td class="qty">${item.qty}×</td><td>${escapeHtml(item.productName)}</td></tr>`
+    )
+    .join('');
+
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Ticket ${escapeHtml(
+    sale.receiptNo
+  )}</title><style>
+@page { size: ${width}mm auto; margin: 0; }
+* { box-sizing: border-box; }
+body { width: ${contentWidth}mm; margin: 0 auto; padding: 2mm 0; font-family: "Courier New", monospace;
+  font-size: ${fontSize}; line-height: 1.3; color: #000; }
+.title { font-weight: bold; font-size: ${width <= 58 ? '13px' : '16px'}; }
+.big { font-weight: bold; font-size: ${width <= 58 ? '13px' : '16px'}; }
+table { width: 100%; border-collapse: collapse; margin-top: 2mm; border-top: 1px dashed #000; }
+td { padding: 1px 0; vertical-align: top; }
+.qty { width: 8mm; font-weight: bold; }
+</style></head><body>
+<div>${meta.join('')}</div>
+<table><tbody>${items}</tbody></table>
 </body></html>`;
 }
 
@@ -148,6 +219,10 @@ export function sampleTestSale(business: BusinessProfile | null): SaleDetail {
     totalKobo: 150000,
     amountPaidKobo: 150000,
     tableName: null,
+    orderType: 'dine_in',
+    waiterName: 'Test print',
+    serviceChargeKobo: 0,
+    tipKobo: 0,
     createdAt: now,
     itemCount: 2,
     locationId: 'test',
@@ -180,7 +255,14 @@ export function sampleTestSale(business: BusinessProfile | null): SaleDetail {
         lineTotalKobo: 50000,
       },
     ],
+    customerId: null,
+    customerName: null,
+    externalRef: null,
+    loyaltyPointsRedeemed: 0,
+    loyaltyDiscountKobo: 0,
+    loyaltyPointsEarned: 0,
     payments: [{ id: 'pay', method: 'cash', amountKobo: 150000, reference: '' }],
+    returns: [],
     reversal: null,
   };
 }

@@ -16,7 +16,7 @@ interface ApiResult {
 }
 
 interface Route {
-  method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+  method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
   path: (args: unknown[]) => string;
   body?: (args: unknown[]) => unknown;
   fallback?: Json;
@@ -103,6 +103,11 @@ const ROUTES: Record<string, Route> = {
 
   'inventory:categories': { method: 'GET', path: () => '/api/categories', fallback: { items: [] } },
   'inventory:category-create': { method: 'POST', path: () => '/api/categories', body: (a) => a[0] },
+  'inventory:category-update': {
+    method: 'PATCH',
+    path: (a) => `/api/categories/${pairArg(a).id}`,
+    body: (a) => pairArg(a).patch,
+  },
   'inventory:products': {
     method: 'GET',
     path: (a) => endpoint('/api/products', a[0]),
@@ -247,10 +252,56 @@ const ROUTES: Record<string, Route> = {
   },
   'purchases:cancel': { method: 'POST', path: (a) => `/api/purchases/${idArg(a)}/cancel` },
 
+  'masters:list': {
+    method: 'GET',
+    path: (a) => `/api/masters/${encodeURIComponent(String(a[0] ?? ''))}`,
+    fallback: { items: [] },
+  },
+  'masters:create': {
+    method: 'POST',
+    path: (a) => `/api/masters/${encodeURIComponent(String(a[0] ?? ''))}`,
+    body: (a) => a[1],
+  },
+  'masters:update': {
+    method: 'PATCH',
+    path: (a) => {
+      const payload = (a[0] ?? {}) as { kind?: unknown; id?: unknown };
+      return `/api/masters/${encodeURIComponent(String(payload.kind ?? ''))}/${encodeURIComponent(
+        String(payload.id ?? '')
+      )}`;
+    },
+    body: (a) => ((a[0] ?? {}) as { patch?: unknown }).patch,
+  },
+  'stock-adjustments:list': {
+    method: 'GET',
+    path: (a) => endpoint('/api/stock-adjustments', a[0]),
+    fallback: { items: [], total: 0 },
+  },
+  'stock-adjustments:create': {
+    method: 'POST',
+    path: () => '/api/stock-adjustments',
+    body: (a) => a[0],
+  },
+  'purchase-returns:list': {
+    method: 'GET',
+    path: (a) => endpoint('/api/purchase-returns', a[0]),
+    fallback: { items: [], total: 0 },
+  },
+  'purchase-returns:create': {
+    method: 'POST',
+    path: () => '/api/purchase-returns',
+    body: (a) => a[0],
+  },
+
   'reports:summary': {
     method: 'GET',
     path: (a) => endpoint('/api/reports/summary', a[0]),
     fallback: { summary: null },
+  },
+  'reports:menu': {
+    method: 'GET',
+    path: (a) => endpoint('/api/reports/menu', a[0]),
+    fallback: { report: null },
   },
 
   'staff:list': { method: 'GET', path: () => '/api/staff', fallback: { items: [] } },
@@ -287,6 +338,53 @@ const ROUTES: Record<string, Route> = {
     path: (a) => `/api/finance/expenses/${idArg(a)}`,
   },
 
+  'accounts:list': {
+    method: 'GET',
+    path: (a) => endpoint('/api/accounts', a[0]),
+    fallback: { items: [], totalKobo: 0 },
+  },
+  'accounts:create': { method: 'POST', path: () => '/api/accounts', body: (a) => a[0] },
+  'accounts:update': {
+    method: 'PATCH',
+    path: (a) => `/api/accounts/${pairArg(a).id}`,
+    body: (a) => pairArg(a).patch,
+  },
+  'accounts:transfer': {
+    method: 'POST',
+    path: () => '/api/accounts/transfer',
+    body: (a) => a[0],
+  },
+  'accounts:adjust': {
+    method: 'POST',
+    path: () => '/api/accounts/adjust',
+    body: (a) => a[0],
+  },
+  'accounts:transactions': {
+    method: 'GET',
+    path: (a) => endpoint('/api/accounts/transactions', a[0]),
+    fallback: { items: [], moneyInKobo: 0, moneyOutKobo: 0 },
+  },
+  'accounts:payment-map': {
+    method: 'GET',
+    path: () => '/api/accounts/payment-map',
+    fallback: { map: {} },
+  },
+  'accounts:payment-map-set': {
+    method: 'POST',
+    path: () => '/api/accounts/payment-map',
+    body: (a) => a[0],
+  },
+  'restaurant:settings': {
+    method: 'GET',
+    path: () => '/api/restaurant/settings',
+    fallback: { settings: null },
+  },
+  'restaurant:settings-set': {
+    method: 'POST',
+    path: () => '/api/restaurant/settings',
+    body: (a) => a[0],
+  },
+
   'business:profile': {
     method: 'GET',
     path: () => '/api/business',
@@ -295,6 +393,116 @@ const ROUTES: Record<string, Route> = {
   'import:products': { method: 'POST', path: () => '/api/import/products', body: (a) => a[0] },
   'import:purchases': { method: 'POST', path: () => '/api/import/purchases', body: (a) => a[0] },
   'import:sales': { method: 'POST', path: () => '/api/import/sales', body: (a) => a[0] },
+  'import:opening-stock': {
+    method: 'POST',
+    path: () => '/api/import/opening-stock',
+    body: (a) => a[0],
+  },
+  'import:contacts': { method: 'POST', path: () => '/api/import/contacts', body: (a) => a[0] },
+
+  'modules:install-view': { method: 'GET', path: () => '/api/modules' },
+  'modules:install-set': { method: 'POST', path: () => '/api/modules', body: (a) => a[0] },
+
+  'batches:list': {
+    method: 'GET',
+    path: (a) => endpoint('/api/batches', a[0]),
+    fallback: { items: [], total: 0, expiringCount: 0, expiredCount: 0 },
+  },
+  'batches:intake': { method: 'POST', path: () => '/api/batches', body: (a) => a[0] },
+  'batches:expiry-alerts': {
+    method: 'GET',
+    path: (a) => endpoint('/api/batches/expiry-alerts', { days: a[0] }),
+    fallback: { items: [] },
+  },
+
+  'price-tiers:list': { method: 'GET', path: () => '/api/price-tiers', fallback: { items: [] } },
+  'price-tiers:create': { method: 'POST', path: () => '/api/price-tiers', body: (a) => a[0] },
+  'price-tiers:update': {
+    method: 'PATCH',
+    path: (a) => `/api/price-tiers/${pairArg(a).id}`,
+    body: (a) => pairArg(a).patch,
+  },
+  'price-tiers:delete': { method: 'DELETE', path: (a) => `/api/price-tiers/${idArg(a)}` },
+  'price-tiers:prices': {
+    method: 'GET',
+    path: (a) => `/api/price-tiers/${idArg(a)}/prices`,
+    fallback: { items: [] },
+  },
+  'price-tiers:prices-set': {
+    method: 'PUT',
+    path: (a) => `/api/price-tiers/${encodeURIComponent(payloadArg(a, ['prices']).id)}/prices`,
+    body: (a) => ({ prices: (a[0] as Json).prices }),
+  },
+
+  'loyalty:settings': { method: 'GET', path: () => '/api/loyalty/settings' },
+  'loyalty:settings-set': {
+    method: 'POST',
+    path: () => '/api/loyalty/settings',
+    body: (a) => a[0],
+  },
+  'loyalty:entries': {
+    method: 'GET',
+    path: (a) => `/api/customers/${idArg(a)}/loyalty`,
+    fallback: { items: [], balance: 0 },
+  },
+  'loyalty:adjust': { method: 'POST', path: () => '/api/loyalty/adjust', body: (a) => a[0] },
+  'customers:notes': {
+    method: 'GET',
+    path: (a) => `/api/customers/${idArg(a)}/notes`,
+    fallback: { items: [] },
+  },
+  'customers:note-add': {
+    method: 'POST',
+    path: (a) => `/api/customers/${encodeURIComponent(payloadArg(a, ['note']).id)}/notes`,
+    body: (a) => (a[0] as Json).note,
+  },
+  'customers:visit-summary': {
+    method: 'GET',
+    path: (a) => `/api/customers/${idArg(a)}/summary`,
+    fallback: { summary: null },
+  },
+
+  'returns:lookup': {
+    method: 'GET',
+    path: (a) => endpoint('/api/returns/lookup', { receipt: a[0] }),
+  },
+  'returns:create': { method: 'POST', path: () => '/api/returns', body: (a) => a[0] },
+  'returns:list': {
+    method: 'GET',
+    path: (a) => endpoint('/api/returns', a[0]),
+    fallback: { items: [], total: 0 },
+  },
+
+  'transfers:list': {
+    method: 'GET',
+    path: (a) => endpoint('/api/transfers', a[0]),
+    fallback: { items: [], total: 0 },
+  },
+  'transfers:create': { method: 'POST', path: () => '/api/transfers', body: (a) => a[0] },
+
+  'debtors:list': {
+    method: 'GET',
+    path: (a) => endpoint('/api/debtors', a[0]),
+    fallback: { items: [], totalKobo: 0 },
+  },
+  'debtors:remind': {
+    method: 'POST',
+    path: () => '/api/debtors/remind',
+    body: (a) => a[0],
+  },
+
+  'cloud-backup:settings': { method: 'GET', path: () => '/api/cloud-backup' },
+  'cloud-backup:settings-set': {
+    method: 'POST',
+    path: () => '/api/cloud-backup',
+    body: (a) => a[0],
+  },
+  'cloud-backup:run': { method: 'POST', path: () => '/api/cloud-backup/run' },
+  'cloud-backup:uploads': {
+    method: 'GET',
+    path: () => '/api/cloud-backup/uploads',
+    fallback: { items: [] },
+  },
 
   'backup:list': {
     method: 'GET',

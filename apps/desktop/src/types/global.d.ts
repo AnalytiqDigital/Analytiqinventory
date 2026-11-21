@@ -6,6 +6,8 @@ export interface SessionUser {
   permissions: string[];
   /** `businesses.type` - drives which modules the app shows. */
   businessType: string;
+  /** Installed modules: the type preset plus this business's switches. */
+  modules: string[];
 }
 
 export interface RealtimeEvent {
@@ -33,6 +35,10 @@ export interface AnalytiqApi {
   authMe: () => Promise<{ user: SessionUser | null }>;
   categories: () => Promise<{ ok: boolean; items?: Category[]; error?: string; code?: string }>;
   categoryCreate: (input: unknown) => Promise<{ ok: boolean; error?: string; code?: string }>;
+  categoryUpdate: (
+    id: string,
+    patch: unknown
+  ) => Promise<{ ok: boolean; category?: Category; error?: string; code?: string }>;
   products: (
     query: unknown
   ) => Promise<{ ok: boolean; items: ProductRow[]; total: number; error?: string; code?: string }>;
@@ -171,6 +177,54 @@ export interface AnalytiqApi {
   ) => Promise<{ ok: boolean; stockLines?: number; error?: string; code?: string }>;
   purchasesCancel: (id: string) => Promise<{ ok: boolean; error?: string; code?: string }>;
 
+  // --- Batch 16: masters, stock adjustments, purchase returns, menu reports ---
+  mastersList: (
+    kind: MasterKind
+  ) => Promise<{ ok: boolean; items?: MasterRow[]; error?: string; code?: string }>;
+  mastersCreate: (
+    kind: MasterKind,
+    input: unknown
+  ) => Promise<{ ok: boolean; item?: MasterRow; error?: string; code?: string }>;
+  mastersUpdate: (
+    kind: MasterKind,
+    id: string,
+    patch: unknown
+  ) => Promise<{ ok: boolean; item?: MasterRow; error?: string; code?: string }>;
+  stockAdjustments: (
+    query: unknown
+  ) => Promise<{
+    ok: boolean;
+    items: StockAdjustmentRow[];
+    total: number;
+    error?: string;
+    code?: string;
+  }>;
+  stockAdjustmentCreate: (
+    input: unknown
+  ) => Promise<{ ok: boolean; id?: string; reference?: string; error?: string; code?: string }>;
+  purchaseReturns: (
+    query: unknown
+  ) => Promise<{
+    ok: boolean;
+    items: PurchaseReturnRow[];
+    total: number;
+    error?: string;
+    code?: string;
+  }>;
+  purchaseReturnCreate: (
+    input: unknown
+  ) => Promise<{
+    ok: boolean;
+    id?: string;
+    reference?: string;
+    totalKobo?: number;
+    error?: string;
+    code?: string;
+  }>;
+  reportsMenu: (
+    query: unknown
+  ) => Promise<{ ok: boolean; report?: MenuReports; error?: string; code?: string }>;
+
   // --- Batch 9: reports and analytics ---
   reportsSummary: (
     query: unknown
@@ -273,6 +327,8 @@ export interface AnalytiqApi {
   importProducts: (input: unknown) => Promise<ImportResponse>;
   importPurchases: (input: unknown) => Promise<ImportResponse>;
   importSales: (input: unknown) => Promise<ImportResponse>;
+  importOpeningStock: (input: unknown) => Promise<ImportResponse>;
+  importContacts: (input: unknown) => Promise<ImportResponse>;
 
   // --- Batch 14: staff, role permissions and expenses ---
   staff: () => Promise<{ ok: boolean; items: StaffMember[]; error?: string; code?: string }>;
@@ -302,6 +358,10 @@ export interface AnalytiqApi {
   expenseCreate: (
     input: unknown
   ) => Promise<{ ok: boolean; expense?: ExpenseRow; error?: string; code?: string }>;
+  expenseUpdate: (
+    id: string,
+    patch: unknown
+  ) => Promise<{ ok: boolean; expense?: ExpenseRow; error?: string; code?: string }>;
   expenseDelete: (id: string) => Promise<{ ok: boolean; error?: string; code?: string }>;
 
   // --- Batch 13: thermal receipt printing ---
@@ -314,6 +374,330 @@ export interface AnalytiqApi {
   printerPrint: (
     input: PrinterPrintInput
   ) => Promise<{ ok: boolean; error?: string; code?: string }>;
+
+  // --- Batch 15: business pack ---
+  modulesView: () => Promise<{
+    ok: boolean;
+    businessType?: string;
+    modules?: string[];
+    overrides?: Record<string, boolean>;
+    error?: string;
+    code?: string;
+  }>;
+  modulesSet: (input: unknown) => Promise<{
+    ok: boolean;
+    businessType?: string;
+    modules?: string[];
+    overrides?: Record<string, boolean>;
+    error?: string;
+    code?: string;
+  }>;
+  batches: (query: unknown) => Promise<{
+    ok: boolean;
+    items: BatchRow[];
+    total: number;
+    expiringCount: number;
+    expiredCount: number;
+    error?: string;
+    code?: string;
+  }>;
+  batchIntake: (
+    input: unknown
+  ) => Promise<{ ok: boolean; batchId?: string; qtyAfter?: number; error?: string; code?: string }>;
+  expiryAlerts: (
+    withinDays?: number
+  ) => Promise<{ ok: boolean; items: BatchRow[]; error?: string; code?: string }>;
+  priceTiers: () => Promise<{
+    ok: boolean;
+    items: PriceTierRow[];
+    error?: string;
+    code?: string;
+  }>;
+  priceTierCreate: (
+    input: unknown
+  ) => Promise<{ ok: boolean; id?: string; error?: string; code?: string }>;
+  priceTierUpdate: (
+    id: string,
+    patch: unknown
+  ) => Promise<{ ok: boolean; error?: string; code?: string }>;
+  priceTierDelete: (id: string) => Promise<{ ok: boolean; error?: string; code?: string }>;
+  tierPrices: (
+    id: string
+  ) => Promise<{ ok: boolean; items: TierPriceRow[]; error?: string; code?: string }>;
+  tierPricesSet: (
+    id: string,
+    prices: unknown
+  ) => Promise<{ ok: boolean; saved?: number; error?: string; code?: string }>;
+  loyaltySettings: () => Promise<{
+    ok: boolean;
+    settings?: LoyaltySettings;
+    error?: string;
+    code?: string;
+  }>;
+  loyaltySettingsSet: (
+    input: unknown
+  ) => Promise<{ ok: boolean; settings?: LoyaltySettings; error?: string; code?: string }>;
+  loyaltyEntries: (customerId: string) => Promise<{
+    ok: boolean;
+    items: LoyaltyEntryRow[];
+    balance: number;
+    error?: string;
+    code?: string;
+  }>;
+  loyaltyAdjust: (
+    input: unknown
+  ) => Promise<{ ok: boolean; balance?: number; error?: string; code?: string }>;
+  customerNotes: (
+    customerId: string
+  ) => Promise<{ ok: boolean; items: CustomerNoteRow[]; error?: string; code?: string }>;
+  customerNoteAdd: (
+    id: string,
+    note: unknown
+  ) => Promise<{ ok: boolean; note?: CustomerNoteRow; error?: string; code?: string }>;
+  customerVisitSummary: (customerId: string) => Promise<{
+    ok: boolean;
+    summary?: { visits: number; spentKobo: number; lastVisitAt: string | null };
+    error?: string;
+    code?: string;
+  }>;
+  returnLookup: (
+    receiptNo: string
+  ) => Promise<{ ok: boolean; sale?: SaleDetail; error?: string; code?: string }>;
+  returnCreate: (input: unknown) => Promise<{
+    ok: boolean;
+    id?: string;
+    refundKobo?: number;
+    fullyReturned?: boolean;
+    error?: string;
+    code?: string;
+  }>;
+  returnsList: (query: unknown) => Promise<{
+    ok: boolean;
+    items: SaleReturnRow[];
+    total: number;
+    error?: string;
+    code?: string;
+  }>;
+  transfers: (query: unknown) => Promise<{
+    ok: boolean;
+    items: StockTransferRow[];
+    total: number;
+    error?: string;
+    code?: string;
+  }>;
+  transferCreate: (input: unknown) => Promise<{
+    ok: boolean;
+    id?: string;
+    reference?: string;
+    error?: string;
+    code?: string;
+  }>;
+  debtors: (query: unknown) => Promise<{
+    ok: boolean;
+    items: DebtorRow[];
+    totalKobo: number;
+    error?: string;
+    code?: string;
+  }>;
+  debtorRemind: (
+    input: unknown
+  ) => Promise<{ ok: boolean; result?: DebtorReminderResult; error?: string; code?: string }>;
+  cloudBackupSettings: () => Promise<{
+    ok: boolean;
+    settings?: CloudBackupSettingsView;
+    error?: string;
+    code?: string;
+  }>;
+  cloudBackupSave: (input: unknown) => Promise<{
+    ok: boolean;
+    settings?: CloudBackupSettingsView;
+    error?: string;
+    code?: string;
+  }>;
+  cloudBackupRun: () => Promise<{
+    ok: boolean;
+    fileName?: string;
+    sizeBytes?: number;
+    uploaded?: boolean;
+    error?: string;
+    code?: string;
+  }>;
+  cloudBackupUploads: () => Promise<{
+    ok: boolean;
+    items: CloudUploadRow[];
+    error?: string;
+    code?: string;
+  }>;
+
+  // --- Batch 17: cash & bank accounts + restaurant service flow ---
+  accounts: (query?: unknown) => Promise<{
+    ok: boolean;
+    items: AccountRow[];
+    totalKobo: number;
+    error?: string;
+    code?: string;
+  }>;
+  accountCreate: (
+    input: unknown
+  ) => Promise<{ ok: boolean; account?: AccountRow; error?: string; code?: string }>;
+  accountUpdate: (
+    id: string,
+    patch: unknown
+  ) => Promise<{ ok: boolean; account?: AccountRow; error?: string; code?: string }>;
+  accountTransfer: (
+    input: unknown
+  ) => Promise<{ ok: boolean; id?: string; error?: string; code?: string }>;
+  accountAdjust: (
+    input: unknown
+  ) => Promise<{ ok: boolean; id?: string; balanceKobo?: number; error?: string; code?: string }>;
+  accountTransactions: (query: unknown) => Promise<{
+    ok: boolean;
+    items: AccountTransactionRow[];
+    moneyInKobo: number;
+    moneyOutKobo: number;
+    error?: string;
+    code?: string;
+  }>;
+  accountPaymentMap: () => Promise<{
+    ok: boolean;
+    map: Partial<Record<'cash' | 'transfer' | 'pos', string>>;
+    error?: string;
+    code?: string;
+  }>;
+  accountPaymentMapSet: (input: unknown) => Promise<{
+    ok: boolean;
+    map?: Partial<Record<'cash' | 'transfer' | 'pos', string>>;
+    error?: string;
+    code?: string;
+  }>;
+  restaurantSettings: () => Promise<{
+    ok: boolean;
+    settings?: { serviceChargeBp: number };
+    error?: string;
+    code?: string;
+  }>;
+  restaurantSettingsSet: (input: unknown) => Promise<{
+    ok: boolean;
+    settings?: { serviceChargeBp: number };
+    error?: string;
+    code?: string;
+  }>;
+}
+
+export interface BatchRow {
+  id: string;
+  productId: string;
+  productName: string;
+  sku: string | null;
+  unit: string;
+  batchNo: string;
+  expiryDate: string | null;
+  locationId: string;
+  locationName: string;
+  remaining: number;
+  onHand: number;
+  nearExpiryDays: number;
+  status: 'expired' | 'expiring' | 'ok' | 'empty';
+}
+
+export interface PriceTierRow {
+  id: string;
+  name: string;
+  description: string;
+  isDefault: boolean;
+  customerCount: number;
+  priceCount: number;
+}
+
+export interface TierPriceRow {
+  productId: string;
+  name: string;
+  sku: string | null;
+  unit: string;
+  sellingPriceKobo: number;
+  tierPriceKobo: number | null;
+}
+
+export interface LoyaltySettings {
+  enabled: boolean;
+  earnKoboPerPoint: number;
+  pointValueKobo: number;
+}
+
+export interface LoyaltyEntryRow {
+  id: string;
+  kind: string;
+  points: number;
+  reason: string;
+  saleId: string | null;
+  createdAt: string;
+  userName: string | null;
+}
+
+export interface CustomerNoteRow {
+  id: string;
+  body: string;
+  createdAt: string;
+  userName: string | null;
+}
+
+export interface SaleReturnRow {
+  id: string;
+  receiptNo: string;
+  saleId: string;
+  kind: string;
+  reason: string;
+  refundKobo: number;
+  refundMethod: string;
+  createdAt: string;
+  userName: string | null;
+  itemCount: number;
+}
+
+export interface StockTransferRow {
+  id: string;
+  reference: string;
+  fromLocationId: string;
+  fromLocationName: string;
+  toLocationId: string;
+  toLocationName: string;
+  note: string;
+  createdAt: string;
+  items: Array<{ productId: string; productName: string; sku: string | null; qty: number }>;
+}
+
+export interface DebtorRow {
+  customerId: string;
+  name: string;
+  phone: string;
+  balanceKobo: number;
+  lastReminderAt: string | null;
+}
+
+export interface DebtorReminderResult {
+  attempted: number;
+  sent: number;
+  dryRun: number;
+  failed: number;
+  skipped: number;
+  errors: string[];
+}
+
+export interface CloudBackupSettingsView {
+  enabled: boolean;
+  url: string;
+  keepLocal: boolean;
+  keySet: boolean;
+  passphraseSet: boolean;
+}
+
+export interface CloudUploadRow {
+  id: string;
+  fileName: string;
+  sizeBytes: number;
+  status: string;
+  error: string;
+  createdAt: string;
 }
 
 export interface PrinterInfo {
@@ -566,8 +950,36 @@ export interface ExpenseRow {
   amountKobo: number;
   paidAt: string;
   locationId: string | null;
+  accountId: string | null;
+  accountName: string;
   createdBy: string | null;
   createdByName: string;
+  createdAt: string;
+}
+
+export type AccountKind = 'cash' | 'bank' | 'pos' | 'mobile';
+
+export interface AccountRow {
+  id: string;
+  name: string;
+  kind: AccountKind;
+  openingBalanceKobo: number;
+  balanceKobo: number;
+  isDefault: boolean;
+  archived: boolean;
+  createdAt: string;
+}
+
+export interface AccountTransactionRow {
+  id: string;
+  accountId: string;
+  accountName: string;
+  kind: string;
+  amountKobo: number;
+  reference: string;
+  note: string;
+  source: string;
+  sourceId: string | null;
   createdAt: string;
 }
 
@@ -579,8 +991,25 @@ export interface CustomerRow {
   address: string;
   note: string;
   creditLimitKobo: number;
+  priceTierId: string | null;
+  priceTierName: string | null;
+  groupId: string | null;
+  groupName: string | null;
+  loyaltyPoints: number;
   isActive: boolean;
   balanceKobo: number;
+  createdAt: string;
+}
+
+export type MasterKind = 'brands' | 'units' | 'warranties' | 'customer-groups';
+
+export interface MasterRow {
+  id: string;
+  name: string;
+  note: string;
+  shortName?: string;
+  durationDays?: number;
+  isActive: boolean;
   createdAt: string;
 }
 
@@ -634,6 +1063,150 @@ export interface PurchaseItemRow {
   qty: number;
   unitCostKobo: number;
   lineTotalKobo: number;
+  batchNo: string;
+  expiryDate: string | null;
+}
+
+export interface StockAdjustmentItemRow {
+  id: string;
+  productId: string;
+  productName: string;
+  sku: string | null;
+  qtyDelta: number;
+  note: string;
+}
+
+export interface StockAdjustmentRow {
+  id: string;
+  reference: string;
+  locationId: string;
+  locationName: string;
+  reason: string;
+  note: string;
+  createdBy: string | null;
+  createdByName: string;
+  createdAt: string;
+  items: StockAdjustmentItemRow[];
+}
+
+export interface PurchaseReturnItemRow {
+  id: string;
+  productId: string;
+  productName: string;
+  sku: string | null;
+  qty: number;
+  unitCostKobo: number;
+  lineTotalKobo: number;
+}
+
+export interface PurchaseReturnRow {
+  id: string;
+  reference: string;
+  purchaseId: string;
+  purchaseReference: string;
+  supplierName: string | null;
+  reason: string;
+  note: string;
+  totalKobo: number;
+  createdByName: string;
+  createdAt: string;
+  items: PurchaseReturnItemRow[];
+}
+
+export interface MenuReports {
+  range: { from: string; to: string; locationId: string | null };
+  purchaseSale: {
+    daily: Array<{
+      date: string;
+      salesCount: number;
+      salesKobo: number;
+      purchaseCount: number;
+      purchaseKobo: number;
+    }>;
+    salesCount: number;
+    salesKobo: number;
+    purchaseCount: number;
+    purchaseKobo: number;
+  };
+  tax: {
+    outputKobo: number;
+    inputKobo: number;
+    netKobo: number;
+    daily: Array<{ date: string; outputKobo: number; inputKobo: number }>;
+  };
+  customers: Array<{
+    customerId: string;
+    name: string;
+    phone: string;
+    groupName: string;
+    transactions: number;
+    spendKobo: number;
+    balanceKobo: number;
+  }>;
+  suppliers: Array<{
+    supplierId: string;
+    name: string;
+    purchasesKobo: number;
+    paidKobo: number;
+    returnsKobo: number;
+    balanceKobo: number;
+  }>;
+  receivablesKobo: number;
+  payablesKobo: number;
+  customerGroups: Array<{
+    groupId: string;
+    name: string;
+    customers: number;
+    salesKobo: number;
+    creditKobo: number;
+  }>;
+  stockAdjustments: Array<{
+    id: string;
+    reference: string;
+    date: string;
+    locationName: string;
+    reason: string;
+    lines: number;
+    qtyNet: number;
+  }>;
+  productPurchases: Array<{
+    productId: string;
+    name: string;
+    sku: string;
+    qty: number;
+    costKobo: number;
+  }>;
+  purchasePayments: Array<{
+    id: string;
+    reference: string;
+    supplierName: string;
+    receivedAt: string;
+    totalKobo: number;
+    paidKobo: number;
+    returnsKobo: number;
+    balanceKobo: number;
+  }>;
+  sellPayments: Array<{ method: string; count: number; amountKobo: number }>;
+  registers: Array<{
+    locationId: string;
+    locationName: string;
+    transactions: number;
+    grossKobo: number;
+    taxKobo: number;
+    cashKobo: number;
+    transferKobo: number;
+    posKobo: number;
+    creditKobo: number;
+  }>;
+  salesReps: Array<{
+    userId: string | null;
+    name: string;
+    transactions: number;
+    grossKobo: number;
+    discountKobo: number;
+    taxKobo: number;
+    refundsKobo: number;
+  }>;
 }
 
 export type PaymentMethod = 'cash' | 'transfer' | 'pos' | 'credit';
@@ -677,10 +1250,29 @@ export interface SaleDetail extends SaleSummaryRow {
   headerDiscountKobo: number;
   taxKobo: number;
   changeKobo: number;
+  orderType: string;
+  waiterName: string;
+  serviceChargeKobo: number;
+  tipKobo: number;
   tableId: string | null;
   tableName: string | null;
+  customerId: string | null;
+  customerName: string | null;
+  externalRef: string | null;
+  loyaltyPointsRedeemed: number;
+  loyaltyDiscountKobo: number;
+  loyaltyPointsEarned: number;
   items: SaleItemRow[];
   payments: SalePaymentRow[];
+  returns: Array<{
+    id: string;
+    kind: string;
+    reason: string;
+    refundKobo: number;
+    refundMethod: string;
+    createdAt: string;
+    itemCount: number;
+  }>;
   reversal: { reason: string; reversedBy: string | null; createdAt: string } | null;
 }
 
@@ -697,12 +1289,18 @@ export interface ProductRow {
   barcode: string | null;
   categoryId: string | null;
   categoryName: string | null;
+  brandId: string | null;
+  brandName: string | null;
+  warrantyId: string | null;
+  warrantyName: string | null;
   unit: string;
   costPriceKobo: number;
   sellingPriceKobo: number;
   reorderLevel: number;
   imagePath: string;
   taxCategoryId: string | null;
+  trackBatches: boolean;
+  nearExpiryDays: number;
   isActive: number;
   onHand: number;
   lowStock: boolean;

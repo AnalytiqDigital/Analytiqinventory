@@ -38,6 +38,11 @@ const api = {
     ipcRenderer.invoke('inventory:categories'),
   categoryCreate: (input: unknown): Promise<{ ok: boolean; error?: string; code?: string }> =>
     ipcRenderer.invoke('inventory:category-create', input),
+  categoryUpdate: (
+    id: string,
+    patch: unknown
+  ): Promise<{ ok: boolean; category?: unknown; error?: string; code?: string }> =>
+    ipcRenderer.invoke('inventory:category-update', { id, patch }),
   products: (
     query: unknown
   ): Promise<{ ok: boolean; items: unknown[]; total: number; error?: string; code?: string }> =>
@@ -206,6 +211,49 @@ const api = {
   purchasesCancel: (id: string): Promise<{ ok: boolean; error?: string; code?: string }> =>
     ipcRenderer.invoke('purchases:cancel', id),
 
+  // --- Batch 16: masters, stock adjustments, purchase returns, menu reports ---
+  mastersList: (
+    kind: string
+  ): Promise<{ ok: boolean; items?: unknown[]; error?: string; code?: string }> =>
+    ipcRenderer.invoke('masters:list', kind),
+  mastersCreate: (
+    kind: string,
+    input: unknown
+  ): Promise<{ ok: boolean; item?: unknown; error?: string; code?: string }> =>
+    ipcRenderer.invoke('masters:create', { kind, input }),
+  mastersUpdate: (
+    kind: string,
+    id: string,
+    patch: unknown
+  ): Promise<{ ok: boolean; item?: unknown; error?: string; code?: string }> =>
+    ipcRenderer.invoke('masters:update', { kind, id, patch }),
+  stockAdjustments: (
+    query: unknown
+  ): Promise<{ ok: boolean; items: unknown[]; total: number; error?: string; code?: string }> =>
+    ipcRenderer.invoke('stock-adjustments:list', query),
+  stockAdjustmentCreate: (
+    input: unknown
+  ): Promise<{ ok: boolean; id?: string; reference?: string; error?: string; code?: string }> =>
+    ipcRenderer.invoke('stock-adjustments:create', input),
+  purchaseReturns: (
+    query: unknown
+  ): Promise<{ ok: boolean; items: unknown[]; total: number; error?: string; code?: string }> =>
+    ipcRenderer.invoke('purchase-returns:list', query),
+  purchaseReturnCreate: (
+    input: unknown
+  ): Promise<{
+    ok: boolean;
+    id?: string;
+    reference?: string;
+    totalKobo?: number;
+    error?: string;
+    code?: string;
+  }> => ipcRenderer.invoke('purchase-returns:create', input),
+  reportsMenu: (
+    query: unknown
+  ): Promise<{ ok: boolean; report?: unknown; error?: string; code?: string }> =>
+    ipcRenderer.invoke('reports:menu', query),
+
   reportsSummary: (
     query: unknown
   ): Promise<{ ok: boolean; summary?: unknown; error?: string; code?: string }> =>
@@ -348,6 +396,26 @@ const api = {
     error?: string;
     code?: string;
   }> => ipcRenderer.invoke('import:sales', input),
+  importOpeningStock: (
+    input: unknown
+  ): Promise<{
+    ok: boolean;
+    created: number;
+    failed: number;
+    errors: unknown[];
+    error?: string;
+    code?: string;
+  }> => ipcRenderer.invoke('import:opening-stock', input),
+  importContacts: (
+    input: unknown
+  ): Promise<{
+    ok: boolean;
+    created: number;
+    failed: number;
+    errors: unknown[];
+    error?: string;
+    code?: string;
+  }> => ipcRenderer.invoke('import:contacts', input),
 
   // --- Batch 14: staff, role permissions and expenses ---
   staff: (): Promise<{ ok: boolean; items: unknown[]; error?: string; code?: string }> =>
@@ -386,6 +454,11 @@ const api = {
     input: unknown
   ): Promise<{ ok: boolean; expense?: unknown; error?: string; code?: string }> =>
     ipcRenderer.invoke('finance:create-expense', input),
+  expenseUpdate: (
+    id: string,
+    patch: unknown
+  ): Promise<{ ok: boolean; expense?: unknown; error?: string; code?: string }> =>
+    ipcRenderer.invoke('finance:update-expense', { id, patch }),
   expenseDelete: (id: string): Promise<{ ok: boolean; error?: string; code?: string }> =>
     ipcRenderer.invoke('finance:delete-expense', id),
 
@@ -398,6 +471,88 @@ const api = {
   }> => ipcRenderer.invoke('printer:list'),
   printerPrint: (input: unknown): Promise<{ ok: boolean; error?: string; code?: string }> =>
     ipcRenderer.invoke('printer:print', input),
+
+  // --- Batch 15: business pack ---
+  modulesView: (): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('modules:install-view'),
+  modulesSet: (input: unknown): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('modules:install-set', input),
+  batches: (query: unknown): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('batches:list', query),
+  batchIntake: (input: unknown): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('batches:intake', input),
+  expiryAlerts: (withinDays?: number): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('batches:expiry-alerts', withinDays),
+  priceTiers: (): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('price-tiers:list'),
+  priceTierCreate: (input: unknown): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('price-tiers:create', input),
+  priceTierUpdate: (id: string, patch: unknown): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('price-tiers:update', { id, patch }),
+  priceTierDelete: (id: string): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('price-tiers:delete', id),
+  tierPrices: (id: string): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('price-tiers:prices', id),
+  tierPricesSet: (id: string, prices: unknown): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('price-tiers:prices-set', { id, prices }),
+  loyaltySettings: (): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('loyalty:settings'),
+  loyaltySettingsSet: (input: unknown): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('loyalty:settings-set', input),
+  loyaltyEntries: (customerId: string): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('loyalty:entries', customerId),
+  loyaltyAdjust: (input: unknown): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('loyalty:adjust', input),
+  customerNotes: (customerId: string): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('customers:notes', customerId),
+  customerNoteAdd: (id: string, note: unknown): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('customers:note-add', { id, note }),
+  customerVisitSummary: (customerId: string): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('customers:visit-summary', customerId),
+  returnLookup: (receiptNo: string): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('returns:lookup', receiptNo),
+  returnCreate: (input: unknown): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('returns:create', input),
+  returnsList: (query: unknown): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('returns:list', query),
+  transfers: (query: unknown): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('transfers:list', query),
+  transferCreate: (input: unknown): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('transfers:create', input),
+  debtors: (query: unknown): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('debtors:list', query),
+  debtorRemind: (input: unknown): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('debtors:remind', input),
+  cloudBackupSettings: (): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('cloud-backup:settings'),
+  cloudBackupSave: (input: unknown): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('cloud-backup:settings-set', input),
+  cloudBackupRun: (): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('cloud-backup:run'),
+  cloudBackupUploads: (): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('cloud-backup:uploads'),
+
+  // --- Batch 17: cash & bank accounts + restaurant service settings ---
+  accounts: (query?: unknown): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('accounts:list', query ?? {}),
+  accountCreate: (input: unknown): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('accounts:create', input),
+  accountUpdate: (id: string, patch: unknown): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('accounts:update', { id, patch }),
+  accountTransfer: (input: unknown): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('accounts:transfer', input),
+  accountAdjust: (input: unknown): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('accounts:adjust', input),
+  accountTransactions: (query: unknown): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('accounts:transactions', query),
+  accountPaymentMap: (): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('accounts:payment-map'),
+  accountPaymentMapSet: (input: unknown): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('accounts:payment-map-set', input),
+  restaurantSettings: (): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('restaurant:settings'),
+  restaurantSettingsSet: (input: unknown): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('restaurant:settings-set', input),
 };
 
 export type AnalytiqApi = typeof api;

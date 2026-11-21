@@ -75,21 +75,21 @@ Issue a key:
 pnpm --filter @analytiq/licensing build
 node packages/licensing/scripts/issue.mjs \
   --business "Ada's Supermart" \
-  --plan pro \
+  --plan standard \
   --days 365 \
   --device 4b2f...            # optional: lock to one installation
 ```
 
 Options:
 
-| Flag         | Meaning                                                      |
-| ------------ | ------------------------------------------------------------ |
-| `--business` | Customer name, printed on the activation screen              |
-| `--plan`     | `starter`, `standard`, `pro`, or any agreed plan             |
-| `--days`     | Days until expiry; omit or `0` for perpetual                 |
-| `--device`   | Installation id to bind to; omit for any computer            |
-| `--key`      | Private key path; defaults to `.secrets/license-private.pem` |
-| `--json`     | Print `{ key, payload }` instead of just the key             |
+| Flag         | Meaning                                                                            |
+| ------------ | ---------------------------------------------------------------------------------- |
+| `--business` | Customer name, printed on the activation screen                                    |
+| `--plan`     | Free-form label; `standard` is the public package, cloud plans are named per quote |
+| `--days`     | Days until expiry; omit or `0` for perpetual                                       |
+| `--device`   | Installation id to bind to; omit for any computer                                  |
+| `--key`      | Private key path; defaults to `.secrets/license-private.pem`                       |
+| `--json`     | Print `{ key, payload }` instead of just the key                                   |
 
 The key is written to **stdout**; progress and payload details go to stderr, so
 output can be piped safely:

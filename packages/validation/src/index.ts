@@ -21,8 +21,11 @@ export const businessTypeSchema = z.enum([
   'retail',
   'supermarket',
   'restaurant',
+  'bar',
   'pharmacy',
   'wholesale',
+  'electronics',
+  'boutique',
   'services',
   'other',
 ]);
@@ -130,6 +133,8 @@ export const productSchema = z.object({
   sku: nullableCode(64),
   barcode: nullableCode(64),
   categoryId: z.string().trim().min(1).nullish(),
+  brandId: z.string().trim().min(1).nullish(),
+  warrantyId: z.string().trim().min(1).nullish(),
   unit: z.string().trim().min(1, 'Unit is required').max(20).default('pcs'),
   costPriceKobo: koboAmountSchema.max(MAX_KOBO).default(0),
   sellingPriceKobo: koboAmountSchema.max(MAX_KOBO).default(0),
@@ -140,6 +145,8 @@ export const productSchema = z.object({
   // character cap is applied — SQLite TEXT is unbounded and this stays offline.
   imagePath: z.string().trim().max(4_000_000).default(''),
   taxCategoryId: z.string().trim().min(1).nullish(),
+  trackBatches: z.coerce.boolean().default(false),
+  nearExpiryDays: z.coerce.number().int().min(0).max(3650).default(30),
 });
 
 export type ProductInput = z.infer<typeof productSchema>;
@@ -206,6 +213,16 @@ export type MovementsQuery = z.infer<typeof movementsQuerySchema>;
 export const PAYMENT_METHODS = ['cash', 'transfer', 'pos', 'credit'] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
+/** Restaurant service flow. takeaway is the default for any shop till. */
+export const ORDER_TYPES = ['dine_in', 'takeaway', 'delivery'] as const;
+export type OrderType = (typeof ORDER_TYPES)[number];
+
+export const ORDER_TYPE_LABELS: Record<OrderType, string> = {
+  dine_in: 'Dine in',
+  takeaway: 'Takeaway',
+  delivery: 'Delivery',
+};
+
 export const saleItemInputSchema = z.object({
   productId: z.string().trim().min(1, 'Product is required'),
   qty: z.coerce.number().int().min(1, 'Quantity must be at least 1').max(1_000_000),
@@ -231,6 +248,14 @@ export const saleCreateSchema = z.object({
   payments: z.array(salePaymentInputSchema).min(1, 'Add at least one payment').max(10),
   tableId: z.string().trim().min(1).nullish(),
   customerId: z.string().trim().min(1).nullish(),
+  /** Restaurant service flow: dine-in, takeaway or delivery. */
+  orderType: z.enum(ORDER_TYPES).default('takeaway'),
+  waiterName: z.string().trim().max(60).default(''),
+  /** Service charge is added after tax and is not itself taxed. */
+  serviceChargeKobo: koboAmountSchema.max(MAX_KOBO).default(0),
+  tipKobo: koboAmountSchema.max(MAX_KOBO).default(0),
+  /** Loyalty points the cashier chose to redeem on this sale. */
+  redeemPoints: z.coerce.number().int().min(0).max(10_000_000).default(0),
   /**
    * Backdating hook used by the CSV importer; defaults to now. The receipt
    * number and the stock rows are stamped with the same instant.
@@ -318,25 +343,153 @@ export const CORE_MODULES = ['pos', 'products', 'inventory', 'reports'] as const
 /** Optional modules that a business type can switch on. */
 export const OPTIONAL_MODULES = [
   'tables',
+  'accounts',
   'taxCategories',
   'purchases',
   'suppliers',
   'customers',
   'finance',
+  'expenses',
+  'expiry',
+  'priceTiers',
+  'loyalty',
+  'returns',
+  'transfers',
 ] as const;
 
 export type OptionalModule = (typeof OPTIONAL_MODULES)[number];
 export type AppModule = (typeof CORE_MODULES)[number] | OptionalModule;
 
-/** What `businesses.type` grants out of the box. */
+/**
+ * What `businesses.type` installs out of the box. Managers can switch any
+ * optional module on or off afterwards (Install modules in Settings).
+ */
 const DEFAULT_MODULES: Record<BusinessType, OptionalModule[]> = {
-  retail: ['taxCategories', 'purchases', 'suppliers', 'customers', 'finance'],
-  supermarket: ['taxCategories', 'purchases', 'suppliers', 'customers', 'finance'],
-  wholesale: ['taxCategories', 'purchases', 'suppliers', 'customers', 'finance'],
-  restaurant: ['tables', 'taxCategories', 'purchases', 'suppliers', 'customers', 'finance'],
-  pharmacy: ['taxCategories', 'purchases', 'suppliers', 'customers', 'finance'],
-  services: ['taxCategories', 'purchases', 'customers', 'finance'],
-  other: ['taxCategories', 'purchases', 'suppliers', 'customers', 'finance'],
+  retail: [
+    'accounts',
+    'taxCategories',
+    'purchases',
+    'suppliers',
+    'customers',
+    'finance',
+    'expenses',
+    'expiry',
+    'loyalty',
+    'returns',
+    'transfers',
+  ],
+  supermarket: [
+    'accounts',
+    'taxCategories',
+    'purchases',
+    'suppliers',
+    'customers',
+    'finance',
+    'expenses',
+    'expiry',
+    'priceTiers',
+    'loyalty',
+    'returns',
+    'transfers',
+  ],
+  wholesale: [
+    'accounts',
+    'taxCategories',
+    'purchases',
+    'suppliers',
+    'customers',
+    'finance',
+    'expenses',
+    'expiry',
+    'priceTiers',
+    'loyalty',
+    'returns',
+    'transfers',
+  ],
+  restaurant: [
+    'tables',
+    'accounts',
+    'taxCategories',
+    'purchases',
+    'suppliers',
+    'customers',
+    'finance',
+    'expenses',
+    'loyalty',
+    'returns',
+  ],
+  bar: [
+    'tables',
+    'accounts',
+    'taxCategories',
+    'purchases',
+    'suppliers',
+    'customers',
+    'finance',
+    'expenses',
+    'loyalty',
+    'returns',
+  ],
+  pharmacy: [
+    'accounts',
+    'taxCategories',
+    'purchases',
+    'suppliers',
+    'customers',
+    'finance',
+    'expenses',
+    'expiry',
+    'loyalty',
+    'returns',
+    'transfers',
+  ],
+  electronics: [
+    'accounts',
+    'taxCategories',
+    'purchases',
+    'suppliers',
+    'customers',
+    'finance',
+    'expenses',
+    'priceTiers',
+    'loyalty',
+    'returns',
+    'transfers',
+  ],
+  boutique: [
+    'accounts',
+    'taxCategories',
+    'purchases',
+    'suppliers',
+    'customers',
+    'finance',
+    'expenses',
+    'loyalty',
+    'returns',
+    'transfers',
+  ],
+  services: [
+    'accounts',
+    'taxCategories',
+    'purchases',
+    'customers',
+    'finance',
+    'expenses',
+    'loyalty',
+    'returns',
+  ],
+  other: [
+    'accounts',
+    'taxCategories',
+    'purchases',
+    'suppliers',
+    'customers',
+    'finance',
+    'expenses',
+    'loyalty',
+    'returns',
+    'transfers',
+  ],
 };
 
 /**
@@ -385,6 +538,8 @@ export const customerSchema = z.object({
   address: z.string().trim().max(500).default(''),
   note: z.string().trim().max(500).default(''),
   creditLimitKobo: z.number().int().min(0).max(1_000_000_000_00).default(0),
+  priceTierId: z.string().trim().min(1).nullish(),
+  groupId: z.string().trim().min(1).nullish(),
 });
 
 export type CustomerInput = z.infer<typeof customerSchema>;
@@ -436,6 +591,12 @@ export const purchaseItemSchema = z.object({
   productId: z.string().trim().min(1),
   qty: z.number().int().min(1, 'Quantity must be at least 1').max(1_000_000),
   unitCostKobo: z.number().int().min(0).max(1_000_000_000_00),
+  batchNo: z.string().trim().max(60).default(''),
+  expiryDate: z
+    .string()
+    .trim()
+    .datetime({ offset: true, message: 'Expiry must be an ISO date' })
+    .nullish(),
 });
 
 export type PurchaseItemInput = z.infer<typeof purchaseItemSchema>;
@@ -468,9 +629,98 @@ export const customerPaymentSchema = z.object({
   amountKobo: z.number().int().min(1, 'Amount must be greater than zero').max(1_000_000_000_00),
   method: z.enum(['cash', 'transfer', 'pos']).default('cash'),
   reference: z.string().trim().max(120).default(''),
+  /** Cash/bank account to credit; defaults to the account mapped for the method. */
+  accountId: z.string().trim().min(1).nullish(),
 });
 
 export type CustomerPaymentInput = z.infer<typeof customerPaymentSchema>;
+
+// --- Batch 16: shop masters, stock adjustments, purchase returns ------------
+
+export const masterNameSchema = z.object({
+  name: z.string().trim().min(2, 'Name is required').max(120),
+  note: z.string().trim().max(500).default(''),
+});
+
+export type MasterNameInput = z.infer<typeof masterNameSchema>;
+
+export const masterUpdateSchema = masterNameSchema.partial().extend({
+  isActive: z.boolean().optional(),
+});
+
+export type MasterUpdateInput = z.infer<typeof masterUpdateSchema>;
+
+export const unitSchema = masterNameSchema.extend({
+  shortName: z.string().trim().max(12).default(''),
+});
+
+export type UnitInput = z.infer<typeof unitSchema>;
+
+export const unitUpdateSchema = unitSchema.partial().extend({
+  isActive: z.boolean().optional(),
+});
+
+export type UnitUpdateInput = z.infer<typeof unitUpdateSchema>;
+
+export const warrantySchema = masterNameSchema.extend({
+  durationDays: z.coerce.number().int().min(0).max(36_500).default(0),
+});
+
+export type WarrantyInput = z.infer<typeof warrantySchema>;
+
+export const warrantyUpdateSchema = warrantySchema.partial().extend({
+  isActive: z.boolean().optional(),
+});
+
+export type WarrantyUpdateInput = z.infer<typeof warrantyUpdateSchema>;
+
+export const stockAdjustmentItemSchema = z.object({
+  productId: z.string().trim().min(1, 'Product is required'),
+  qtyDelta: z.coerce
+    .number()
+    .int()
+    .min(-1_000_000_000)
+    .max(1_000_000_000)
+    .refine((n) => n !== 0, 'Change cannot be zero'),
+  note: z.string().trim().max(300).default(''),
+});
+
+export type StockAdjustmentItemInput = z.infer<typeof stockAdjustmentItemSchema>;
+
+export const stockAdjustmentCreateSchema = z.object({
+  locationId: z.string().trim().min(1).nullish(),
+  reason: z.string().trim().min(3, 'Give a reason (min 3 characters)').max(200),
+  note: z.string().trim().max(500).default(''),
+  items: z.array(stockAdjustmentItemSchema).min(1, 'Add at least one line'),
+});
+
+export type StockAdjustmentCreateInput = z.infer<typeof stockAdjustmentCreateSchema>;
+
+export const stockAdjustmentsQuerySchema = z.object({
+  limit: z.number().int().min(1).max(200).default(100),
+  offset: z.number().int().min(0).default(0),
+});
+
+export const purchaseReturnItemSchema = z.object({
+  productId: z.string().trim().min(1),
+  qty: z.number().int().min(1, 'Quantity must be at least 1').max(1_000_000),
+});
+
+export type PurchaseReturnItemInput = z.infer<typeof purchaseReturnItemSchema>;
+
+export const purchaseReturnCreateSchema = z.object({
+  purchaseId: z.string().trim().min(1, 'Choose a purchase'),
+  reason: z.string().trim().min(3, 'Give a reason (min 3 characters)').max(200),
+  note: z.string().trim().max(500).default(''),
+  items: z.array(purchaseReturnItemSchema).min(1, 'Add at least one line'),
+});
+
+export type PurchaseReturnCreateInput = z.infer<typeof purchaseReturnCreateSchema>;
+
+export const purchaseReturnsQuerySchema = z.object({
+  limit: z.number().int().min(1).max(200).default(100),
+  offset: z.number().int().min(0).default(0),
+});
 
 // --- Batch 9: reporting + BI ------------------------------------------------
 
@@ -649,6 +899,47 @@ export const salesImportSchema = z.object({
 export type SaleImportRow = z.infer<typeof saleImportRowSchema>;
 export type SalesImportInput = z.infer<typeof salesImportSchema>;
 
+export const openingStockImportRowSchema = z
+  .object({
+    sku: z.string().trim().max(64).default(''),
+    barcode: nullableCode(64),
+    name: z.string().trim().max(200).default(''),
+    qty: z.coerce.number().int().min(0, 'Quantity cannot be negative').max(1_000_000_000),
+    location: z.string().trim().max(120).default(''),
+  })
+  .refine((row) => row.sku !== '' || (row.barcode ?? '') !== '' || row.name !== '', {
+    message: 'Each row needs a sku, barcode or product name',
+  });
+
+export const openingStockImportSchema = z.object({
+  rows: z
+    .array(openingStockImportRowSchema)
+    .min(1, 'Nothing to import')
+    .max(5000, 'Import 5000 rows at a time at most'),
+});
+
+export type OpeningStockImportRow = z.infer<typeof openingStockImportRowSchema>;
+export type OpeningStockImportInput = z.infer<typeof openingStockImportSchema>;
+
+export const contactsImportRowSchema = z.object({
+  name: z.string().trim().min(1, 'Contact name is required').max(120),
+  type: z.enum(['customer', 'supplier']).default('customer'),
+  phone: z.string().trim().max(40).default(''),
+  email: z.string().trim().max(200).default(''),
+  address: z.string().trim().max(500).default(''),
+  group: z.string().trim().max(120).default(''),
+});
+
+export const contactsImportSchema = z.object({
+  rows: z
+    .array(contactsImportRowSchema)
+    .min(1, 'Nothing to import')
+    .max(5000, 'Import 5000 rows at a time at most'),
+});
+
+export type ContactImportRow = z.infer<typeof contactsImportRowSchema>;
+export type ContactsImportInput = z.infer<typeof contactsImportSchema>;
+
 /** Downloadable CSV templates, kept next to the schemas they must match. */
 export const importTemplates = {
   products: [
@@ -663,6 +954,15 @@ export const importTemplates = {
     'receipt,date,sku,qty,unit_price,line_discount,tender,customer,tax',
     'INV-0001,2026-11-02,IND-70,2,450.00,0,cash,,0',
   ],
+  'opening-stock': [
+    'sku,barcode,name,qty,location',
+    'IND-70,,Indomie 70g,100,',
+  ],
+  contacts: [
+    'name,type,phone,email,address,group',
+    'Ada Obi,customer,08030000000,ada@example.com,Lagos,Wholesale',
+    'Peak Foods,supplier,08055550000,sales@peak.example,Onitsha,',
+  ],
 } as const;
 
 export type ImportKind = keyof typeof importTemplates;
@@ -675,44 +975,19 @@ export type ImportKind = keyof typeof importTemplates;
 
 export const licensePlans = [
   {
-    id: 'starter',
-    name: 'Starter',
-    tagline: 'For a single shop getting organised.',
-    priceKobo: 2_500_000,
-    days: 365,
-    features: [
-      '1 till and 1 location',
-      'Up to 5 staff accounts',
-      'Inventory, POS, receipts and reports',
-      'Daily automatic backups',
-    ],
-  },
-  {
     id: 'standard',
-    name: 'Standard',
-    tagline: 'For growing shops with more than one till.',
-    priceKobo: 4_500_000,
+    name: 'AnalytIQ Inventory & POS',
+    tagline: 'One shop location. Everything included.',
+    priceKobo: 8_000_000,
     days: 365,
     features: [
-      '3 tills and 2 locations',
-      'Up to 15 staff accounts',
-      'Everything in Starter',
-      'WhatsApp low-stock alerts and daily summary',
-      'Customer credit and supplier purchasing',
-    ],
-  },
-  {
-    id: 'pro',
-    name: 'Pro',
-    tagline: 'For multi-branch businesses.',
-    priceKobo: 8_500_000,
-    days: 365,
-    features: [
-      'Unlimited tills and locations',
-      'Unlimited staff accounts',
-      'Everything in Standard',
-      'Branch sync and a central stock ledger',
-      'Priority support',
+      'One shop location, with extra tills on your shop network',
+      'Unlimited products, suppliers and customers',
+      'Inventory, POS, receipts, returns and daily reports',
+      'Customer credit, expenses and profit',
+      'Batches & expiry, price lists and loyalty points',
+      'Daily automatic backups with a checked restore',
+      'Works fully offline',
     ],
   },
 ] as const;
@@ -720,7 +995,7 @@ export const licensePlans = [
 export type LicensePlan = (typeof licensePlans)[number];
 export type LicensePlanId = LicensePlan['id'];
 
-export const licensePlanIds = ['starter', 'standard', 'pro'] as const;
+export const licensePlanIds = ['standard'] as const;
 
 export function findLicensePlan(id: string): LicensePlan | undefined {
   return licensePlans.find((plan) => plan.id === id);
@@ -786,9 +1061,23 @@ export const expenseCreateSchema = z.object({
   amountKobo: z.number().int().positive('Enter an amount above zero'),
   paidAt: z.coerce.date().optional(),
   locationId: z.string().trim().min(1).nullish(),
+  accountId: z.string().trim().min(1).nullish(),
 });
 
 export type ExpenseCreateInput = z.infer<typeof expenseCreateSchema>;
+
+export const expenseUpdateSchema = z
+  .object({
+    category: z.string().trim().min(1, 'Choose a category').max(60).optional(),
+    note: z.string().trim().max(300).optional(),
+    amountKobo: z.number().int().positive('Enter an amount above zero').optional(),
+    paidAt: z.coerce.date().optional(),
+    locationId: z.string().trim().min(1).nullish(),
+    accountId: z.string().trim().min(1).nullish(),
+  })
+  .refine((value) => Object.values(value).some((v) => v !== undefined), 'Nothing to update');
+
+export type ExpenseUpdateInput = z.infer<typeof expenseUpdateSchema>;
 
 export const expenseQuerySchema = z.object({
   from: z.coerce.date().optional(),
@@ -798,3 +1087,250 @@ export const expenseQuerySchema = z.object({
 });
 
 export type ExpenseQuery = z.infer<typeof expenseQuerySchema>;
+
+// --- Batch 15: batches, price tiers, loyalty, returns, transfers -----------
+
+export const batchIntakeSchema = z.object({
+  productId: z.string().trim().min(1, 'Choose a product'),
+  locationId: z.string().trim().min(1).nullish(),
+  batchNo: z.string().trim().max(60).default(''),
+  expiryDate: z
+    .string()
+    .trim()
+    .datetime({ offset: true, message: 'Expiry must be an ISO date' })
+    .nullish(),
+  qty: z.coerce.number().int().min(1, 'Quantity must be at least 1').max(1_000_000),
+  note: z.string().trim().max(300).default(''),
+});
+
+export type BatchIntakeInput = z.infer<typeof batchIntakeSchema>;
+
+export const batchesQuerySchema = z.object({
+  productId: z.string().trim().min(1).nullish(),
+  locationId: z.string().trim().min(1).nullish(),
+  /** Only batches expiring within this many days (0 = already expired only). */
+  expiringDays: z.coerce.number().int().min(0).max(3650).nullish(),
+  includeEmpty: z.coerce.boolean().default(false),
+  search: z.string().trim().max(120).default(''),
+});
+
+export type BatchesQuery = z.infer<typeof batchesQuerySchema>;
+
+export const priceTierSchema = z.object({
+  name: z.string().trim().min(1, 'Tier name is required').max(60),
+  description: z.string().trim().max(300).default(''),
+  isDefault: z.coerce.boolean().default(false),
+});
+
+export type PriceTierInput = z.infer<typeof priceTierSchema>;
+
+export const priceTierUpdateSchema = priceTierSchema.partial();
+
+export type PriceTierUpdateInput = z.infer<typeof priceTierUpdateSchema>;
+
+export const tierPriceRowSchema = z.object({
+  productId: z.string().trim().min(1),
+  priceKobo: koboAmountSchema.max(MAX_KOBO),
+});
+
+export const tierPricesSchema = z.object({
+  prices: z.array(tierPriceRowSchema).max(5000),
+});
+
+export type TierPricesInput = z.infer<typeof tierPricesSchema>;
+
+export const loyaltySettingsSchema = z.object({
+  enabled: z.boolean(),
+  /** Spend needed to earn one point. */
+  earnKoboPerPoint: z.coerce
+    .number()
+    .int()
+    .min(100, 'Earn at most one point per ₦1')
+    .max(100_000_000),
+  /** Cash value of one point when redeemed. */
+  pointValueKobo: z.coerce.number().int().min(1).max(100_000),
+});
+
+export type LoyaltySettingsInput = z.infer<typeof loyaltySettingsSchema>;
+
+export const loyaltyAdjustSchema = z.object({
+  customerId: z.string().trim().min(1),
+  points: z.coerce
+    .number()
+    .int()
+    .min(-1_000_000)
+    .max(1_000_000)
+    .refine((n) => n !== 0, 'Enter points'),
+  reason: z.string().trim().min(3, 'Give a reason').max(300),
+});
+
+export type LoyaltyAdjustInput = z.infer<typeof loyaltyAdjustSchema>;
+
+export const customerNoteSchema = z.object({
+  body: z.string().trim().min(1, 'Write a note').max(2000),
+});
+
+export type CustomerNoteInput = z.infer<typeof customerNoteSchema>;
+
+export const REFUND_METHODS = ['cash', 'transfer', 'pos'] as const;
+export type RefundMethod = (typeof REFUND_METHODS)[number];
+
+export const returnCreateSchema = z.object({
+  saleId: z.string().trim().min(1),
+  items: z
+    .array(
+      z.object({
+        saleItemId: z.string().trim().min(1),
+        qty: z.coerce.number().int().min(1).max(1_000_000),
+      })
+    )
+    .min(1, 'Choose at least one item')
+    .max(200),
+  reason: z.string().trim().min(3, 'Give a reason (min 3 characters)').max(500),
+  refundMethod: z.enum(REFUND_METHODS).default('cash'),
+  /** Exchange = return, then ring the replacement as a new sale. */
+  kind: z.enum(['refund', 'exchange']).default('refund'),
+});
+
+export type ReturnCreateInput = z.infer<typeof returnCreateSchema>;
+
+export const returnsQuerySchema = z.object({
+  search: z.string().trim().max(120).default(''),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
+export type ReturnsQuery = z.infer<typeof returnsQuerySchema>;
+
+export const transferCreateSchema = z.object({
+  fromLocationId: z.string().trim().min(1, 'Choose the sending branch'),
+  toLocationId: z.string().trim().min(1, 'Choose the receiving branch'),
+  note: z.string().trim().max(300).default(''),
+  items: z
+    .array(
+      z.object({
+        productId: z.string().trim().min(1),
+        qty: z.coerce.number().int().min(1, 'Quantity must be at least 1').max(1_000_000),
+      })
+    )
+    .min(1, 'Add at least one product')
+    .max(200),
+});
+
+export type TransferCreateInput = z.infer<typeof transferCreateSchema>;
+
+export const transfersQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
+export type TransfersQuery = z.infer<typeof transfersQuerySchema>;
+
+export const debtorReminderSchema = z.object({
+  customerIds: z.array(z.string().trim().min(1)).max(200).optional(),
+  dryRun: z.boolean().default(false),
+});
+
+export type DebtorReminderInput = z.infer<typeof debtorReminderSchema>;
+
+export const cloudBackupSettingsSchema = z.object({
+  enabled: z.boolean(),
+  url: z
+    .string()
+    .trim()
+    .max(300)
+    .refine((value) => value === '' || /^https:\/\//i.test(value), 'Use an https upload URL'),
+  key: z.string().trim().max(600).default(''),
+  passphrase: z.string().max(200).default(''),
+  keepLocal: z.boolean().default(true),
+});
+
+export type CloudBackupSettingsInput = z.infer<typeof cloudBackupSettingsSchema>;
+
+export const moduleOverridesSchema = z.object({
+  overrides: z.record(z.boolean()),
+});
+
+export type ModuleOverridesInput = z.infer<typeof moduleOverridesSchema>;
+
+// --- Batch 17: cash & bank accounts + restaurant service flow --------------
+
+export const ACCOUNT_KINDS = ['cash', 'bank', 'pos', 'mobile'] as const;
+export type AccountKind = (typeof ACCOUNT_KINDS)[number];
+
+export const ACCOUNT_KIND_LABELS: Record<AccountKind, string> = {
+  cash: 'Cash drawer',
+  bank: 'Bank account',
+  pos: 'POS terminal',
+  mobile: 'Mobile money',
+};
+
+export const accountSchema = z.object({
+  name: z.string().trim().min(1, 'Account name is required').max(80),
+  kind: z.enum(ACCOUNT_KINDS),
+  openingBalanceKobo: z.coerce.number().int().min(0).max(MAX_KOBO).default(0),
+  isDefault: z.coerce.boolean().default(false),
+});
+
+export type AccountInput = z.infer<typeof accountSchema>;
+
+export const accountUpdateSchema = z
+  .object({
+    name: z.string().trim().min(1, 'Account name is required').max(80).optional(),
+    kind: z.enum(ACCOUNT_KINDS).optional(),
+    openingBalanceKobo: z.coerce.number().int().min(0).max(MAX_KOBO).optional(),
+    isDefault: z.coerce.boolean().optional(),
+    archived: z.coerce.boolean().optional(),
+  })
+  .refine((value) => Object.values(value).some((v) => v !== undefined), 'Nothing to update');
+
+export type AccountUpdateInput = z.infer<typeof accountUpdateSchema>;
+
+export const accountTransferSchema = z
+  .object({
+    fromAccountId: z.string().trim().min(1, 'Choose the account money leaves'),
+    toAccountId: z.string().trim().min(1, 'Choose the account money enters'),
+    amountKobo: z.number().int().positive('Enter an amount above zero').max(MAX_KOBO),
+    note: z.string().trim().max(300).default(''),
+  })
+  .refine((value) => value.fromAccountId !== value.toAccountId, 'Choose two different accounts');
+
+export type AccountTransferInput = z.infer<typeof accountTransferSchema>;
+
+export const accountAdjustSchema = z.object({
+  accountId: z.string().trim().min(1),
+  /** Positive = money in, negative = money out. */
+  amountKobo: z
+    .number()
+    .int()
+    .refine((value) => value !== 0, 'Enter an amount above zero')
+    .refine((value) => Math.abs(value) <= MAX_KOBO, 'Amount is too large'),
+  note: z.string().trim().min(3, 'Say what moved the money').max(300),
+});
+
+export type AccountAdjustInput = z.infer<typeof accountAdjustSchema>;
+
+export const accountTransactionsQuerySchema = z.object({
+  accountId: z.string().trim().min(1).nullish(),
+  from: z.coerce.date().optional(),
+  to: z.coerce.date().optional(),
+  limit: z.coerce.number().int().min(1).max(500).default(100),
+});
+
+export type AccountTransactionsQuery = z.infer<typeof accountTransactionsQuerySchema>;
+
+export const accountPaymentMapSchema = z.object({
+  cash: z.string().trim().min(1).nullish(),
+  transfer: z.string().trim().min(1).nullish(),
+  pos: z.string().trim().min(1).nullish(),
+});
+
+export type AccountPaymentMapInput = z.infer<typeof accountPaymentMapSchema>;
+
+export const restaurantSettingsSchema = z.object({
+  /** Default service charge in basis points of the net bill (0–50%). */
+  serviceChargeBp: z.coerce.number().int().min(0).max(5000).default(0),
+});
+
+export type RestaurantSettingsInput = z.infer<typeof restaurantSettingsSchema>;
+

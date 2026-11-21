@@ -1,5 +1,5 @@
 import { ipc } from './ipc';
-import { buildReceiptHtml } from './receipt';
+import { buildKitchenTicketHtml, buildReceiptHtml } from './receipt';
 import { usePrinter } from '../stores/printer';
 import type { BusinessProfile, SaleDetail } from '../types/global';
 
@@ -43,5 +43,26 @@ export async function printSale(
   }
 
   if (openPrintWindow(html, sale.receiptNo)) return { ok: true, usedFallback: true };
+  return { ok: false, error: 'Printing is unavailable in this window' };
+}
+
+/** Print the kitchen copy, on the kitchen printer when one is configured. */
+export async function printKitchenTicket(sale: SaleDetail): Promise<PrintOutcome> {
+  const { kitchenPrinterName, printerName, paperWidthMm } = usePrinter.getState();
+  const html = buildKitchenTicketHtml(sale, { widthMm: paperWidthMm });
+
+  if (typeof window !== 'undefined' && window.analytiq) {
+    const result = await ipc.printerPrint({
+      html,
+      printerName: kitchenPrinterName || printerName || undefined,
+      paperWidthMm,
+      copies: 1,
+    });
+    if (result.ok) return { ok: true };
+    if (openPrintWindow(html, `${sale.receiptNo} (kitchen)`)) return { ok: true, usedFallback: true };
+    return { ok: false, error: result.error ?? 'The kitchen printer rejected the job' };
+  }
+
+  if (openPrintWindow(html, `${sale.receiptNo} (kitchen)`)) return { ok: true, usedFallback: true };
   return { ok: false, error: 'Printing is unavailable in this window' };
 }

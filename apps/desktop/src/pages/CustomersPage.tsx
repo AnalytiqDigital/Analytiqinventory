@@ -1,18 +1,27 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Banknote, Pencil, Plus, RotateCcw, Trash2, Users } from 'lucide-react';
+import { Banknote, NotebookPen, Pencil, Plus, RotateCcw, Sparkles, Trash2, Upload, Users } from 'lucide-react';
 import { Button } from '../components/ui/button';
-import { Card, CardContent } from '../components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
 import { TD, TH, THead, TRow, Table } from '../components/ui/table';
 import { EmptyState, ErrorState, LoadingState } from '../components/ui/states';
 import { Modal } from '../components/ui/modal';
 import { Stat } from '../components/ui/stat';
+import { ImportDialog } from '../components/ImportDialog';
 import { RequirePermission } from '../components/RequirePermission';
+import { hasModule } from '../components/layout/nav';
 import { ipc } from '../lib/ipc';
 import { formatKobo, parseNairaToKobo } from '../lib/money';
-import type { CustomerPaymentRow, CustomerRow } from '../types/global';
+import { useSession } from '../stores/session';
+import type {
+  CustomerNoteRow,
+  CustomerPaymentRow,
+  CustomerRow,
+  LoyaltyEntryRow,
+  PriceTierRow,
+} from '../types/global';
 
 const PAGE_SIZE = 50;
 
@@ -23,6 +32,8 @@ interface CustomerFormValues {
   address: string;
   note: string;
   creditLimit: string;
+  priceTierId: string;
+  groupId: string;
 }
 
 const BLANK: CustomerFormValues = {
@@ -32,6 +43,8 @@ const BLANK: CustomerFormValues = {
   address: '',
   note: '',
   creditLimit: '0.00',
+  priceTierId: '',
+  groupId: '',
 };
 
 function toForm(c?: CustomerRow): CustomerFormValues {
@@ -42,6 +55,8 @@ function toForm(c?: CustomerRow): CustomerFormValues {
     address: c?.address ?? '',
     note: c?.note ?? '',
     creditLimit: c ? (c.creditLimitKobo / 100).toFixed(2) : '0.00',
+    priceTierId: c?.priceTierId ?? '',
+    groupId: c?.groupId ?? '',
   };
 }
 
@@ -52,12 +67,17 @@ export function CustomersPage(): JSX.Element {
   const [includeInactive, setIncludeInactive] = useState(false);
   const [page, setPage] = useState(1);
   const [modalOpen, setModalOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [editing, setEditing] = useState<CustomerRow | null>(null);
   const [values, setValues] = useState<CustomerFormValues>(BLANK);
   const [formError, setFormError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [paying, setPaying] = useState<CustomerRow | null>(null);
   const [history, setHistory] = useState<CustomerRow | null>(null);
+  const [profile, setProfile] = useState<CustomerRow | null>(null);
+  const businessType = useSession((s) => s.user?.businessType);
+  const modules = useSession((s) => s.user?.modules);
+  const tiersEnabled = hasModule(businessType, 'priceTiers', modules);
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -81,6 +101,25 @@ export function CustomersPage(): JSX.Element {
     },
   });
 
+  const tiersQuery = useQuery({
+    queryKey: ['price-tiers', 'for-customer'],
+    enabled: tiersEnabled,
+    queryFn: async () => {
+      const res = await ipc.priceTiers();
+      if (!res.ok) throw new Error(res.error ?? 'Could not load price lists');
+      return (res.items ?? []) as PriceTierRow[];
+    },
+  });
+
+  const groupsQuery = useQuery({
+    queryKey: ['masters', 'customer-groups'],
+    queryFn: async () => {
+      const res = await ipc.mastersList('customer-groups');
+      if (!res.ok) return [];
+      return (res.items ?? []).filter((group) => group.isActive);
+    },
+  });
+
   const invalidate = (): Promise<unknown> =>
     queryClient.invalidateQueries({ queryKey: ['customers'] });
 
@@ -99,6 +138,8 @@ export function CustomersPage(): JSX.Element {
         address: values.address.trim(),
         note: values.note.trim(),
         creditLimitKobo,
+        priceTierId: values.priceTierId || null,
+        groupId: values.groupId || null,
       };
       const res = editing
         ? await ipc.customersUpdate(editing.id, payload)
@@ -157,11 +198,27 @@ export function CustomersPage(): JSX.Element {
           </p>
         </div>
         <RequirePermission permission="customers.manage">
-          <Button onClick={openCreate}>
-            <Plus className="h-4 w-4" /> New customer
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="secondary" onClick={() => setImportOpen(true)}>
+              <Upload className="h-4 w-4" /> Import contacts
+            </Button>
+            <Button onClick={openCreate}>
+              <Plus className="h-4 w-4" /> New customer
+            </Button>
+          </div>
         </RequirePermission>
       </div>
+
+      <ImportDialog
+        open={importOpen}
+        kind="contacts"
+        onClose={() => setImportOpen(false)}
+        onImported={() => {
+          void queryClient.invalidateQueries({ queryKey: ['customers'] });
+          void queryClient.invalidateQueries({ queryKey: ['suppliers'] });
+          void queryClient.invalidateQueries({ queryKey: ['masters'] });
+        }}
+      />
 
       <div className="grid gap-3 sm:grid-cols-3">
         <Stat icon={Users} label="Customers" value={String(total)} tone="brand" />
@@ -272,6 +329,9 @@ export function CustomersPage(): JSX.Element {
                     </TD>
                     <TD>
                       <div className="flex flex-wrap gap-1">
+                        <Button variant="ghost" size="sm" onClick={() => setProfile(c)}>
+                          Profile
+                        </Button>
                         <Button variant="ghost" size="sm" onClick={() => setHistory(c)}>
                           History
                         </Button>
@@ -391,6 +451,44 @@ export function CustomersPage(): JSX.Element {
             value={values.note}
             onChange={(e) => setValues((v) => ({ ...v, note: e.target.value }))}
           />
+          {tiersEnabled && (tiersQuery.data?.length ?? 0) > 0 ? (
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">
+                Price list
+              </label>
+              <select
+                value={values.priceTierId}
+                onChange={(e) => setValues((v) => ({ ...v, priceTierId: e.target.value }))}
+                className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-900"
+              >
+                <option value="">Normal retail price</option>
+                {(tiersQuery.data ?? []).map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
+          {(groupsQuery.data?.length ?? 0) > 0 ? (
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">
+                Customer group
+              </label>
+              <select
+                value={values.groupId}
+                onChange={(e) => setValues((v) => ({ ...v, groupId: e.target.value }))}
+                className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-900"
+              >
+                <option value="">No group</option>
+                {(groupsQuery.data ?? []).map((group) => (
+                  <option key={group.id} value={group.id}>
+                    {group.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
           {formError ? <p className="text-sm text-red-600">{formError}</p> : null}
           <div className="flex justify-end gap-2 pt-1">
             <Button
@@ -422,6 +520,16 @@ export function CustomersPage(): JSX.Element {
       ) : null}
 
       {history ? <HistoryModal customer={history} onClose={() => setHistory(null)} /> : null}
+
+      {profile ? (
+        <ProfileModal
+          customer={profile}
+          onClose={() => {
+            setProfile(null);
+            void invalidate();
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -564,6 +672,209 @@ function HistoryModal({
             </tbody>
           </Table>
         ) : null}
+      </div>
+    </Modal>
+  );
+}
+
+function ProfileModal({
+  customer,
+  onClose,
+}: {
+  customer: CustomerRow;
+  onClose: () => void;
+}): JSX.Element {
+  const queryClient = useQueryClient();
+  const businessType = useSession((s) => s.user?.businessType);
+  const modules = useSession((s) => s.user?.modules);
+  const loyaltyEnabled = hasModule(businessType, 'loyalty', modules);
+  const [noteBody, setNoteBody] = useState('');
+  const [points, setPoints] = useState('');
+  const [reason, setReason] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const summaryQuery = useQuery({
+    queryKey: ['customer-summary', customer.id],
+    queryFn: async () => {
+      const res = await ipc.customerVisitSummary(customer.id);
+      if (!res.ok) throw new Error(res.error ?? 'Could not load visits');
+      return res.summary ?? { visits: 0, spentKobo: 0, lastVisitAt: null };
+    },
+  });
+
+  const notesQuery = useQuery({
+    queryKey: ['customer-notes', customer.id],
+    queryFn: async () => {
+      const res = await ipc.customerNotes(customer.id);
+      if (!res.ok) throw new Error(res.error ?? 'Could not load notes');
+      return (res.items ?? []) as CustomerNoteRow[];
+    },
+  });
+
+  const loyaltyQuery = useQuery({
+    queryKey: ['loyalty-entries', customer.id],
+    enabled: loyaltyEnabled,
+    queryFn: async () => {
+      const res = await ipc.loyaltyEntries(customer.id);
+      if (!res.ok) throw new Error(res.error ?? 'Could not load loyalty points');
+      return { items: (res.items ?? []) as LoyaltyEntryRow[], balance: res.balance ?? 0 };
+    },
+  });
+
+  const noteMutation = useMutation({
+    mutationFn: async () => {
+      if (noteBody.trim() === '') throw new Error('Write a note first');
+      const res = await ipc.customerNoteAdd(customer.id, { body: noteBody.trim() });
+      if (!res.ok) throw new Error(res.error ?? 'Could not save the note');
+    },
+    onSuccess: async () => {
+      setNoteBody('');
+      setError(null);
+      await queryClient.invalidateQueries({ queryKey: ['customer-notes', customer.id] });
+    },
+    onError: (e: Error) => setError(e.message),
+  });
+
+  const adjustMutation = useMutation({
+    mutationFn: async () => {
+      const value = Number(points);
+      if (!Number.isInteger(value) || value === 0) throw new Error('Enter points (use minus to deduct)');
+      if (reason.trim().length < 3) throw new Error('Give a reason of at least 3 characters');
+      const res = await ipc.loyaltyAdjust({ customerId: customer.id, points: value, reason: reason.trim() });
+      if (!res.ok) throw new Error(res.error ?? 'Could not adjust points');
+    },
+    onSuccess: async () => {
+      setPoints('');
+      setReason('');
+      setError(null);
+      await queryClient.invalidateQueries({ queryKey: ['loyalty-entries', customer.id] });
+      await queryClient.invalidateQueries({ queryKey: ['customers'] });
+    },
+    onError: (e: Error) => setError(e.message),
+  });
+
+  const summary = summaryQuery.data;
+
+  return (
+    <Modal open title={`Profile — ${customer.name}`} onClose={onClose}>
+      <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
+        <div className="grid grid-cols-3 gap-2 text-center">
+          <div className="rounded-xl bg-slate-50 p-2 dark:bg-slate-800/50">
+            <p className="text-lg font-bold tabular-nums">{summary?.visits ?? 0}</p>
+            <p className="text-[10px] uppercase tracking-wide text-slate-500">Visits</p>
+          </div>
+          <div className="rounded-xl bg-slate-50 p-2 dark:bg-slate-800/50">
+            <p className="text-lg font-bold tabular-nums">{formatKobo(summary?.spentKobo ?? 0)}</p>
+            <p className="text-[10px] uppercase tracking-wide text-slate-500">Spent</p>
+          </div>
+          <div className="rounded-xl bg-slate-50 p-2 dark:bg-slate-800/50">
+            <p className="text-sm font-semibold">{customer.priceTierName ?? 'Retail'}</p>
+            <p className="text-[10px] uppercase tracking-wide text-slate-500">Price list</p>
+          </div>
+        </div>
+        <p className="text-xs text-slate-500">
+          Last visit: {summary?.lastVisitAt ? new Date(summary.lastVisitAt).toLocaleString() : '—'} · Owing:{' '}
+          {formatKobo(customer.balanceKobo)}
+        </p>
+
+        {loyaltyEnabled ? (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4" /> Loyalty points
+                <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                  {loyaltyQuery.data?.balance ?? 0} points
+                </Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {loyaltyQuery.isPending ? <LoadingState label="Loading points…" /> : null}
+              {(loyaltyQuery.data?.items.length ?? 0) > 0 ? (
+                <div className="max-h-40 overflow-y-auto">
+                  <Table>
+                    <THead>
+                      <TRow>
+                        <TH>When</TH>
+                        <TH>Points</TH>
+                        <TH>Reason</TH>
+                      </TRow>
+                    </THead>
+                    <tbody>
+                      {loyaltyQuery.data?.items.map((e) => (
+                        <TRow key={e.id}>
+                          <TD className="text-xs">{new Date(e.createdAt).toLocaleDateString()}</TD>
+                          <TD
+                            className={
+                              e.points >= 0 ? 'tabular-nums text-emerald-600' : 'tabular-nums text-red-600'
+                            }
+                          >
+                            {e.points > 0 ? `+${e.points}` : e.points}
+                          </TD>
+                          <TD className="text-xs">{e.reason}</TD>
+                        </TRow>
+                      ))}
+                    </tbody>
+                  </Table>
+                </div>
+              ) : (
+                <p className="text-xs text-slate-500">No points activity yet.</p>
+              )}
+              <RequirePermission permission="customers.manage">
+                <div className="flex items-end gap-2">
+                  <Input
+                    label="Adjust"
+                    placeholder="+50 or -20"
+                    value={points}
+                    onChange={(e) => setPoints(e.target.value.replace(/[^0-9-]/g, ''))}
+                    className="w-24"
+                  />
+                  <Input label="Reason" value={reason} onChange={(e) => setReason(e.target.value)} />
+                  <Button size="sm" onClick={() => adjustMutation.mutate()} disabled={adjustMutation.isPending}>
+                    Apply
+                  </Button>
+                </div>
+              </RequirePermission>
+            </CardContent>
+          </Card>
+        ) : null}
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <NotebookPen className="h-4 w-4" /> Notes
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {(notesQuery.data ?? []).length === 0 ? (
+              <p className="text-xs text-slate-500">No notes yet.</p>
+            ) : (
+              <ul className="space-y-2">
+                {(notesQuery.data ?? []).map((n) => (
+                  <li key={n.id} className="rounded-lg bg-slate-50 p-2 text-sm dark:bg-slate-800/50">
+                    {n.body}
+                    <span className="mt-0.5 block text-[10px] text-slate-400">
+                      {new Date(n.createdAt).toLocaleString()}
+                      {n.userName ? ` · ${n.userName}` : ''}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="flex items-end gap-2">
+              <Input
+                label="New note"
+                placeholder="e.g. Prefers delivery on Fridays"
+                value={noteBody}
+                onChange={(e) => setNoteBody(e.target.value)}
+              />
+              <Button size="sm" onClick={() => noteMutation.mutate()} disabled={noteMutation.isPending}>
+                Add
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {error ? <p className="text-sm text-red-600">{error}</p> : null}
       </div>
     </Modal>
   );

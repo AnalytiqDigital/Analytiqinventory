@@ -111,7 +111,7 @@ export default function SuccessStatus() {
           You can try again with the same or a different payment method.
         </p>
         <div className="success-actions">
-          <a className="btn btn-primary" href={`/checkout?plan=${order.planId}`}>
+          <a className="btn btn-primary" href="/checkout">
             Try again
           </a>
         </div>

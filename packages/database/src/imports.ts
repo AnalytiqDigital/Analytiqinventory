@@ -9,7 +9,9 @@
 // the rest.
 
 import {
+  contactsImportSchema,
   importTemplates,
+  openingStockImportSchema,
   productsImportSchema,
   purchasesImportSchema,
   salesImportSchema,
@@ -17,15 +19,19 @@ import {
   type PurchaseImportRow,
   type SaleImportRow,
 } from '@analytiq/validation';
-import { and, eq, inArray, isNotNull } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import { newId } from './auth';
 import type { LocalDb } from './connection';
+import { createCustomer } from './customers';
 import { requirePermission } from './permissions';
 import { writeAuditSync } from './service';
 import { createSale } from './sales';
+import { createSupplier } from './suppliers';
 import {
   categories,
+  customerGroups,
   customers,
+  locations,
   products,
   purchaseItems,
   purchases,
@@ -688,6 +694,215 @@ export async function importSales(
   }
 
   return { created: created.length, failed: issues.length, errors: issues };
+}
+
+/**
+ * Sets the on-hand quantity of existing products (per branch) from a CSV of
+ * counts. Quantities are absolute: importing the same file twice leaves stock
+ * where the file says, it does not double it.
+ */
+export async function importOpeningStock(
+  local: LocalDb,
+  businessId: string,
+  userId: string,
+  grants: string[],
+  raw: unknown
+): Promise<ImportResult> {
+  requirePermission(new Set(grants), 'inventory.adjust');
+  const input = openingStockImportSchema.parse(raw);
+  const issues: ImportIssue[] = [];
+  const timestamp = new Date();
+
+  const productRows = await local.db
+    .select({ id: products.id, name: products.name, sku: products.sku, barcode: products.barcode })
+    .from(products)
+    .where(eq(products.businessId, businessId));
+  if (productRows.length === 0) {
+    throw codedError('Add products before importing opening stock', 'NO_PRODUCTS');
+  }
+  const byBarcode = new Map<string, string>();
+  const bySku = new Map<string, string>();
+  const byName = new Map<string, string>();
+  for (const product of productRows) {
+    if (product.barcode) byBarcode.set(product.barcode.trim(), product.id);
+    if (product.sku) bySku.set(keyOf(product.sku), product.id);
+    byName.set(keyOf(product.name), product.id);
+  }
+
+  const locationRows = await local.db
+    .select({ id: locations.id, name: locations.name, isDefault: locations.isDefault })
+    .from(locations)
+    .where(eq(locations.businessId, businessId));
+  const locByName = new Map(locationRows.map((row) => [keyOf(row.name), row.id]));
+  const defaultLocationId =
+    locationRows.find((row) => row.isDefault === 1)?.id ?? locationRows[0]?.id ?? null;
+  if (!defaultLocationId) {
+    throw codedError('Add a branch before importing opening stock', 'LOCATION_NOT_FOUND');
+  }
+
+  const sums = await local.db
+    .select({
+      productId: stockMovements.productId,
+      locationId: stockMovements.locationId,
+      onHand: sql<number>`COALESCE(SUM(${stockMovements.qtyDelta}), 0)`,
+    })
+    .from(stockMovements)
+    .where(eq(stockMovements.businessId, businessId))
+    .groupBy(stockMovements.productId, stockMovements.locationId);
+  const onHand = new Map<string, number>();
+  for (const row of sums) {
+    onHand.set(`${row.productId}:${row.locationId}`, Number(row.onHand));
+  }
+
+  let created = 0;
+  local.raw.transaction(() => {
+    input.rows.forEach((row, index) => {
+      const rowNo = index + 2;
+      const barcode = (row.barcode ?? '').trim();
+      const productId =
+        (barcode ? byBarcode.get(barcode) : undefined) ??
+        (row.sku ? bySku.get(keyOf(row.sku)) : undefined) ??
+        (row.name ? byName.get(keyOf(row.name)) : undefined);
+      if (!productId) {
+        issues.push({
+          row: rowNo,
+          code: 'PRODUCT_NOT_FOUND',
+          message: `No product matches ${barcode || row.sku || row.name}`,
+        });
+        return;
+      }
+      let locationId = defaultLocationId;
+      if (row.location) {
+        const found = locByName.get(keyOf(row.location));
+        if (!found) {
+          issues.push({
+            row: rowNo,
+            code: 'LOCATION_NOT_FOUND',
+            message: `Unknown branch "${row.location}"`,
+          });
+          return;
+        }
+        locationId = found;
+      }
+      const key = `${productId}:${locationId}`;
+      const current = onHand.get(key) ?? 0;
+      const delta = row.qty - current;
+      if (delta !== 0) {
+        local.db
+          .insert(stockMovements)
+          .values({
+            id: newId('mov'),
+            businessId,
+            productId,
+            locationId,
+            kind: 'opening',
+            qtyDelta: delta,
+            qtyAfter: row.qty,
+            reason: 'Opening stock (import)',
+            userId,
+            version: 1,
+            createdAt: timestamp,
+          })
+          .run();
+      }
+      onHand.set(key, row.qty);
+      created += 1;
+    });
+  })();
+
+  if (created > 0) {
+    writeAuditSync(local, {
+      businessId,
+      userId,
+      action: 'stock.import',
+      entity: 'stock_movement',
+      details: { rows: created, failed: issues.length },
+    });
+  }
+
+  return { created, failed: issues.length, errors: issues };
+}
+
+/** Imports customers and suppliers from one contacts CSV. */
+export async function importContacts(
+  local: LocalDb,
+  businessId: string,
+  userId: string,
+  grants: string[],
+  raw: unknown
+): Promise<ImportResult> {
+  const input = contactsImportSchema.parse(raw);
+  const rows = input.rows;
+  const issues: ImportIssue[] = [];
+  if (rows.some((row) => row.type === 'customer')) {
+    requirePermission(new Set(grants), 'customers.manage');
+  }
+  if (rows.some((row) => row.type === 'supplier')) {
+    requirePermission(new Set(grants), 'suppliers.manage');
+  }
+
+  const groupRows = await local.db
+    .select({ id: customerGroups.id, name: customerGroups.name })
+    .from(customerGroups)
+    .where(eq(customerGroups.businessId, businessId));
+  const groupByName = new Map(groupRows.map((row) => [keyOf(row.name), row.id]));
+
+  let created = 0;
+  for (const [index, row] of rows.entries()) {
+    const rowNo = index + 2;
+    try {
+      if (row.type === 'customer') {
+        const groupId = row.group ? (groupByName.get(keyOf(row.group)) ?? null) : null;
+        if (row.group && !groupId) {
+          issues.push({
+            row: rowNo,
+            code: 'CUSTOMER_GROUP_NOT_FOUND',
+            message: `No customer group named "${row.group}"`,
+          });
+          continue;
+        }
+        await createCustomer(local, businessId, userId, grants, {
+          name: row.name,
+          phone: row.phone,
+          email: row.email,
+          address: row.address,
+          note: '',
+          creditLimitKobo: 0,
+          priceTierId: null,
+          groupId,
+        });
+      } else {
+        await createSupplier(local, businessId, userId, grants, {
+          name: row.name,
+          contactName: '',
+          phone: row.phone,
+          email: row.email,
+          address: row.address,
+          note: '',
+        });
+      }
+      created += 1;
+    } catch (err) {
+      const coded = err as NodeJS.ErrnoException;
+      issues.push({
+        row: rowNo,
+        code: typeof coded.code === 'string' ? coded.code : 'IMPORT_FAILED',
+        message: (err as Error).message,
+      });
+    }
+  }
+
+  if (created > 0) {
+    writeAuditSync(local, {
+      businessId,
+      userId,
+      action: 'contact.import',
+      entity: 'contact',
+      details: { rows: created, failed: issues.length },
+    });
+  }
+
+  return { created, failed: issues.length, errors: issues };
 }
 
 export const IMPORT_TEMPLATES = importTemplates;

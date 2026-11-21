@@ -91,9 +91,12 @@ Settlement is idempotent:
 
 ## Website flow
 
-1. Landing page pricing links to `/checkout?plan=starter|standard|pro`.
-2. The form pre-selects that plan (defaults to Standard), validates with the
-   shared `checkoutSchema`, and posts to the API.
+1. The landing page sells one package (`standard`, ₦80,000/year for one
+   location) and links to `/checkout`. More than one location is the cloud
+   version, quoted through the WhatsApp form on the landing page instead of
+   self-service checkout.
+2. The checkout form shows that package, validates with the shared
+   `checkoutSchema`, and posts to the API.
 3. The browser is redirected to Paystack's `authorizationUrl`.
 4. Paystack redirects back to `/checkout/success?reference=…`; the page polls
    `GET /api/checkout/:reference` every 3 s (up to ~2 minutes) and shows:

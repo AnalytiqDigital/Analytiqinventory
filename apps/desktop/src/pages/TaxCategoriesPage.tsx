@@ -8,6 +8,7 @@ import { EmptyState, ErrorState, LoadingState } from '../components/ui/states';
 import { Modal } from '../components/ui/modal';
 import { RequirePermission } from '../components/RequirePermission';
 import { ipc } from '../lib/ipc';
+import { TAX_CATEGORIES_KEY, fetchTaxCategories } from '../lib/taxCategories';
 import type { TaxCategory } from '../types/global';
 
 function formatRate(rateBps: number): string {
@@ -40,15 +41,12 @@ export function TaxCategoriesPage(): JSX.Element {
   const [formError, setFormError] = useState<string | null>(null);
 
   const taxQuery = useQuery({
-    queryKey: ['tax-categories'],
-    queryFn: async () => {
-      const res = await ipc.taxCategories();
-      if (!res.ok) throw new Error(res.error ?? 'Could not load tax categories');
-      return { items: (res.items ?? []) as TaxCategory[], defaultId: res.defaultId ?? null };
-    },
+    queryKey: TAX_CATEGORIES_KEY,
+    queryFn: fetchTaxCategories,
   });
 
-  const invalidate = (): Promise<unknown> => queryClient.invalidateQueries({ queryKey: ['tax-categories'] });
+  const invalidate = (): Promise<unknown> =>
+    queryClient.invalidateQueries({ queryKey: TAX_CATEGORIES_KEY });
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -88,7 +86,7 @@ export function TaxCategoriesPage(): JSX.Element {
     setModalOpen(true);
   }
 
-  const categories = taxQuery.data?.items ?? [];
+  const categories = taxQuery.data ?? [];
 
   return (
     <div className="space-y-4">

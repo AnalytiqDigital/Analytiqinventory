@@ -27,6 +27,7 @@ import type { LocalDb } from './connection';
 import { requirePermission } from './permissions';
 import { getDefaultLocationId } from './inventory';
 import { writeAuditSync } from './service';
+import { postSalePaymentsSync, reverseSalePostingsSync } from './accounts';
 import {
   businesses,
   locations,
@@ -40,6 +41,14 @@ import {
   stockMovements,
   users,
 } from './schema';
+import {
+  computeRedemption,
+  getLoyaltySettings,
+  loyaltyBalance,
+  pointsEarned,
+  recordLoyalty,
+} from './loyalty';
+import { createSaleReturn, returnedQtyByItem } from './returns';
 
 export const SALE_STATUSES = ['completed', 'refunded', 'voided'] as const;
 export type SaleStatus = (typeof SALE_STATUSES)[number];
@@ -107,15 +116,33 @@ export interface SaleView {
   totalKobo: number;
   amountPaidKobo: number;
   changeKobo: number;
+  orderType: string;
+  waiterName: string;
+  serviceChargeKobo: number;
+  tipKobo: number;
   tableId: string | null;
   tableName: string | null;
   customerId: string | null;
   customerName: string | null;
   externalRef: string | null;
+  loyaltyPointsRedeemed: number;
+  loyaltyDiscountKobo: number;
+  loyaltyPointsEarned: number;
   createdAt: string;
   items: SaleItemView[];
   payments: SalePaymentView[];
+  returns: SaleReturnSummary[];
   reversal: { reason: string; reversedBy: string | null; createdAt: string } | null;
+}
+
+export interface SaleReturnSummary {
+  id: string;
+  kind: string;
+  reason: string;
+  refundKobo: number;
+  refundMethod: string;
+  createdAt: string;
+  itemCount: number;
 }
 
 export interface SaleSummary {
@@ -185,7 +212,9 @@ export async function createSale(
   const placeholders = productIds.map(() => '?').join(',');
   const prodRows = local.raw
     .prepare(
-      `SELECT id, name, selling_price_kobo AS sellingPriceKobo, is_active AS isActive, tax_category_id AS taxCategoryId FROM products WHERE business_id = ? AND id IN (${placeholders})`
+      `SELECT id, name, selling_price_kobo AS sellingPriceKobo, is_active AS isActive,
+              tax_category_id AS taxCategoryId, track_batches AS trackBatches
+         FROM products WHERE business_id = ? AND id IN (${placeholders})`
     )
     .all(businessId, ...productIds) as Array<{
     id: string;
@@ -193,6 +222,7 @@ export async function createSale(
     sellingPriceKobo: number;
     isActive: number;
     taxCategoryId: string | null;
+    trackBatches: number;
   }>;
   const prodMap = new Map(prodRows.map((p) => [p.id, p]));
   for (const item of input.items) {
@@ -201,12 +231,32 @@ export async function createSale(
     if (p.isActive !== 1) throw codedError(`Product is archived: ${p.name}`, 'PRODUCT_ARCHIVED');
   }
 
-  // Compute lines: default unit price = selling price; clamp line discount.
+  // Wholesale price list: a named customer on a tier gets the tier price
+  // unless the cashier typed a price manually.
+  const tierPrices = new Map<string, number>();
+  if (input.customerId != null) {
+    const [tierCustomer] = await local.db
+      .select({ priceTierId: customers.priceTierId })
+      .from(customers)
+      .where(and(eq(customers.id, input.customerId), eq(customers.businessId, businessId)))
+      .limit(1);
+    if (tierCustomer?.priceTierId) {
+      const rows = local.raw
+        .prepare(
+          `SELECT product_id AS productId, price_kobo AS priceKobo FROM product_prices
+            WHERE business_id = ? AND price_tier_id = ?`
+        )
+        .all(businessId, tierCustomer.priceTierId) as Array<{ productId: string; priceKobo: number }>;
+      for (const row of rows) tierPrices.set(row.productId, row.priceKobo);
+    }
+  }
+
+  // Compute lines: default unit price = tier price, then retail; clamp discount.
   let subtotal = 0;
   let lineDiscountTotal = 0;
   const lines = input.items.map((item) => {
     const p = prodMap.get(item.productId)!;
-    const unitPrice = item.unitPriceKobo ?? p.sellingPriceKobo;
+    const unitPrice = item.unitPriceKobo ?? tierPrices.get(p.id) ?? p.sellingPriceKobo;
     const gross = unitPrice * item.qty;
     const lineDiscount = Math.min(item.lineDiscountKobo, gross);
     const lineTotal = gross - lineDiscount;
@@ -259,7 +309,37 @@ export async function createSale(
   }
   void lineTaxable;
   const taxKobo = input.taxKobo ?? perLineTax;
-  const total = taxable + taxKobo;
+  const beforeLoyalty = taxable + taxKobo;
+
+  // Loyalty redemption is a discount on the total, so payments and change keep
+  // reconciling without an extra tender type.
+  const loyalty = getLoyaltySettings(local, businessId);
+  let loyaltyPointsRedeemed = 0;
+  let loyaltyDiscountKobo = 0;
+  if (input.redeemPoints > 0) {
+    if (!loyalty.enabled) throw codedError('Loyalty points are switched off', 'LOYALTY_DISABLED');
+    if (input.customerId == null) {
+      throw codedError('Choose a customer to redeem loyalty points', 'LOYALTY_REQUIRES_CUSTOMER');
+    }
+    const balance = loyaltyBalance(local, businessId, input.customerId);
+    const redemption = computeRedemption({
+      requestedPoints: input.redeemPoints,
+      balance,
+      totalKobo: beforeLoyalty,
+      pointValueKobo: loyalty.pointValueKobo,
+    });
+    if (redemption.points < input.redeemPoints) {
+      throw codedError(
+        `Only ${redemption.points} point${redemption.points === 1 ? '' : 's'} can be used on this sale`,
+        'LOYALTY_INSUFFICIENT'
+      );
+    }
+    loyaltyPointsRedeemed = redemption.points;
+    loyaltyDiscountKobo = redemption.discountKobo;
+  }
+  const total = beforeLoyalty + input.serviceChargeKobo + input.tipKobo - loyaltyDiscountKobo;
+  const loyaltyPointsEarned =
+    loyalty.enabled && input.customerId != null ? pointsEarned(total, loyalty.earnKoboPerPoint) : 0;
 
   const amountPaid = input.payments.reduce((s, p) => s + p.amountKobo, 0);
   if (amountPaid < total)
@@ -355,9 +435,16 @@ export async function createSale(
         totalKobo: total,
         tableId,
         customerId,
+        loyaltyPointsRedeemed,
+        loyaltyDiscountKobo,
+        loyaltyPointsEarned,
         externalRef: input.externalRef?.trim() || null,
         amountPaidKobo: amountPaid,
         changeKobo: change,
+        orderType: input.orderType,
+        waiterName: input.waiterName,
+        serviceChargeKobo: input.serviceChargeKobo,
+        tipKobo: input.tipKobo,
         version: 1,
         createdAt: timestamp,
         updatedAt: timestamp,
@@ -392,37 +479,152 @@ export async function createSale(
         .run();
     }
 
-    // Ledger: one `sale` row per line; guard negative on-hand.
+    // Cash & bank ledgers: only money actually kept reaches an account.
+    postSalePaymentsSync(local, businessId, {
+      saleId,
+      receiptNo,
+      payments: input.payments.map((p) => ({
+        method: p.method as PaymentMethod,
+        amountKobo: p.amountKobo,
+      })),
+      changeKobo: change,
+      userId,
+      createdAt: timestamp,
+    });
+
+    // Ledger: batches are consumed first-expiry-first-out, then any unbatched
+    // stock (e.g. opening stock recorded before batch tracking was switched on).
     for (const line of lines) {
+      const product = prodMap.get(line.productId)!;
       const cur = local.raw
         .prepare(
           'SELECT COALESCE(SUM(qty_delta), 0) AS qty FROM stock_movements WHERE business_id = ? AND product_id = ? AND location_id = ?'
         )
         .get(businessId, line.productId, locationId) as { qty: number };
-      const after = cur.qty - line.qty;
-      if (after < 0) {
-        const p = prodMap.get(line.productId)!;
-        throw codedError(
-          `Insufficient stock for ${p.name} (have ${cur.qty}, need ${line.qty})`,
-          'NEGATIVE_STOCK'
-        );
+      let after = cur.qty;
+      let left = line.qty;
+
+      if (product.trackBatches === 1) {
+        const batches = local.raw
+          .prepare(
+            `SELECT pb.id AS id, pb.batch_no AS batchNo,
+                    (SELECT COALESCE(SUM(m.qty_delta), 0) FROM stock_movements m
+                      WHERE m.batch_id = pb.id) AS remaining
+               FROM product_batches pb
+              WHERE pb.business_id = ? AND pb.product_id = ? AND pb.location_id = ?
+              ORDER BY (pb.expiry_date IS NULL), pb.expiry_date ASC, pb.created_at ASC`
+          )
+          .all(businessId, line.productId, locationId) as Array<{
+          id: string;
+          batchNo: string;
+          remaining: number;
+        }>;
+        const batchStock = batches.reduce((sum, b) => sum + Math.max(0, b.remaining), 0);
+        for (const batch of batches) {
+          if (left <= 0) break;
+          const take = Math.min(left, Math.max(0, batch.remaining));
+          if (take <= 0) continue;
+          after -= take;
+          local.db
+            .insert(stockMovements)
+            .values({
+              id: newId('mov'),
+              businessId,
+              productId: line.productId,
+              locationId,
+              kind: 'sale',
+              qtyDelta: -take,
+              qtyAfter: after,
+              reason: batch.batchNo ? `Sale ${receiptNo} · ${batch.batchNo}` : `Sale ${receiptNo}`,
+              batchId: batch.id,
+              userId,
+              version: 1,
+              createdAt: timestamp,
+            })
+            .run();
+          left -= take;
+        }
+        const unbatched = Math.max(0, cur.qty - batchStock);
+        if (left > unbatched) {
+          throw codedError(
+            `Insufficient stock for ${product.name} (have ${cur.qty}, need ${line.qty})`,
+            'NEGATIVE_STOCK'
+          );
+        }
+        if (left > 0) {
+          after -= left;
+          local.db
+            .insert(stockMovements)
+            .values({
+              id: newId('mov'),
+              businessId,
+              productId: line.productId,
+              locationId,
+              kind: 'sale',
+              qtyDelta: -left,
+              qtyAfter: after,
+              reason: `Sale ${receiptNo}`,
+              userId,
+              version: 1,
+              createdAt: timestamp,
+            })
+            .run();
+          left = 0;
+        }
+      } else {
+        after = cur.qty - line.qty;
+        if (after < 0) {
+          throw codedError(
+            `Insufficient stock for ${product.name} (have ${cur.qty}, need ${line.qty})`,
+            'NEGATIVE_STOCK'
+          );
+        }
+        local.db
+          .insert(stockMovements)
+          .values({
+            id: newId('mov'),
+            businessId,
+            productId: line.productId,
+            locationId,
+            kind: 'sale',
+            qtyDelta: -line.qty,
+            qtyAfter: after,
+            reason: `Sale ${receiptNo}`,
+            userId,
+            version: 1,
+            createdAt: timestamp,
+          })
+          .run();
+        left = 0;
       }
-      local.db
-        .insert(stockMovements)
-        .values({
-          id: newId('mov'),
+      void left;
+    }
+
+    if (customerId != null && (loyaltyPointsRedeemed > 0 || loyaltyPointsEarned > 0)) {
+      if (loyaltyPointsRedeemed > 0) {
+        recordLoyalty(local, {
           businessId,
-          productId: line.productId,
-          locationId,
-          kind: 'sale',
-          qtyDelta: -line.qty,
-          qtyAfter: after,
-          reason: `Sale ${receiptNo}`,
+          customerId,
+          kind: 'redeem',
+          points: -loyaltyPointsRedeemed,
+          saleId,
+          reason: `Redeemed on ${receiptNo}`,
           userId,
-          version: 1,
           createdAt: timestamp,
-        })
-        .run();
+        });
+      }
+      if (loyaltyPointsEarned > 0) {
+        recordLoyalty(local, {
+          businessId,
+          customerId,
+          kind: 'earn',
+          points: loyaltyPointsEarned,
+          saleId,
+          reason: `Earned on ${receiptNo}`,
+          userId,
+          createdAt: timestamp,
+        });
+      }
     }
 
     writeAuditSync(local, {
@@ -511,6 +713,23 @@ export async function getSale(
 
   const payRows = await local.db.select().from(salePayments).where(eq(salePayments.saleId, saleId));
 
+  const returnRows = local.raw
+    .prepare(
+      `SELECT r.id AS id, r.kind AS kind, r.reason AS reason, r.refund_kobo AS refundKobo,
+              r.refund_method AS refundMethod, r.created_at AS createdAtMs,
+              (SELECT COUNT(*) FROM sale_return_items ri WHERE ri.return_id = r.id) AS itemCount
+         FROM sale_returns r WHERE r.sale_id = ? ORDER BY r.created_at ASC, r.rowid ASC`
+    )
+    .all(saleId) as Array<{
+    id: string;
+    kind: string;
+    reason: string;
+    refundKobo: number;
+    refundMethod: string;
+    createdAtMs: number;
+    itemCount: number;
+  }>;
+
   const [rev] = await local.db
     .select()
     .from(saleReversals)
@@ -547,11 +766,18 @@ export async function getSale(
     totalKobo: head.totalKobo,
     amountPaidKobo: head.amountPaidKobo,
     changeKobo: head.changeKobo,
+    orderType: head.orderType,
+    waiterName: head.waiterName,
+    serviceChargeKobo: head.serviceChargeKobo,
+    tipKobo: head.tipKobo,
     tableId: head.tableId,
     tableName: tbl?.name ?? null,
     customerId: head.customerId,
     customerName: cust?.name ?? null,
     externalRef: head.externalRef ?? null,
+    loyaltyPointsRedeemed: head.loyaltyPointsRedeemed ?? 0,
+    loyaltyDiscountKobo: head.loyaltyDiscountKobo ?? 0,
+    loyaltyPointsEarned: head.loyaltyPointsEarned ?? 0,
     createdAt: (head.createdAt as Date).toISOString(),
     items: itemRows.map((r) => ({
       id: r.id,
@@ -568,6 +794,15 @@ export async function getSale(
       method: p.method as PaymentMethod,
       amountKobo: p.amountKobo,
       reference: p.reference,
+    })),
+    returns: returnRows.map((r) => ({
+      id: r.id,
+      kind: r.kind,
+      reason: r.reason,
+      refundKobo: r.refundKobo,
+      refundMethod: r.refundMethod,
+      createdAt: new Date(r.createdAtMs).toISOString(),
+      itemCount: r.itemCount,
     })),
     reversal,
   };
@@ -653,39 +888,31 @@ export async function refundSale(
   if (!head) throw codedError('Sale not found', 'SALE_NOT_FOUND');
   if (head.status !== 'completed') throw codedError('Sale is already reversed', 'ALREADY_REVERSED');
 
+  // A counter refund returns whatever is still outstanding on the receipt;
+  // items already exchanged back are not restocked twice.
   const itemRows = await local.db.select().from(saleItems).where(eq(saleItems.saleId, saleId));
+  const returned = returnedQtyByItem(local, saleId);
+  const picks = itemRows
+    .map((line) => ({ saleItemId: line.id, qty: line.qty - (returned.get(line.id) ?? 0) }))
+    .filter((pick) => pick.qty > 0);
+  if (picks.length === 0) throw codedError('Sale is already reversed', 'ALREADY_REVERSED');
 
+  await createSaleReturn(local, businessId, userId, grants, {
+    saleId,
+    items: picks,
+    reason: input.reason.trim(),
+    refundMethod: 'cash',
+    kind: 'refund',
+  });
+
+  // Keep the reversal record receipts already print, on top of the new
+  // sale_returns ledger entry.
   const timestamp = new Date();
-  const reversalId = newId('rev');
   const apply = local.raw.transaction(() => {
-    // Restock: one `return` row per line.
-    for (const line of itemRows) {
-      const cur = local.raw
-        .prepare(
-          'SELECT COALESCE(SUM(qty_delta), 0) AS qty FROM stock_movements WHERE business_id = ? AND product_id = ? AND location_id = ?'
-        )
-        .get(businessId, line.productId, head.locationId) as { qty: number };
-      local.db
-        .insert(stockMovements)
-        .values({
-          id: newId('mov'),
-          businessId,
-          productId: line.productId,
-          locationId: head.locationId,
-          kind: 'return',
-          qtyDelta: line.qty,
-          qtyAfter: cur.qty + line.qty,
-          reason: `Refund ${head.receiptNo}: ${input.reason.trim()}`,
-          userId,
-          version: 1,
-          createdAt: timestamp,
-        })
-        .run();
-    }
     local.db
       .insert(saleReversals)
       .values({
-        id: reversalId,
+        id: newId('rev'),
         saleId,
         reason: input.reason.trim(),
         reversedBy: userId,
@@ -694,17 +921,9 @@ export async function refundSale(
       .run();
     local.db
       .update(sales)
-      .set({ status: 'refunded', updatedAt: timestamp, version: head.version + 1 })
+      .set({ version: head.version + 1, updatedAt: timestamp })
       .where(eq(sales.id, saleId))
       .run();
-    writeAuditSync(local, {
-      businessId,
-      userId,
-      action: 'sale.refund',
-      entity: 'sale',
-      entityId: saleId,
-      details: { receiptNo: head.receiptNo, reason: input.reason.trim() },
-    });
   });
   apply();
   return { ok: true };
@@ -731,12 +950,15 @@ export async function voidSale(
 
   const timestamp = new Date();
   const apply = local.raw.transaction(() => {
-    // Void = same-day correction: restock without a separate return reason trail
-    // beyond the audit record; status distinguishes it from a refund.
+    // Void = same-day correction: restock what a counter return has not
+    // already brought back, keeping the audit trail in sale_reversals.
     const itemRows = local.raw
-      .prepare('SELECT product_id AS productId, qty FROM sale_items WHERE sale_id = ?')
-      .all(saleId) as Array<{ productId: string; qty: number }>;
+      .prepare('SELECT id, product_id AS productId, qty FROM sale_items WHERE sale_id = ?')
+      .all(saleId) as Array<{ id: string; productId: string; qty: number }>;
+    const returned = returnedQtyByItem(local, saleId);
     for (const line of itemRows) {
+      const back = line.qty - (returned.get(line.id) ?? 0);
+      if (back <= 0) continue;
       const cur = local.raw
         .prepare(
           'SELECT COALESCE(SUM(qty_delta), 0) AS qty FROM stock_movements WHERE business_id = ? AND product_id = ? AND location_id = ?'
@@ -750,8 +972,8 @@ export async function voidSale(
           productId: line.productId,
           locationId: head.locationId,
           kind: 'return',
-          qtyDelta: line.qty,
-          qtyAfter: cur.qty + line.qty,
+          qtyDelta: back,
+          qtyAfter: cur.qty + back,
           reason: `Void ${head.receiptNo}: ${input.reason.trim()}`,
           userId,
           version: 1,
@@ -774,6 +996,7 @@ export async function voidSale(
       .set({ status: 'voided', updatedAt: timestamp, version: head.version + 1 })
       .where(eq(sales.id, saleId))
       .run();
+    reverseSalePostingsSync(local, businessId, saleId, head.receiptNo, userId, timestamp);
     writeAuditSync(local, {
       businessId,
       userId,

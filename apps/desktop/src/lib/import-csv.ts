@@ -47,12 +47,16 @@ const HEADER_ALIASES: Record<string, string> = {
   customer_name: 'customer',
   sku_or_barcode: 'sku',
   barcode_or_sku: 'sku',
+  branch: 'location',
+  store: 'location',
 };
 
 const REQUIRED_COLUMNS: Record<ImportKind, string[]> = {
   products: ['name'],
   purchases: ['reference', 'supplier', 'sku', 'qty', 'unit_cost'],
   sales: ['receipt', 'sku', 'qty', 'unit_price'],
+  'opening-stock': ['qty'],
+  contacts: ['name', 'type'],
 };
 
 const TENDERS = new Set(['cash', 'transfer', 'pos', 'credit']);
@@ -169,6 +173,45 @@ function buildSales(
   };
 }
 
+function buildOpeningStock(
+  value: (name: string) => string,
+  rowNo: number,
+  errors: RowIssue[]
+): Record<string, unknown> {
+  const sku = value('sku').trim();
+  const barcode = value('barcode').trim();
+  const name = value('name').trim();
+  if (!sku && !barcode && !name) {
+    errors.push({ row: rowNo, message: 'Each row needs a sku, barcode or product name' });
+  }
+  return {
+    sku,
+    barcode,
+    name,
+    qty: toInt(value('qty'), true, 'qty', rowNo, errors) ?? 0,
+    location: value('location').trim(),
+  };
+}
+
+function buildContacts(
+  value: (name: string) => string,
+  rowNo: number,
+  errors: RowIssue[]
+): Record<string, unknown> {
+  const type = value('type').trim().toLowerCase() || 'customer';
+  if (type !== 'customer' && type !== 'supplier') {
+    errors.push({ row: rowNo, message: `"type" must be customer or supplier` });
+  }
+  return {
+    name: value('name').trim(),
+    type: type === 'supplier' ? 'supplier' : 'customer',
+    phone: value('phone').trim(),
+    email: value('email').trim(),
+    address: value('address').trim(),
+    group: value('group').trim(),
+  };
+}
+
 function toInt(
   raw: string,
   required: boolean,
@@ -265,7 +308,11 @@ export function buildImport(kind: ImportKind, text: string): ImportBuild {
         ? buildProducts(value, rowNo, errors)
         : kind === 'purchases'
           ? buildPurchases(value, rowNo, errors)
-          : buildSales(value, rowNo, errors)
+          : kind === 'sales'
+            ? buildSales(value, rowNo, errors)
+            : kind === 'opening-stock'
+              ? buildOpeningStock(value, rowNo, errors)
+              : buildContacts(value, rowNo, errors)
     );
     if (preview.length < 5) preview.push(headers.map((header) => value(header)));
   });

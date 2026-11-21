@@ -1,38 +1,95 @@
 import { app, BrowserWindow, ipcMain, safeStorage, shell } from 'electron';
 import {
+  adjustAccount,
+  adjustLoyalty,
   adjustStock,
+  addCustomerNote,
   archiveCustomer,
   archiveProduct,
   archiveSupplier,
   cancelPurchase,
+  cloudBackupView,
+  createAccount,
   createBackup,
+  createBatchIntake,
+  createBrand,
   createCustomer,
+  createCustomerGroup,
   createLocation,
+  createPriceTier,
   createPurchase,
+  createPurchaseReturn,
+  createSaleReturn,
+  createStockAdjustment,
+  createStockTransfer,
   createSupplier,
+  createUnit,
+  createWarranty,
+  customerVisitSummary,
   deleteBackup,
+  deletePriceTier,
   getAutomationSettings,
+  getCloudBackupSettings,
   getCustomer,
+  getLoyaltySettings,
+  getMenuReports,
+  getModuleInstallView,
+  getPaymentMap,
+  getRestaurantSettings,
   getSyncStatus,
   httpTransport,
+  listAccountTransactions,
+  listAccounts,
   listAutomationMessages,
   listBackups,
+  listBatches,
+  listBrands,
+  listCloudUploads,
+  listCustomerGroups,
+  listCustomerNotes,
   listCustomerPayments,
   listCustomers,
+  listDebtors,
+  listExpiryAlerts,
   listLocations,
+  listLoyaltyEntries,
+  listPriceTiers,
   listPurchases,
+  listPurchaseReturns,
+  listSaleReturns,
+  listStockAdjustments,
+  listStockTransfers,
   listSuppliers,
+  listTierPrices,
+  listUnits,
+  listWarranties,
+  lookupSaleByReceipt,
   receivePurchase,
   recordCustomerPayment,
   requirePermission,
   restoreBackup,
   runAutomation,
   runDailyBackupIfDue,
+  runEncryptedCloudBackup,
+  sendDebtorReminders,
   sendTestMessage,
   setAutomationSettings,
+  setCloudBackupSettings,
+  setLoyaltySettings,
+  setModuleInstall,
+  setPaymentMap,
+  setRestaurantSettings,
+  setTierPrices,
   toAutomationView,
+  transferBetweenAccounts,
+  updateAccount,
   updateCustomer,
+  updateBrand,
+  updateCustomerGroup,
+  updatePriceTier,
   updateSupplier,
+  updateUnit,
+  updateWarranty,
   authenticate,
   countStock,
   createCategory,
@@ -51,6 +108,8 @@ import {
   importProducts,
   importPurchases,
   importSales,
+  importOpeningStock,
+  importContacts,
   productByBarcode,
   deleteTable,
   ensureDefaultTaxCategory,
@@ -73,8 +132,10 @@ import {
   setSyncSettings,
   setTableStatus,
   syncNow,
+  updateExpense,
   updateLocation,
   updateProduct,
+  updateCategory,
   updateRolePermissions,
   updateStaff,
   updateTable,
@@ -284,6 +345,15 @@ function licenseHandlers(): void {
   });
 }
 
+type MasterKind = 'brands' | 'units' | 'warranties' | 'customer-groups';
+
+function assertMasterKind(kind: unknown): MasterKind {
+  if (kind === 'brands' || kind === 'units' || kind === 'warranties' || kind === 'customer-groups') {
+    return kind;
+  }
+  throw new Error('Unknown list type');
+}
+
 function inventoryHandlers(): void {
   ipcMain.handle('inventory:categories', async () => {
     try {
@@ -298,6 +368,25 @@ function inventoryHandlers(): void {
     try {
       const { db, user } = await requireUser();
       const category = await createCategory(db, user.businessId, user.id, user.permissions, input);
+      return { ok: true, category };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
+
+  ipcMain.handle('inventory:category-update', async (_event, payload: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      const { id, patch } = (payload ?? {}) as { id?: unknown; patch?: unknown };
+      if (typeof id !== 'string' || id.length === 0) throw new Error('Category id is required');
+      const category = await updateCategory(
+        db,
+        user.businessId,
+        user.id,
+        user.permissions,
+        id,
+        patch
+      );
       return { ok: true, category };
     } catch (err: unknown) {
       return { ok: false, ...safeError(err) };
@@ -688,6 +777,131 @@ function inventoryHandlers(): void {
       if (typeof id !== 'string' || id.length === 0) throw new Error('Purchase id is required');
       await cancelPurchase(db, user.businessId, user.id, user.permissions, id);
       return { ok: true };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
+
+  // --- Batch 16: masters, stock adjustments and purchase returns ---
+  ipcMain.handle('masters:list', async (_event, kind: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      const list = assertMasterKind(kind);
+      const items =
+        list === 'brands'
+          ? await listBrands(db, user.businessId)
+          : list === 'units'
+            ? await listUnits(db, user.businessId)
+            : list === 'warranties'
+              ? await listWarranties(db, user.businessId)
+              : await listCustomerGroups(db, user.businessId);
+      return { ok: true, items };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err), items: [] };
+    }
+  });
+
+  ipcMain.handle('masters:create', async (_event, payload: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      const { kind, input } = (payload ?? {}) as { kind?: unknown; input?: unknown };
+      const list = assertMasterKind(kind);
+      const args = [db, user.businessId, user.id, user.permissions, input] as const;
+      const item =
+        list === 'brands'
+          ? await createBrand(...args)
+          : list === 'units'
+            ? await createUnit(...args)
+            : list === 'warranties'
+              ? await createWarranty(...args)
+              : await createCustomerGroup(...args);
+      return { ok: true, item };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
+
+  ipcMain.handle('masters:update', async (_event, payload: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      const { kind, id, patch } = (payload ?? {}) as {
+        kind?: unknown;
+        id?: unknown;
+        patch?: unknown;
+      };
+      const list = assertMasterKind(kind);
+      if (typeof id !== 'string' || id.length === 0) throw new Error('Item id is required');
+      const args = [db, user.businessId, user.id, user.permissions, id, patch] as const;
+      const item =
+        list === 'brands'
+          ? await updateBrand(...args)
+          : list === 'units'
+            ? await updateUnit(...args)
+            : list === 'warranties'
+              ? await updateWarranty(...args)
+              : await updateCustomerGroup(...args);
+      return { ok: true, item };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
+
+  ipcMain.handle('stock-adjustments:list', async (_event, query: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      const result = await listStockAdjustments(db, user.businessId, query ?? {});
+      return { ok: true, ...result };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err), items: [], total: 0 };
+    }
+  });
+
+  ipcMain.handle('stock-adjustments:create', async (_event, input: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      const result = await createStockAdjustment(
+        db,
+        user.businessId,
+        user.id,
+        user.permissions,
+        input
+      );
+      return { ok: true, ...result };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
+
+  ipcMain.handle('purchase-returns:list', async (_event, query: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      const result = await listPurchaseReturns(db, user.businessId, query ?? {});
+      return { ok: true, ...result };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err), items: [], total: 0 };
+    }
+  });
+
+  ipcMain.handle('purchase-returns:create', async (_event, input: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      const result = await createPurchaseReturn(
+        db,
+        user.businessId,
+        user.id,
+        user.permissions,
+        input
+      );
+      return { ok: true, ...result };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err) };
+    }
+  });
+
+  ipcMain.handle('reports:menu', async (_event, query: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      return { ok: true, report: getMenuReports(db, user.businessId, user.permissions, query ?? {}) };
     } catch (err: unknown) {
       return { ok: false, ...safeError(err) };
     }
@@ -1085,6 +1299,30 @@ function importHandlers(): void {
       return { ok: false, ...safeError(err), created: 0, failed: 0, errors: [] };
     }
   });
+
+  ipcMain.handle('import:opening-stock', async (_event, input: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      return {
+        ok: true,
+        ...(await importOpeningStock(db, user.businessId, user.id, user.permissions, input)),
+      };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err), created: 0, failed: 0, errors: [] };
+    }
+  });
+
+  ipcMain.handle('import:contacts', async (_event, input: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      return {
+        ok: true,
+        ...(await importContacts(db, user.businessId, user.id, user.permissions, input)),
+      };
+    } catch (err: unknown) {
+      return { ok: false, ...safeError(err), created: 0, failed: 0, errors: [] };
+    }
+  });
 }
 
 // Batch 14: staff accounts, editable role permissions and the expenses ledger.
@@ -1183,6 +1421,30 @@ function staffFinanceHandlers(): void {
     }
   });
 
+  ipcMain.handle(
+    'finance:update-expense',
+    async (_event, payload: { id?: unknown; patch?: unknown } | undefined) => {
+      try {
+        const { db, user } = await requireUser();
+        const id = payload?.id;
+        if (typeof id !== 'string' || id.length === 0) throw new Error('Expense id is required');
+        return {
+          ok: true,
+          ...(await updateExpense(
+            db,
+            user.businessId,
+            user.id,
+            user.permissions,
+            id,
+            payload?.patch ?? {}
+          )),
+        };
+      } catch (err: unknown) {
+        return { ok: false, ...safeError(err) };
+      }
+    }
+  );
+
   ipcMain.handle('finance:delete-expense', async (_event, id: unknown) => {
     try {
       const { db, user } = await requireUser();
@@ -1191,6 +1453,486 @@ function staffFinanceHandlers(): void {
       return { ok: true };
     } catch (err: unknown) {
       return { ok: false, ...safeError(err) };
+    }
+  });
+}
+
+// --- Batch 17: cash & bank accounts + restaurant service settings -----------
+function accountsRestaurantHandlers(): void {
+  const fail = (err: unknown, extra: Record<string, unknown> = {}) => ({
+    ok: false,
+    ...safeError(err),
+    ...extra,
+  });
+
+  ipcMain.handle('accounts:list', async (_event, query: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      const includeArchived = Boolean((query as { includeArchived?: unknown } | null)?.includeArchived);
+      return {
+        ok: true,
+        ...(await listAccounts(db, user.businessId, user.permissions, { includeArchived })),
+      };
+    } catch (err: unknown) {
+      return fail(err, { items: [], totalKobo: 0 });
+    }
+  });
+
+  ipcMain.handle('accounts:create', async (_event, input: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      return {
+        ok: true,
+        ...(await createAccount(db, user.businessId, user.id, user.permissions, input)),
+      };
+    } catch (err: unknown) {
+      return fail(err);
+    }
+  });
+
+  ipcMain.handle(
+    'accounts:update',
+    async (_event, payload: { id?: unknown; patch?: unknown } | undefined) => {
+      try {
+        const { db, user } = await requireUser();
+        const id = payload?.id;
+        if (typeof id !== 'string' || id.length === 0) throw new Error('Account id is required');
+        return {
+          ok: true,
+          ...(await updateAccount(
+            db,
+            user.businessId,
+            user.id,
+            user.permissions,
+            id,
+            payload?.patch ?? {}
+          )),
+        };
+      } catch (err: unknown) {
+        return fail(err);
+      }
+    }
+  );
+
+  ipcMain.handle('accounts:transfer', async (_event, input: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      return {
+        ok: true,
+        ...(await transferBetweenAccounts(db, user.businessId, user.id, user.permissions, input)),
+      };
+    } catch (err: unknown) {
+      return fail(err);
+    }
+  });
+
+  ipcMain.handle('accounts:adjust', async (_event, input: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      return {
+        ok: true,
+        ...(await adjustAccount(db, user.businessId, user.id, user.permissions, input)),
+      };
+    } catch (err: unknown) {
+      return fail(err);
+    }
+  });
+
+  ipcMain.handle('accounts:transactions', async (_event, query: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      return {
+        ok: true,
+        ...(await listAccountTransactions(db, user.businessId, user.permissions, query ?? {})),
+      };
+    } catch (err: unknown) {
+      return fail(err, { items: [], moneyInKobo: 0, moneyOutKobo: 0 });
+    }
+  });
+
+  ipcMain.handle('accounts:payment-map', async () => {
+    try {
+      const { db, user } = await requireUser();
+      return { ok: true, map: getPaymentMap(db, user.businessId) };
+    } catch (err: unknown) {
+      return fail(err, { map: {} });
+    }
+  });
+
+  ipcMain.handle('accounts:payment-map-set', async (_event, input: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      return {
+        ok: true,
+        ...(await setPaymentMap(db, user.businessId, user.id, user.permissions, input)),
+      };
+    } catch (err: unknown) {
+      return fail(err);
+    }
+  });
+
+  ipcMain.handle('restaurant:settings', async () => {
+    try {
+      const { db, user } = await requireUser();
+      return { ok: true, settings: getRestaurantSettings(db, user.businessId) };
+    } catch (err: unknown) {
+      return fail(err);
+    }
+  });
+
+  ipcMain.handle('restaurant:settings-set', async (_event, input: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      return {
+        ok: true,
+        ...(await setRestaurantSettings(db, user.businessId, user.id, user.permissions, input)),
+      };
+    } catch (err: unknown) {
+      return fail(err);
+    }
+  });
+}
+
+// --- Batch 15: business pack. Batch tracking + expiry alerts, wholesale price
+// lists, loyalty + customer notes, counter returns, branch transfers, debtor
+// reminders and encrypted offsite backup. All licence- and session-gated.
+function businessPackHandlers(): void {
+  const fail = (err: unknown, extra: Record<string, unknown> = {}) => ({
+    ok: false,
+    ...safeError(err),
+    ...extra,
+  });
+
+  ipcMain.handle('modules:install-view', async () => {
+    try {
+      const { db, user } = await requireUser();
+      return { ok: true, ...(await getModuleInstallView(db, user.businessId)) };
+    } catch (err: unknown) {
+      return fail(err);
+    }
+  });
+
+  ipcMain.handle('modules:install-set', async (_event, input: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      return {
+        ok: true,
+        ...(await setModuleInstall(db, user.businessId, user.id, user.permissions, input)),
+      };
+    } catch (err: unknown) {
+      return fail(err);
+    }
+  });
+
+  ipcMain.handle('batches:list', async (_event, query: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      return { ok: true, ...(await listBatches(db, user.businessId, query ?? {})) };
+    } catch (err: unknown) {
+      return fail(err, { items: [], total: 0, expiringCount: 0, expiredCount: 0 });
+    }
+  });
+
+  ipcMain.handle('batches:intake', async (_event, input: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      return {
+        ok: true,
+        ...(await createBatchIntake(db, user.businessId, user.id, user.permissions, input)),
+      };
+    } catch (err: unknown) {
+      return fail(err);
+    }
+  });
+
+  ipcMain.handle('batches:expiry-alerts', async (_event, withinDays: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      const days = typeof withinDays === 'number' ? withinDays : 60;
+      return { ok: true, items: await listExpiryAlerts(db, user.businessId, days) };
+    } catch (err: unknown) {
+      return fail(err, { items: [] });
+    }
+  });
+
+  ipcMain.handle('price-tiers:list', async () => {
+    try {
+      const { db, user } = await requireUser();
+      return { ok: true, items: await listPriceTiers(db, user.businessId) };
+    } catch (err: unknown) {
+      return fail(err, { items: [] });
+    }
+  });
+
+  ipcMain.handle('price-tiers:create', async (_event, input: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      return {
+        ok: true,
+        ...(await createPriceTier(db, user.businessId, user.id, user.permissions, input)),
+      };
+    } catch (err: unknown) {
+      return fail(err);
+    }
+  });
+
+  ipcMain.handle('price-tiers:update', async (_event, payload: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      const { id, patch } = payload as { id?: unknown; patch?: unknown };
+      if (typeof id !== 'string' || id.length === 0) throw new Error('Price list id is required');
+      await updatePriceTier(db, user.businessId, user.id, user.permissions, id, patch);
+      return { ok: true };
+    } catch (err: unknown) {
+      return fail(err);
+    }
+  });
+
+  ipcMain.handle('price-tiers:delete', async (_event, id: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      if (typeof id !== 'string' || id.length === 0) throw new Error('Price list id is required');
+      await deletePriceTier(db, user.businessId, user.id, user.permissions, id);
+      return { ok: true };
+    } catch (err: unknown) {
+      return fail(err);
+    }
+  });
+
+  ipcMain.handle('price-tiers:prices', async (_event, id: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      if (typeof id !== 'string' || id.length === 0) throw new Error('Price list id is required');
+      return { ok: true, items: await listTierPrices(db, user.businessId, id) };
+    } catch (err: unknown) {
+      return fail(err, { items: [] });
+    }
+  });
+
+  ipcMain.handle('price-tiers:prices-set', async (_event, payload: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      const { id, prices } = payload as { id?: unknown; prices?: unknown };
+      if (typeof id !== 'string' || id.length === 0) throw new Error('Price list id is required');
+      return {
+        ok: true,
+        ...(await setTierPrices(db, user.businessId, user.id, user.permissions, id, prices)),
+      };
+    } catch (err: unknown) {
+      return fail(err);
+    }
+  });
+
+  ipcMain.handle('loyalty:settings', async () => {
+    try {
+      const { db, user } = await requireUser();
+      return { ok: true, settings: getLoyaltySettings(db, user.businessId) };
+    } catch (err: unknown) {
+      return fail(err);
+    }
+  });
+
+  ipcMain.handle('loyalty:settings-set', async (_event, input: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      return {
+        ok: true,
+        settings: setLoyaltySettings(db, user.businessId, user.id, user.permissions, input),
+      };
+    } catch (err: unknown) {
+      return fail(err);
+    }
+  });
+
+  ipcMain.handle('loyalty:entries', async (_event, customerId: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      if (typeof customerId !== 'string' || customerId.length === 0) {
+        throw new Error('Customer id is required');
+      }
+      return { ok: true, ...(await listLoyaltyEntries(db, user.businessId, customerId)) };
+    } catch (err: unknown) {
+      return fail(err, { items: [], balance: 0 });
+    }
+  });
+
+  ipcMain.handle('loyalty:adjust', async (_event, input: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      return {
+        ok: true,
+        ...(await adjustLoyalty(db, user.businessId, user.id, user.permissions, input)),
+      };
+    } catch (err: unknown) {
+      return fail(err);
+    }
+  });
+
+  ipcMain.handle('customers:notes', async (_event, customerId: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      if (typeof customerId !== 'string' || customerId.length === 0) {
+        throw new Error('Customer id is required');
+      }
+      return { ok: true, items: await listCustomerNotes(db, user.businessId, customerId) };
+    } catch (err: unknown) {
+      return fail(err, { items: [] });
+    }
+  });
+
+  ipcMain.handle('customers:note-add', async (_event, payload: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      const { id, note } = payload as { id?: unknown; note?: unknown };
+      if (typeof id !== 'string' || id.length === 0) throw new Error('Customer id is required');
+      return {
+        ok: true,
+        note: await addCustomerNote(db, user.businessId, user.id, user.permissions, id, note),
+      };
+    } catch (err: unknown) {
+      return fail(err);
+    }
+  });
+
+  ipcMain.handle('customers:visit-summary', async (_event, customerId: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      if (typeof customerId !== 'string' || customerId.length === 0) {
+        throw new Error('Customer id is required');
+      }
+      return {
+        ok: true,
+        summary: await customerVisitSummary(db, user.businessId, customerId),
+      };
+    } catch (err: unknown) {
+      return fail(err);
+    }
+  });
+
+  ipcMain.handle('returns:lookup', async (_event, receiptNo: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      if (typeof receiptNo !== 'string' || receiptNo.trim().length === 0) {
+        throw new Error('Scan or type a receipt number');
+      }
+      const sale = await lookupSaleByReceipt(db, user.businessId, user.permissions, receiptNo);
+      return { ok: true, sale };
+    } catch (err: unknown) {
+      return fail(err);
+    }
+  });
+
+  ipcMain.handle('returns:create', async (_event, input: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      return {
+        ok: true,
+        ...(await createSaleReturn(db, user.businessId, user.id, user.permissions, input)),
+      };
+    } catch (err: unknown) {
+      return fail(err);
+    }
+  });
+
+  ipcMain.handle('returns:list', async (_event, query: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      requirePermission(new Set(user.permissions), 'sales.view');
+      return { ok: true, ...(await listSaleReturns(db, user.businessId, query ?? {})) };
+    } catch (err: unknown) {
+      return fail(err, { items: [], total: 0 });
+    }
+  });
+
+  ipcMain.handle('transfers:list', async (_event, query: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      return { ok: true, ...(await listStockTransfers(db, user.businessId, query ?? {})) };
+    } catch (err: unknown) {
+      return fail(err, { items: [], total: 0 });
+    }
+  });
+
+  ipcMain.handle('transfers:create', async (_event, input: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      return {
+        ok: true,
+        ...(await createStockTransfer(db, user.businessId, user.id, user.permissions, input)),
+      };
+    } catch (err: unknown) {
+      return fail(err);
+    }
+  });
+
+  ipcMain.handle('debtors:list', async (_event, query: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      return { ok: true, ...(await listDebtors(db, user.businessId, query ?? {})) };
+    } catch (err: unknown) {
+      return fail(err, { items: [], totalKobo: 0 });
+    }
+  });
+
+  ipcMain.handle('debtors:remind', async (_event, input: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      return {
+        ok: true,
+        ...(await sendDebtorReminders(db, user.businessId, user.id, user.permissions, input ?? {})),
+      };
+    } catch (err: unknown) {
+      return fail(err);
+    }
+  });
+
+  ipcMain.handle('cloud-backup:settings', async () => {
+    try {
+      const { db, user } = await requireUser();
+      requirePermission(new Set(user.permissions), 'settings.manage');
+      return { ok: true, settings: cloudBackupView(getCloudBackupSettings(db, user.businessId)) };
+    } catch (err: unknown) {
+      return fail(err);
+    }
+  });
+
+  ipcMain.handle('cloud-backup:settings-set', async (_event, input: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      return {
+        ok: true,
+        settings: setCloudBackupSettings(db, user.businessId, user.id, user.permissions, input),
+      };
+    } catch (err: unknown) {
+      return fail(err);
+    }
+  });
+
+  ipcMain.handle('cloud-backup:run', async () => {
+    try {
+      const { db, user } = await requireUser();
+      return {
+        ok: true,
+        ...(await runEncryptedCloudBackup(
+          db,
+          user.businessId,
+          user.id,
+          user.permissions,
+          backupDirectory()
+        )),
+      };
+    } catch (err: unknown) {
+      return fail(err);
+    }
+  });
+
+  ipcMain.handle('cloud-backup:uploads', async () => {
+    try {
+      const { db, user } = await requireUser();
+      requirePermission(new Set(user.permissions), 'settings.manage');
+      return { ok: true, items: listCloudUploads(db, user.businessId) };
+    } catch (err: unknown) {
+      return fail(err, { items: [] });
     }
   });
 }
@@ -1263,6 +2005,8 @@ void app.whenReady().then(async () => {
     businessHandlers();
     importHandlers();
     staffFinanceHandlers();
+    businessPackHandlers();
+    accountsRestaurantHandlers();
   }
   createWindow();
   app.on('activate', () => {

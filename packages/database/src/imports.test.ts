@@ -5,7 +5,17 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { closeLocalDb, openLocalDb, type LocalDb } from './connection';
 import { getBusinessProfile, runSetup } from './service';
 import { getProduct, productByBarcode } from './inventory';
-import { importProducts, importPurchases, importSales, parseImportDate } from './imports';
+import {
+  importContacts,
+  importOpeningStock,
+  importProducts,
+  importPurchases,
+  importSales,
+  parseImportDate,
+} from './imports';
+import { listCustomers } from './customers';
+import { listSuppliers } from './suppliers';
+import { createCustomerGroup } from './masters';
 import { runMigrations } from './migrate';
 
 const GRANTS = [
@@ -319,5 +329,101 @@ describe('business profile', () => {
       phone: '+2348012345678',
       taxLabel: 'VAT',
     });
+  });
+});
+
+describe('bulk import: opening stock', () => {
+  it('sets absolute on-hand quantities and reports unmatched products', async () => {
+    const productId = await seedProduct();
+    expect((await getProduct(local, businessId, productId)).onHand).toBe(100);
+
+    const up = await importOpeningStock(local, businessId, userId, GRANTS, {
+      rows: [{ sku: 'IND-70', qty: 150, barcode: '', name: '', location: '' }],
+    });
+    expect(up).toMatchObject({ created: 1, failed: 0, errors: [] });
+    expect((await getProduct(local, businessId, productId)).onHand).toBe(150);
+
+    // Re-importing the same count must not double the stock.
+    const again = await importOpeningStock(local, businessId, userId, GRANTS, {
+      rows: [{ barcode: '6151100012345', qty: 150, sku: '', name: '', location: '' }],
+    });
+    expect(again.created).toBe(1);
+    expect((await getProduct(local, businessId, productId)).onHand).toBe(150);
+
+    const missing = await importOpeningStock(local, businessId, userId, GRANTS, {
+      rows: [{ name: 'Ghost Product', qty: 5, sku: '', barcode: '', location: '' }],
+    });
+    expect(missing.created).toBe(0);
+    expect(missing.failed).toBe(1);
+    expect(missing.errors[0]?.code).toBe('PRODUCT_NOT_FOUND');
+  });
+
+  it('requires the inventory.adjust permission', async () => {
+    await seedProduct();
+    await expect(
+      importOpeningStock(local, businessId, userId, [], {
+        rows: [{ sku: 'IND-70', qty: 1, barcode: '', name: '', location: '' }],
+      })
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+});
+
+describe('bulk import: contacts', () => {
+  it('creates customers and suppliers in one file and assigns groups by name', async () => {
+    await createCustomerGroup(local, businessId, userId, GRANTS, {
+      name: 'Wholesale',
+      note: '',
+    });
+
+    const result = await importContacts(local, businessId, userId, GRANTS, {
+      rows: [
+        {
+          name: 'Ada Obi',
+          type: 'customer',
+          phone: '08030000000',
+          email: 'ada@example.com',
+          address: 'Lagos',
+          group: 'Wholesale',
+        },
+        {
+          name: 'Peak Foods',
+          type: 'supplier',
+          phone: '08055550000',
+          email: 'sales@peak.example',
+          address: 'Onitsha',
+          group: '',
+        },
+      ],
+    });
+    expect(result.created).toBe(2);
+    expect(result.failed).toBe(0);
+
+    const customers = await listCustomers(local, businessId, { search: 'Ada', limit: 10, offset: 0 });
+    expect(customers.items[0]).toMatchObject({ name: 'Ada Obi', groupName: 'Wholesale' });
+    const suppliersPage = await listSuppliers(local, businessId, { search: 'Peak', limit: 10, offset: 0 });
+    expect(suppliersPage.items[0]).toMatchObject({ name: 'Peak Foods' });
+  });
+
+  it('reports unknown groups and missing permissions per file', async () => {
+    const groups = await importContacts(local, businessId, userId, GRANTS, {
+      rows: [
+        {
+          name: 'No Group Person',
+          type: 'customer',
+          phone: '',
+          email: '',
+          address: '',
+          group: 'Missing',
+        },
+      ],
+    });
+    expect(groups.created).toBe(0);
+    expect(groups.errors[0]?.code).toBe('CUSTOMER_GROUP_NOT_FOUND');
+
+    await expect(
+      importContacts(local, businessId, userId, ['suppliers.manage'], {
+        rows: [{ name: 'X', type: 'customer', phone: '', email: '', address: '', group: '' }],
+      })
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
 });

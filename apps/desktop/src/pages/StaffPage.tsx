@@ -48,6 +48,7 @@ const BLANK: StaffFormValues = {
 
 export function StaffPage(): JSX.Element {
   const queryClient = useQueryClient();
+  const [tab, setTab] = useState<'users' | 'roles'>('users');
   const [modalMode, setModalMode] = useState<'create' | 'edit' | null>(null);
   const [editing, setEditing] = useState<StaffMember | null>(null);
   const [values, setValues] = useState<StaffFormValues>(BLANK);
@@ -211,14 +212,30 @@ export function StaffPage(): JSX.Element {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Staff &amp; Permissions</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Users &amp; Roles</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
             Add staff, reset passwords and decide what each role can do.
           </p>
         </div>
-        <Button onClick={openCreate}>
-          <Plus className="h-4 w-4" /> Add staff
-        </Button>
+        <div className="flex flex-wrap items-center gap-1">
+          <Button
+            size="sm"
+            variant={tab === 'users' ? 'primary' : 'secondary'}
+            onClick={() => setTab('users')}
+          >
+            Users
+          </Button>
+          <Button
+            size="sm"
+            variant={tab === 'roles' ? 'primary' : 'secondary'}
+            onClick={() => setTab('roles')}
+          >
+            Roles
+          </Button>
+          <Button onClick={openCreate}>
+            <Plus className="h-4 w-4" /> Add staff
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
@@ -242,7 +259,7 @@ export function StaffPage(): JSX.Element {
         />
       ) : null}
 
-      {staffQuery.isSuccess ? (
+      {tab === 'users' && staffQuery.isSuccess ? (
         <Card>
           <CardHeader>
             <CardTitle>Staff accounts</CardTitle>
@@ -316,73 +333,75 @@ export function StaffPage(): JSX.Element {
         </Card>
       ) : null}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Role permissions</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-wrap gap-1">
-            {roles.map((role) => (
-              <Button
-                key={role.id}
-                size="sm"
-                variant={role.id === selectedRoleId ? 'primary' : 'secondary'}
-                onClick={() => setRoleId(role.id)}
-              >
-                {role.name}
-                <span className="ml-1 text-xs opacity-70">({role.userCount})</span>
-              </Button>
-            ))}
-          </div>
-          {selectedRole ? (
-            <>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                {selectedRole.description}
-              </p>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {PERMISSION_OPTIONS.map((option) => {
-                  const locked =
-                    selectedRole.name === 'Administrator' && LOCKED_FOR_ADMIN.has(option.key);
-                  const checked = currentPermissions.includes(option.key);
-                  return (
-                    <label
-                      key={option.key}
-                      className="flex items-start gap-2 rounded-xl border border-slate-100 px-3 py-2 text-sm dark:border-slate-800"
-                    >
-                      <input
-                        type="checkbox"
-                        className="mt-0.5"
-                        checked={checked}
-                        disabled={locked}
-                        onChange={() => togglePermission(option.key)}
-                      />
-                      <span>
-                        <span className="block text-slate-700 dark:text-slate-200">
-                          {option.label}
-                        </span>
-                        <span className="block text-[11px] text-slate-400">{option.key}</span>
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Administrator always keeps staff and settings management.
-                </p>
+      {tab === 'roles' ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Role permissions</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-wrap gap-1">
+              {roles.map((role) => (
                 <Button
-                  disabled={roleMutation.isPending || drafts[selectedRoleId] === undefined}
-                  onClick={() => roleMutation.mutate()}
+                  key={role.id}
+                  size="sm"
+                  variant={role.id === selectedRoleId ? 'primary' : 'secondary'}
+                  onClick={() => setRoleId(role.id)}
                 >
-                  Save {selectedRole.name} permissions
+                  {role.name}
+                  <span className="ml-1 text-xs opacity-70">({role.userCount})</span>
                 </Button>
-              </div>
-            </>
-          ) : (
-            <p className="text-sm text-slate-500">No roles found.</p>
-          )}
-        </CardContent>
-      </Card>
+              ))}
+            </div>
+            {selectedRole ? (
+              <>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {selectedRole.description}
+                </p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {PERMISSION_OPTIONS.map((option) => {
+                    const locked =
+                      selectedRole.name === 'Administrator' && LOCKED_FOR_ADMIN.has(option.key);
+                    const checked = currentPermissions.includes(option.key);
+                    return (
+                      <label
+                        key={option.key}
+                        className="flex items-start gap-2 rounded-xl border border-slate-100 px-3 py-2 text-sm dark:border-slate-800"
+                      >
+                        <input
+                          type="checkbox"
+                          className="mt-0.5"
+                          checked={checked}
+                          disabled={locked}
+                          onChange={() => togglePermission(option.key)}
+                        />
+                        <span>
+                          <span className="block text-slate-700 dark:text-slate-200">
+                            {option.label}
+                          </span>
+                          <span className="block text-[11px] text-slate-400">{option.key}</span>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Administrator always keeps staff and settings management.
+                  </p>
+                  <Button
+                    disabled={roleMutation.isPending || drafts[selectedRoleId] === undefined}
+                    onClick={() => roleMutation.mutate()}
+                  >
+                    Save {selectedRole.name} permissions
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-slate-500">No roles found.</p>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Modal
         open={modalMode !== null}

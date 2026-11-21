@@ -4,11 +4,11 @@ import { CheckoutError, fetchOrder, startCheckout } from './api';
 const ORDER = {
   reference: 'ord_abc123',
   planId: 'standard' as const,
-  planName: 'Standard',
+  planName: 'AnalytIQ Inventory & POS',
   business: 'Ada Stores',
   name: 'Ada Obi',
   email: 'ada@example.com',
-  amountKobo: 4_500_000,
+  amountKobo: 8_000_000,
   status: 'pending' as const,
   licenseKey: null,
   createdAt: '2026-11-18T12:00:00.000Z',
@@ -61,7 +61,7 @@ describe('startCheckout', () => {
     );
 
     await expect(
-      startCheckout({ plan: 'pro', business: 'Ada Stores', name: '', email: 'x', phone: '' })
+      startCheckout({ plan: 'standard', business: 'Ada Stores', name: '', email: 'x', phone: '' })
     ).rejects.toMatchObject({ message: 'Enter a valid email', code: 'VALIDATION', status: 400 });
   });
 
@@ -74,7 +74,7 @@ describe('startCheckout', () => {
     );
 
     const error = await startCheckout({
-      plan: 'pro',
+      plan: 'standard',
       business: 'Ada Stores',
       name: '',
       email: 'ada@example.com',
@@ -93,7 +93,7 @@ describe('startCheckout', () => {
 
     await expect(
       startCheckout({
-        plan: 'starter',
+        plan: 'standard',
         business: 'Ada Stores',
         name: '',
         email: 'a@b.co',

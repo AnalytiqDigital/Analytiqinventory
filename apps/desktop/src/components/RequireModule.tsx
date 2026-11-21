@@ -9,6 +9,7 @@ import { useSession } from '../stores/session';
  */
 export function RequireModule({ module }: { module: OptionalModule }): JSX.Element {
  const businessType = useSession((s) => s.user?.businessType);
- if (!hasModule(businessType, module)) return <Navigate to="/" replace />;
+ const modules = useSession((s) => s.user?.modules);
+ if (!hasModule(businessType, module, modules)) return <Navigate to="/" replace />;
  return <Outlet />;
 }

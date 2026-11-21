@@ -1,5 +1,151 @@
 # Changelog
 
+## Unreleased — Batch 17: cash & bank ledgers and restaurant service flow
+
+- **Cash & Bank** (`/accounts`, Finance): create cash drawer, bank, POS and
+  mobile-money accounts with an opening balance. Each account shows its live
+  balance, can be renamed, made default or archived (only at zero balance).
+  A **Move money** dialog transfers between accounts with a paired
+  `transfer_out`/`transfer_in` entry, and **Adjust** records a signed float
+  top-up or withdrawal with a reason. Every write is audited and blocked from
+  taking an account overdrawn (`ACCOUNT_INSUFFICIENT`).
+- **Automatic posting**: sales, refunds, voids, expenses and customer payments
+  now post to an account inside the same SQLite transaction, so the ledger and
+  the books can never disagree. Cash tenders post net of change; credit tenders
+  post nothing until the customer pays. Expenses gain a "Paid from" account
+  (edits reverse the old posting and repost), and deleting an expense reverses
+  it. The ledger screen lists every movement with in/out totals.
+- **Payment mapping**: the Cash & Bank screen lets a business pin each tender
+  (cash, bank transfer, POS) to a specific account instead of the default by
+  account type.
+- **Restaurant service flow** (POS, when Tables is installed): order type
+  (dine-in / takeaway / delivery), waiter name, service charge percentage and
+  tip. The service charge pre-fills from Settings → Restaurant service charge
+  and is computed on the net bill after discounts; service charge and tip are
+  stored on the sale and shown on the receipt and sale detail.
+- **Kitchen order tickets**: a new toggle prints a price-free kitchen ticket
+  (receipt number, time, order type, table, waiter, quantity × item) after each
+  sale, optionally on a separate kitchen printer.
+- **REST parity**: `/api/accounts`, `/api/accounts/transactions`,
+  `/api/accounts/payment-map`, `/api/accounts/transfer`, `/api/accounts/adjust`
+  and `/api/restaurant/settings` are served by the LAN server and mapped in the
+  desktop LAN client, so a client till behaves like the primary machine.
+- **Modules**: `accounts` is a new optional module, on by default for every
+  business type; it can be switched off in Install Modules.
+- **POS product grid**: the sell screen now shows a fixed five-by-five grid
+  (25 tiles) at full width with Previous / numbered / Next paging and a
+  "Showing X–Y of N" count. Search and category changes return to page 1, and
+  the previous page stays visible while the next one loads.
+- **Sidebar contrast**: menu items, group headings and the app subtitle are
+  darker on light backgrounds and brighter in dark mode so the menu is easier
+  to read on till screens.
+
+## Unreleased — Batch 16: shop masters, returns, labels and report menu
+
+- **Grouped, collapsible sidebar**: the menu now mirrors the reference ERP with
+  Main, Sell, Products, Inventory, Purchases, Contacts, Reports, Finance and
+  Setup groups. Each group collapses from its header and the choice is
+  remembered per browser (`analytiq.nav.collapsed`). Group headers hide when no
+  item inside is visible, so permissions and installed modules still decide the
+  menu.
+- **Units, Brands & Groups** (`/masters`): manage units (with short name),
+  brands, warranties (with duration in days) and customer groups in one tabbed
+  screen. Products can store a brand and a warranty; the customer form can
+  store a group.
+- **Stock adjustments** (`/stock-adjustments`): list past adjustments with
+  branch, reason, lines and signed quantity, and record new `ADJ-000001`
+  adjustments with plus/minus lines per product. Lines that would take stock
+  below zero are refused (`NEGATIVE_STOCK`); every write is audited.
+- **Purchase returns** (`/purchase-returns`): return received stock to a
+  supplier with `PRT-000001` references, per-line quantities capped by what is
+  still returnable on that purchase, and a value total at the purchase's unit
+  cost. Restocking uses the `purchase_return` movement kind.
+- **Print labels** (`/labels`): search products, pick copies per row or select
+  all, optionally hide products without a barcode, and print 50×30 mm labels on
+  A4 with the business name, product name, price and an inline EAN-13 barcode
+  (plain code when the barcode is not EAN-13). Printing uses a hidden iframe so
+  no popup blocker is involved.
+- **Report menu**: the Reports screen gains ten tabs — Purchase & Sale, Tax,
+  Suppliers & Customers, Customer Groups, Stock Adjustments, Product Purchases,
+  Purchase Payments, Sell Payments, Registers and Sales Representatives — all
+  driven by one `reports:menu` (LAN `GET /api/reports/menu`) call for the
+  selected date range.
+- **Users & Roles**: the staff screen now has Users and Roles tabs instead of
+  stacking both cards.
+- **Imports**: opening stock (`opening-stock`) sets the on-hand quantity per
+  branch, matched by barcode, then SKU, then name, and re-importing the same
+  file is idempotent; contacts (`contacts`) imports customers and suppliers in
+  one file with type, phone, email, address and an existing customer group.
+  Both kinds are importable from Products (opening stock) and Customers
+  (contacts), with downloadable templates.
+- LAN parity: `GET/POST /api/masters/:kind`, `PATCH /api/masters/:kind/:id`,
+  `GET/POST /api/stock-adjustments`, `GET/POST /api/purchase-returns`,
+  `GET /api/reports/menu`, `POST /api/import/opening-stock` and
+  `POST /api/import/contacts`; IPC mirrors each route for the primary computer.
+
+## Unreleased — Batch 15: business pack
+
+- **Install Modules**: the app now installs a different set of optional
+  modules per business type (retail, supermarket, wholesale, pharmacy,
+  restaurant, bar/lounge, electronics, boutique, services) and a manager can
+  switch any module on or off from Settings. The menu, screens and POS update
+  immediately; hidden modules keep their data.
+- **Batches & Expiry**: track batches with expiry dates on chosen products,
+  receive them from Purchases or the new Batches screen, sell First Expired
+  First Out, and see OK / expiring / expired badges with 30/90-day filters.
+- **Price lists**: wholesale and customer price tiers with per-product
+  override prices; a customer's tier is applied automatically on Sell and the
+  cashier can still override.
+- **Loyalty and CRM**: points ledger with configurable earn and redemption
+  rates, redemption as a discount on the sale, points shown on receipts, and a
+  customer profile with visit summary, point adjustments and notes.
+- **Counter returns**: receipt lookup, per-line returnable quantities, capped
+  refunds across partial returns, restock to the original batches, exchange
+  tagging and return history. Batched sales now restock to their exact batch.
+- **Branch transfers**: move stock between branches with paired ledger rows,
+  batch identity preserved, guards against same-branch and negative-stock
+  transfers, and a `TRF-` history.
+- **Debtor reminders**: outstanding balance list with opt-in selection, a
+  dry-run preview when WhatsApp is not configured, and a reminder log.
+- **Encrypted offsite backup**: AES-256-GCM `.aqb` snapshot with a passphrase
+  (scrypt), uploaded to any HTTPS PUT endpoint with a bearer key; restore needs
+  the passphrase, which never leaves the machine.
+- LAN parity for all new routes and migration `0013_business_pack.sql`.
+- **Fix**: opening Products or Sell after the Tax Categories settings screen
+  could crash the window (`find is not a function`) because the shared
+  tax-category cache held two different shapes. All screens now share one query
+  helper that always returns a plain list.
+- **Dashboard analytics**: the home screen now leads with today's sales and
+  basket, month gross and net profit with margins, credit, low stock and stock
+  value, cash and transfer received today, a seven-day trend, payment mix,
+  best-selling products with margin, sales by cashier and a profit snapshot.
+  Cashiers without `reports.view` keep the original sales-list tiles.
+- **Accounting page**: new `/accounting` screen (Reports-permission) with an
+  overview, a formal profit and loss statement (net sales after discounts and
+  loyalty, COGS, gross profit, expenses, net profit, tax shown as collected)
+  and a product sales statement (quantity, revenue, COGS, profit, margin and
+  share per product). Date presets, last month, custom range and CSV export;
+  statement arithmetic is unit-tested (`statements.test.ts`).
+- **Expenses module**: new optional `expenses` module (installed by default for
+  every business type, switchable in Install modules) with a dedicated
+  `/expenses` ledger. Date presets, category filter, note search, selection
+  totals (total spent, entries, average, biggest category), add/edit/delete
+  and a filtered CSV export. Menu and route require `finance.manage` and the
+  installed module; Finance keeps the profit statement.
+- Expenses can now be edited (`PATCH /api/finance/expenses/:id`, IPC
+  `finance:update-expense`) with an `expense.update` audit entry.
+- **Website**: one package at ₦80,000/year for one location replaces the
+  Starter/Standard/Pro tiers. The landing page was rebuilt on the mockup with
+  warehouse, supermarket and POS computer imagery, a welcoming emerald/cream
+  palette, a cloud-version card and a quote form that opens WhatsApp with the
+  branch details prefilled. Checkout shows the single package; cloud-api prices
+  follow the same catalogue. The screens section now opens with three real app
+  captures: the Reports screen and both sign-in screens.
+- Docs: `docs/BUSINESS_PACK.md`; updated `docs/CHECKOUT.md`,
+  `docs/WEBSITE.md`, `docs/LICENSE_KEYS.md`, `docs/REPORTING.md` (dashboard
+  metrics and accounting statement formulas) and `docs/FINANCE.md` (expenses
+  module, edit endpoint and tests).
+
 ## 1.1.0 — Batch 14: staff, permissions, finance and richer reports
 
 - **Staff & Permissions** page: add, edit, deactivate and reactivate staff,

@@ -22,18 +22,38 @@ import { Input } from '../components/ui/input';
 import { TD, TH, THead, TRow, Table } from '../components/ui/table';
 import { ErrorState, LoadingState } from '../components/ui/states';
 import { Stat } from '../components/ui/stat';
+import { MenuReportsPanel, type MenuReportTab } from '../components/reports/MenuReportsPanel';
 import { ipc } from '../lib/ipc';
 import { formatKobo } from '../lib/money';
 import type { ReportsSummary } from '../types/global';
 
-const TABS = [
+const BASE_TABS = [
   { key: 'overview', label: 'Overview' },
   { key: 'products', label: 'Products' },
   { key: 'weekly', label: 'Weekly' },
   { key: 'stock', label: 'Stock alerts' },
 ] as const;
 
+const MENU_TABS = [
+  { key: 'purchase-sale', label: 'Purchase & Sale' },
+  { key: 'tax', label: 'Tax' },
+  { key: 'suppliers-customers', label: 'Suppliers & Customers' },
+  { key: 'customer-groups', label: 'Customer Groups' },
+  { key: 'adjustments', label: 'Stock Adjustment' },
+  { key: 'product-purchases', label: 'Product Purchase' },
+  { key: 'purchase-payments', label: 'Purchase Payment' },
+  { key: 'sell-payments', label: 'Sell Payment' },
+  { key: 'registers', label: 'Register' },
+  { key: 'sales-reps', label: 'Sales Representative' },
+] as const satisfies ReadonlyArray<{ key: MenuReportTab; label: string }>;
+
+const TABS = [...BASE_TABS, ...MENU_TABS] as const;
+
 type TabKey = (typeof TABS)[number]['key'];
+
+function isMenuTab(tab: TabKey): tab is MenuReportTab {
+  return MENU_TABS.some((item) => item.key === tab);
+}
 
 const PRESETS = [
   { key: 'today', label: 'Today' },
@@ -288,6 +308,16 @@ export function ReportsPage(): JSX.Element {
       const res = await ipc.reportsSummary({ from: fromIso, to: toIso });
       if (!res.ok || !res.summary) throw new Error(res.error ?? 'Could not load reports');
       return res.summary;
+    },
+  });
+
+  const menuQuery = useQuery({
+    queryKey: ['reports-menu', fromIso, toIso],
+    enabled: validRange && isMenuTab(tab),
+    queryFn: async () => {
+      const res = await ipc.reportsMenu({ from: fromIso, to: toIso });
+      if (!res.ok || !res.report) throw new Error(res.error ?? 'Could not load this report');
+      return res.report;
     },
   });
 
@@ -889,6 +919,19 @@ export function ReportsPage(): JSX.Element {
               </CardContent>
             </Card>
           ) : null}
+        </>
+      ) : null}
+
+      {validRange && isMenuTab(tab) ? (
+        <>
+          {menuQuery.isLoading ? <LoadingState label="Crunching this report…" /> : null}
+          {menuQuery.isError ? (
+            <ErrorState
+              message={(menuQuery.error as Error).message}
+              onRetry={() => void menuQuery.refetch()}
+            />
+          ) : null}
+          {menuQuery.data ? <MenuReportsPanel tab={tab} report={menuQuery.data} /> : null}
         </>
       ) : null}
     </div>

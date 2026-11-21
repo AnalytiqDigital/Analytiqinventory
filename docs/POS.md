@@ -46,7 +46,8 @@
 
 - Product search (name/SKU/barcode, Enter adds first match), cart with
   qty/price/discount editing, header discount, live totals with tax
-  estimate (authoritative tax computed server-side).
+  estimate (authoritative tax computed server-side). Products are shown in a
+  five-by-five grid with 25 per page and Previous / Next paging.
 - Barcode scanners (keyboard wedge): a scan with nothing focused adds the
   exact barcode/SKU match and beeps. See `docs/PRINTERS.md`.
 - Tender dialog: per-line method picker, split payments, reference field
@@ -73,6 +74,17 @@
   highlighted; picking one tags the sale, occupies the table inside the
   checkout transaction and frees it once the sale completes. The table appears
   on the cart, the printed receipt and sales-history rows.
+- **Service flow**: when Tables is installed the cart shows an order-type
+  switch (Dine-in / Takeaway / Delivery), a waiter name, a service charge
+  percentage and a tip. The percentage pre-fills from Settings → Restaurant
+  service charge; the cashier can change it per sale. Service charge is
+  computed on the net bill after line and header discounts, and both service
+  charge and tip are added after tax and stored on the sale. They appear on the
+  receipt and sale detail, and count toward the amount tendered.
+- **Kitchen tickets**: enable "Print a kitchen order ticket after each sale"
+  in Settings → Receipt printer and optionally pick a separate kitchen printer.
+  The ticket lists receipt number, time, order type, table, waiter and
+  quantity × item with no prices. See `docs/PRINTERS.md`.
 - **Product photos**: uploaded images are downscaled to a 640 px JPEG data URL
   and stored in `products.image_path`, so they render with no network and are
   included in the single-file SQLite backup. Products without a photo show a

@@ -5,7 +5,10 @@ import { Server as SocketIOServer } from 'socket.io';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { join } from 'node:path';
 import {
+  adjustAccount,
+  adjustLoyalty,
   adjustStock,
+  addCustomerNote,
   archiveCustomer,
   archiveProduct,
   archiveSupplier,
@@ -13,57 +16,98 @@ import {
   backupDirFor,
   cancelPurchase,
   closeLocalDb,
+  cloudBackupView,
   countStock,
+  createAccount,
   createBackup,
+  createBatchIntake,
+  createBrand,
   createCategory,
   createCustomer,
+  createCustomerGroup,
   createExpense,
   createLocation,
+  createPriceTier,
   createProduct,
   createPurchase,
+  createPurchaseReturn,
   createSale,
+  createSaleReturn,
   createStaff,
+  createStockAdjustment,
+  createStockTransfer,
   createSupplier,
   createTable,
   createTaxCategory,
+  createUnit,
+  createWarranty,
+  customerVisitSummary,
   deleteBackup,
   deleteExpense,
+  deletePriceTier,
   deleteTable,
   ensureDefaultTaxCategory,
   getAutomationSettings,
   getBusinessProfile,
+  getCloudBackupSettings,
   getCustomer,
   getLevels,
+  getLoyaltySettings,
+  getMenuReports,
+  getModuleInstallView,
+  getPaymentMap,
   getProduct,
   getReportsSummary,
+  getRestaurantSettings,
   getSale,
   getSyncStatus,
   httpTransport,
   importProducts,
   importPurchases,
   importSales,
+  importOpeningStock,
+  importContacts,
   ingestRecords,
   isFirstRun,
   isSyncEntity,
+  listAccountTransactions,
+  listAccounts,
   listAutomationMessages,
   listBackups,
+  listBatches,
+  listBrands,
   listCategories,
+  listCloudUploads,
+  listCustomerGroups,
+  listCustomerNotes,
   listCustomerPayments,
   listCustomers,
+  listDebtors,
   listExpenses,
+  listExpiryAlerts,
   listLocations,
+  listLoyaltyEntries,
   listMovements,
+  listPriceTiers,
   listProducts,
   listPurchases,
+  listPurchaseReturns,
   listRecordsSince,
   listRoles,
+  listSaleReturns,
   listSales,
   listStaff,
+  listStockAdjustments,
+  listStockTransfers,
   listSuppliers,
   listTables,
   listTaxCategories,
+  listTierPrices,
+  listUnits,
+  listWarranties,
   login,
   logout,
+  lookupSaleByReceipt,
   openLocalDb,
   productByBarcode,
   recordCustomerPayment,
@@ -75,22 +119,39 @@ import {
   restoreProduct,
   runAutomation,
   runDailyBackupIfDue,
+  runEncryptedCloudBackup,
   runMigrations,
   runSetup,
+  sendDebtorReminders,
   sendTestMessage,
   setAutomationSettings,
+  setCloudBackupSettings,
+  setLoyaltySettings,
+  setModuleInstall,
+  setPaymentMap,
+  setRestaurantSettings,
   setTableStatus,
   setSyncSettings,
+  setTierPrices,
   syncNow,
   toAutomationView,
+  transferBetweenAccounts,
+  updateAccount,
+  updateBrand,
+  updateCategory,
   updateCustomer,
+  updateCustomerGroup,
+  updateExpense,
   updateLocation,
+  updatePriceTier,
   updateProduct,
   updateRolePermissions,
   updateStaff,
   updateSupplier,
   updateTable,
   updateTaxCategory,
+  updateUnit,
+  updateWarranty,
   voidSale,
   type AuthenticatedUser,
   type LocalDb,
@@ -388,6 +449,19 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
           user.businessId,
           user.id,
           user.permissions,
+          request.body ?? {}
+        );
+        return { ok: true, category };
+      });
+
+      scope.patch<{ Params: { id: string } }>('/categories/:id', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        const category = await updateCategory(
+          local,
+          user.businessId,
+          user.id,
+          user.permissions,
+          request.params.id,
           request.body ?? {}
         );
         return { ok: true, category };
@@ -848,6 +922,119 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
         return { ok: true };
       });
 
+      // --- Batch 16: masters, stock adjustments, purchase returns ---
+      scope.get<{ Params: { kind: string } }>('/masters/:kind', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        const kind = request.params.kind;
+        const items =
+          kind === 'brands'
+            ? await listBrands(local, user.businessId)
+            : kind === 'units'
+              ? await listUnits(local, user.businessId)
+              : kind === 'warranties'
+                ? await listWarranties(local, user.businessId)
+                : kind === 'customer-groups'
+                  ? await listCustomerGroups(local, user.businessId)
+                  : null;
+        if (!items) throw Object.assign(new Error('Unknown list type'), { code: 'NOT_FOUND' });
+        return { ok: true, items };
+      });
+
+      scope.post<{ Params: { kind: string } }>('/masters/:kind', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        const kind = request.params.kind;
+        const input = request.body ?? {};
+        const args = [local, user.businessId, user.id, user.permissions, input] as const;
+        const item =
+          kind === 'brands'
+            ? await createBrand(...args)
+            : kind === 'units'
+              ? await createUnit(...args)
+              : kind === 'warranties'
+                ? await createWarranty(...args)
+                : kind === 'customer-groups'
+                  ? await createCustomerGroup(...args)
+                  : null;
+        if (!item) throw Object.assign(new Error('Unknown list type'), { code: 'NOT_FOUND' });
+        return { ok: true, item };
+      });
+
+      scope.patch<{ Params: { kind: string; id: string } }>(
+        '/masters/:kind/:id',
+        async (request) => {
+          const { user, db: local } = userIdOf(request);
+          const kind = request.params.kind;
+          const args = [
+            local,
+            user.businessId,
+            user.id,
+            user.permissions,
+            request.params.id,
+            request.body ?? {},
+          ] as const;
+          const item =
+            kind === 'brands'
+              ? await updateBrand(...args)
+              : kind === 'units'
+                ? await updateUnit(...args)
+                : kind === 'warranties'
+                  ? await updateWarranty(...args)
+                  : kind === 'customer-groups'
+                    ? await updateCustomerGroup(...args)
+                    : null;
+          if (!item) throw Object.assign(new Error('Unknown list type'), { code: 'NOT_FOUND' });
+          return { ok: true, item };
+        }
+      );
+
+      scope.get('/stock-adjustments', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return {
+          ok: true,
+          ...(await listStockAdjustments(local, user.businessId, queryOf(request.query))),
+        };
+      });
+
+      scope.post('/stock-adjustments', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        const result = await createStockAdjustment(
+          local,
+          user.businessId,
+          user.id,
+          user.permissions,
+          request.body ?? {}
+        );
+        scope.realtime.emit(user.businessId, 'inventory.changed', {
+          reason: 'stock.adjustment',
+          id: result.id,
+        });
+        return { ok: true, ...result };
+      });
+
+      scope.get('/purchase-returns', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return {
+          ok: true,
+          ...(await listPurchaseReturns(local, user.businessId, queryOf(request.query))),
+        };
+      });
+
+      scope.post('/purchase-returns', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        const result = await createPurchaseReturn(
+          local,
+          user.businessId,
+          user.id,
+          user.permissions,
+          request.body ?? {}
+        );
+        scope.realtime.emit(user.businessId, 'inventory.changed', {
+          reason: 'purchase.return',
+          id: result.id,
+        });
+        return { ok: true, ...result };
+      });
+
       scope.get('/reports/summary', async (request) => {
         const { user, db: local } = userIdOf(request);
         return {
@@ -858,6 +1045,14 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
             user.permissions,
             queryOf(request.query)
           ),
+        };
+      });
+
+      scope.get('/reports/menu', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return {
+          ok: true,
+          report: getMenuReports(local, user.businessId, user.permissions, queryOf(request.query)),
         };
       });
 
@@ -923,6 +1118,38 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
           });
         }
         return { ok: true, ...result };
+      });
+
+      scope.post('/import/opening-stock', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        const result = await importOpeningStock(
+          local,
+          user.businessId,
+          user.id,
+          user.permissions,
+          request.body ?? {}
+        );
+        if (result.created > 0) {
+          scope.realtime.emit(user.businessId, 'inventory.changed', {
+            reason: 'import.opening-stock',
+            count: result.created,
+          });
+        }
+        return { ok: true, ...result };
+      });
+
+      scope.post('/import/contacts', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return {
+          ok: true,
+          ...(await importContacts(
+            local,
+            user.businessId,
+            user.id,
+            user.permissions,
+            request.body ?? {}
+          )),
+        };
       });
 
       // --- Batch 14: staff, role permissions and expenses ---
@@ -1017,10 +1244,145 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
         };
       });
 
+      scope.patch<{ Params: { id: string } }>('/finance/expenses/:id', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return {
+          ok: true,
+          ...(await updateExpense(
+            local,
+            user.businessId,
+            user.id,
+            user.permissions,
+            request.params.id,
+            request.body ?? {}
+          )),
+        };
+      });
+
       scope.delete<{ Params: { id: string } }>('/finance/expenses/:id', async (request) => {
         const { user, db: local } = userIdOf(request);
         await deleteExpense(local, user.businessId, user.id, user.permissions, request.params.id);
         return { ok: true };
+      });
+
+      // --- Cash and bank ledgers, plus restaurant service settings ---
+      scope.get('/accounts', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        const query = queryOf(request.query) as { includeArchived?: unknown };
+        return {
+          ok: true,
+          ...(await listAccounts(local, user.businessId, user.permissions, {
+            includeArchived: Boolean(query.includeArchived),
+          })),
+        };
+      });
+
+      scope.post('/accounts', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return {
+          ok: true,
+          ...(await createAccount(
+            local,
+            user.businessId,
+            user.id,
+            user.permissions,
+            request.body ?? {}
+          )),
+        };
+      });
+
+      scope.get('/accounts/transactions', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return {
+          ok: true,
+          ...(await listAccountTransactions(
+            local,
+            user.businessId,
+            user.permissions,
+            queryOf(request.query)
+          )),
+        };
+      });
+
+      scope.get('/accounts/payment-map', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return { ok: true, map: getPaymentMap(local, user.businessId) };
+      });
+
+      scope.post('/accounts/payment-map', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return {
+          ok: true,
+          ...(await setPaymentMap(
+            local,
+            user.businessId,
+            user.id,
+            user.permissions,
+            request.body ?? {}
+          )),
+        };
+      });
+
+      scope.post('/accounts/transfer', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return {
+          ok: true,
+          ...(await transferBetweenAccounts(
+            local,
+            user.businessId,
+            user.id,
+            user.permissions,
+            request.body ?? {}
+          )),
+        };
+      });
+
+      scope.post('/accounts/adjust', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return {
+          ok: true,
+          ...(await adjustAccount(
+            local,
+            user.businessId,
+            user.id,
+            user.permissions,
+            request.body ?? {}
+          )),
+        };
+      });
+
+      scope.patch<{ Params: { id: string } }>('/accounts/:id', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return {
+          ok: true,
+          ...(await updateAccount(
+            local,
+            user.businessId,
+            user.id,
+            user.permissions,
+            request.params.id,
+            request.body ?? {}
+          )),
+        };
+      });
+
+      scope.get('/restaurant/settings', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return { ok: true, settings: getRestaurantSettings(local, user.businessId) };
+      });
+
+      scope.post('/restaurant/settings', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return {
+          ok: true,
+          ...(await setRestaurantSettings(
+            local,
+            user.businessId,
+            user.id,
+            user.permissions,
+            request.body ?? {}
+          )),
+        };
       });
 
       // --- Batch 8: locations ---
@@ -1160,6 +1522,300 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
           scope.realtime.emit(user.businessId, 'automation.changed', { reason: 'run' });
         }
         return { ok: true, result };
+      });
+
+      // --- Batch 15: business pack (modules, batches, price lists, loyalty,
+      // counter returns, transfers, debtors, encrypted offsite backup).
+      scope.get('/modules', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return { ok: true, ...(await getModuleInstallView(local, user.businessId)) };
+      });
+
+      scope.post('/modules', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return {
+          ok: true,
+          ...(await setModuleInstall(
+            local,
+            user.businessId,
+            user.id,
+            user.permissions,
+            request.body ?? {}
+          )),
+        };
+      });
+
+      scope.get('/batches', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return { ok: true, ...(await listBatches(local, user.businessId, queryOf(request.query))) };
+      });
+
+      scope.post('/batches', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        const result = await createBatchIntake(
+          local,
+          user.businessId,
+          user.id,
+          user.permissions,
+          request.body ?? {}
+        );
+        scope.realtime.emit(user.businessId, 'inventory.changed', { reason: 'batch.intake' });
+        return { ok: true, ...result };
+      });
+
+      scope.get('/batches/expiry-alerts', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        const days = Number((request.query as { days?: string })?.days ?? 60);
+        return {
+          ok: true,
+          items: await listExpiryAlerts(local, user.businessId, Number.isFinite(days) ? days : 60),
+        };
+      });
+
+      scope.get('/price-tiers', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return { ok: true, items: await listPriceTiers(local, user.businessId) };
+      });
+
+      scope.post('/price-tiers', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return {
+          ok: true,
+          ...(await createPriceTier(
+            local,
+            user.businessId,
+            user.id,
+            user.permissions,
+            request.body ?? {}
+          )),
+        };
+      });
+
+      scope.patch<{ Params: { id: string } }>('/price-tiers/:id', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        await updatePriceTier(
+          local,
+          user.businessId,
+          user.id,
+          user.permissions,
+          request.params.id,
+          request.body ?? {}
+        );
+        return { ok: true };
+      });
+
+      scope.delete<{ Params: { id: string } }>('/price-tiers/:id', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        await deletePriceTier(local, user.businessId, user.id, user.permissions, request.params.id);
+        return { ok: true };
+      });
+
+      scope.get<{ Params: { id: string } }>('/price-tiers/:id/prices', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return { ok: true, items: await listTierPrices(local, user.businessId, request.params.id) };
+      });
+
+      scope.put<{ Params: { id: string } }>('/price-tiers/:id/prices', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return {
+          ok: true,
+          ...(await setTierPrices(
+            local,
+            user.businessId,
+            user.id,
+            user.permissions,
+            request.params.id,
+            request.body ?? {}
+          )),
+        };
+      });
+
+      scope.get('/loyalty/settings', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return { ok: true, settings: getLoyaltySettings(local, user.businessId) };
+      });
+
+      scope.post('/loyalty/settings', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return {
+          ok: true,
+          settings: setLoyaltySettings(
+            local,
+            user.businessId,
+            user.id,
+            user.permissions,
+            request.body ?? {}
+          ),
+        };
+      });
+
+      scope.get<{ Params: { id: string } }>('/customers/:id/loyalty', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return {
+          ok: true,
+          ...(await listLoyaltyEntries(local, user.businessId, request.params.id)),
+        };
+      });
+
+      scope.post('/loyalty/adjust', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return {
+          ok: true,
+          ...(await adjustLoyalty(
+            local,
+            user.businessId,
+            user.id,
+            user.permissions,
+            request.body ?? {}
+          )),
+        };
+      });
+
+      scope.get<{ Params: { id: string } }>('/customers/:id/notes', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return {
+          ok: true,
+          items: await listCustomerNotes(local, user.businessId, request.params.id),
+        };
+      });
+
+      scope.post<{ Params: { id: string } }>('/customers/:id/notes', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        const note = await addCustomerNote(
+          local,
+          user.businessId,
+          user.id,
+          user.permissions,
+          request.params.id,
+          request.body ?? {}
+        );
+        return { ok: true, note };
+      });
+
+      scope.get<{ Params: { id: string } }>('/customers/:id/summary', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return {
+          ok: true,
+          summary: await customerVisitSummary(local, user.businessId, request.params.id),
+        };
+      });
+
+      scope.get<{ Querystring: { receipt?: string } }>('/returns/lookup', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        const receipt = typeof request.query.receipt === 'string' ? request.query.receipt : '';
+        if (!receipt.trim()) {
+          const err = new Error('Scan or type a receipt number');
+          (err as NodeJS.ErrnoException).code = 'SALE_NOT_FOUND';
+          throw err;
+        }
+        return {
+          ok: true,
+          sale: await lookupSaleByReceipt(local, user.businessId, user.permissions, receipt),
+        };
+      });
+
+      scope.post('/returns', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        const result = await createSaleReturn(
+          local,
+          user.businessId,
+          user.id,
+          user.permissions,
+          request.body ?? {}
+        );
+        scope.realtime.emit(user.businessId, 'sale.updated', { reason: 'return', id: result.id });
+        return { ok: true, ...result };
+      });
+
+      scope.get('/returns', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        requirePermission(new Set(user.permissions), 'sales.view');
+        return {
+          ok: true,
+          ...(await listSaleReturns(local, user.businessId, queryOf(request.query))),
+        };
+      });
+
+      scope.get('/transfers', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return {
+          ok: true,
+          ...(await listStockTransfers(local, user.businessId, queryOf(request.query))),
+        };
+      });
+
+      scope.post('/transfers', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        const result = await createStockTransfer(
+          local,
+          user.businessId,
+          user.id,
+          user.permissions,
+          request.body ?? {}
+        );
+        scope.realtime.emit(user.businessId, 'inventory.changed', { reason: 'transfer' });
+        return { ok: true, ...result };
+      });
+
+      scope.get('/debtors', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return { ok: true, ...(await listDebtors(local, user.businessId, queryOf(request.query))) };
+      });
+
+      scope.post('/debtors/remind', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        const result = await sendDebtorReminders(
+          local,
+          user.businessId,
+          user.id,
+          user.permissions,
+          request.body ?? {}
+        );
+        scope.realtime.emit(user.businessId, 'automation.changed', { reason: 'debtors' });
+        return { ok: true, result };
+      });
+
+      scope.get('/cloud-backup', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        requirePermission(new Set(user.permissions), 'settings.manage');
+        return {
+          ok: true,
+          settings: cloudBackupView(getCloudBackupSettings(local, user.businessId)),
+        };
+      });
+
+      scope.post('/cloud-backup', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return {
+          ok: true,
+          settings: setCloudBackupSettings(
+            local,
+            user.businessId,
+            user.id,
+            user.permissions,
+            request.body ?? {}
+          ),
+        };
+      });
+
+      scope.post('/cloud-backup/run', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return {
+          ok: true,
+          ...(await runEncryptedCloudBackup(
+            local,
+            user.businessId,
+            user.id,
+            user.permissions,
+            scope.backupsDir
+          )),
+        };
+      });
+
+      scope.get('/cloud-backup/uploads', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        requirePermission(new Set(user.permissions), 'settings.manage');
+        return { ok: true, items: listCloudUploads(local, user.businessId) };
       });
 
       // --- Batch 12: backups. Snapshots live beside the database file on the
