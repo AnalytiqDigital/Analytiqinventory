@@ -187,7 +187,7 @@ export function HelpPage(): JSX.Element {
             </p>
             <p>
               WhatsApp support:{' '}
-              <span className="font-medium">0803 917 1767</span> · Calls:{' '}
+              <span className="font-medium">0813 971 1767</span> · Calls:{' '}
               <span className="font-medium">0812 431 4217</span>. Send a short description of the
               problem and attach the diagnostics below. Support hours: Monday–Saturday, 9:00–18:00
               WAT.
@@ -197,7 +197,7 @@ export function HelpPage(): JSX.Element {
               size="sm"
               onClick={() =>
                 void ipc.openExternal(
-                  'https://wa.me/2348039171767?text=Hi%20AnalytIQ%2C%20I%20need%20help%20with%20the%20app.'
+                  'https://wa.me/2348139711767?text=Hi%20AnalytIQ%2C%20I%20need%20help%20with%20the%20app.'
                 )
               }
             >

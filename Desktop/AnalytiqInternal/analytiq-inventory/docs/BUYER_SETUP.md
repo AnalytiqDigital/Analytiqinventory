@@ -56,6 +56,6 @@ Tell the buyer to send:
 
 Support contacts:
 
-- WhatsApp: 0803 917 1767 (https://wa.me/2348039171767)
+- WhatsApp: 0813 971 1767 (https://wa.me/2348139711767)
 - Calls: 0812 431 4217
 - Hours: Mon–Sat, 9:00–18:00 WAT

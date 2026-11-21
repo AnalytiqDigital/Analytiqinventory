@@ -34,7 +34,7 @@ const organisation = {
   contactPoint: {
     '@type': 'ContactPoint',
     contactType: 'customer support',
-    telephone: '+2348039171767',
+    telephone: '+2348139711767',
     availableLanguage: ['en'],
   },
 };

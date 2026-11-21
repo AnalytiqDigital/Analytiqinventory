@@ -23,7 +23,7 @@ afterEach(() => {
 describe('whatsappUrl', () => {
   it('uses the published support number', () => {
     expect(whatsappUrl()).toBe(`https://wa.me/${SUPPORT_WHATSAPP}`);
-    expect(SUPPORT_WHATSAPP).toBe('2348039171767');
+    expect(SUPPORT_WHATSAPP).toBe('2348139711767');
   });
 
   it('encodes the prefilled message', () => {
