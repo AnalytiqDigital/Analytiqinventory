@@ -1,30 +1,7 @@
-import type { CheckoutInput, LeadInput, LicensePlanId } from '@analytiq/validation';
+import type { CheckoutInput, LeadInput } from '@analytiq/validation';
+import type { OrderView } from './types';
 
-export interface DeliveryAttempt {
-  state: 'sent' | 'failed' | 'skipped';
-  at: string;
-  detail?: string;
-}
-
-export interface DeliveryRecord {
-  email?: DeliveryAttempt;
-  whatsapp?: DeliveryAttempt;
-}
-
-export interface OrderView {
-  reference: string;
-  planId: LicensePlanId;
-  planName: string;
-  business: string;
-  name: string;
-  email: string;
-  amountKobo: number;
-  status: 'pending' | 'paid' | 'failed';
-  licenseKey: string | null;
-  createdAt: string;
-  paidAt: string | null;
-  delivery?: DeliveryRecord | null;
-}
+export type { DeliveryAttempt, DeliveryRecord, OrderView } from './types';
 
 export interface CheckoutResponse {
   order: OrderView;
@@ -42,9 +19,13 @@ export class CheckoutError extends Error {
   }
 }
 
+/**
+ * Blank means the API routes deployed with this site (`/api/...`). Set
+ * NEXT_PUBLIC_API_URL to point the site at a separately hosted cloud API.
+ */
 export function apiUrl(): string {
-  const configured = process.env.NEXT_PUBLIC_API_URL?.trim() || 'http://localhost:3002';
-  return configured.replace(/\/+$/, '');
+  const configured = process.env.NEXT_PUBLIC_API_URL?.trim();
+  return configured ? configured.replace(/\/+$/, '') : '';
 }
 
 interface ErrorBody {

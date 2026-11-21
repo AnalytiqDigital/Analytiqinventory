@@ -190,7 +190,7 @@ export default function CheckoutForm() {
         </div>
         <p className="fine-print">
           Payment is handled by Paystack. AnalytIQ never sees your card details. Your licence works
-          offline and can be moved to another computer later.
+          offline once activated, on one computer at a time.
         </p>
       </aside>
     </div>

@@ -286,6 +286,12 @@ export interface AnalytiqApi {
   licenseActivate: (
     key: string
   ) => Promise<{ ok: boolean; status?: LicenseStatus; error?: string; code?: string }>;
+  licenseDeactivate: () => Promise<{
+    ok: boolean;
+    status?: LicenseStatus;
+    error?: string;
+    code?: string;
+  }>;
 
   // --- Batch 12: update check + safe external links ---
   updateCheck: () => Promise<UpdateCheck>;

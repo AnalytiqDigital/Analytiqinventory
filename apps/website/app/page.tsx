@@ -114,7 +114,7 @@ const alsoIncluded = [
 const setupSteps = [
   'Pay on this site by card, transfer or USSD through Paystack. Your licence key appears on screen straight after payment.',
   'Download the installer and allow it to run. Windows will warn that the publisher is unknown until the installer is signed.',
-  'Install, open the app and paste your key on the licence screen. Activation is offline.',
+  'Install, open the app and paste your key on the licence screen. Activation needs the internet once; after that the app works offline.',
   'Follow the setup wizard, then add products by hand or import a CSV file.',
   'Connect your receipt printer and scanner in Settings, then ring your first sale.',
 ] as const;

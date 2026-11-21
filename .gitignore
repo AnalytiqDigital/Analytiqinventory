@@ -5,6 +5,7 @@ build/
 # Installer assets live in apps/desktop/build (icon + .gitkeep); everything
 # else named "build" is generated output.
 !apps/desktop/build/
+apps/desktop/build/native/
 .turbo/
 out/
 .next/
@@ -19,6 +20,8 @@ next-env.d.ts
 # VM deployment secrets and local backups.
 deploy/oracle-cloud/secrets/
 deploy/oracle-cloud/backups/
+deploy/google-cloud/secrets/
+deploy/google-cloud/backups/
 apps/*/data/*.db
 apps/*/data/*.db-journal
 # Cloud orders hold customer contact details and licence keys.

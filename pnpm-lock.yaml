@@ -221,6 +221,9 @@ importers:
 
   apps/website:
     dependencies:
+      '@analytiq/licensing':
+        specifier: workspace:*
+        version: link:../../packages/licensing
       '@analytiq/validation':
         specifier: workspace:*
         version: link:../../packages/validation

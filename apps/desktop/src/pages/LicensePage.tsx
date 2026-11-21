@@ -38,6 +38,7 @@ export function LicensePage(): JSX.Element {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [key, setKey] = useState('');
   const [busy, setBusy] = useState(false);
+  const [deactivating, setDeactivating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -65,6 +66,25 @@ export function LicensePage(): JSX.Element {
     }
     setStatus(result.status);
     if (result.status.usable) navigate('/', { replace: true });
+  };
+
+  const deactivate = async (): Promise<void> => {
+    if (
+      !window.confirm(
+        'Deactivate this computer? The key can then be activated on another computer. This copy locks until you activate it again.'
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    setDeactivating(true);
+    const result = await ipc.licenseDeactivate();
+    setDeactivating(false);
+    if (!result.ok) {
+      setError(result.error ?? 'Could not deactivate this computer. Check your internet connection.');
+      return;
+    }
+    if (result.status) setStatus(result.status);
   };
 
   const copyInstallId = async (): Promise<void> => {
@@ -165,10 +185,27 @@ export function LicensePage(): JSX.Element {
                       </Button>
                     </dd>
                     <p className="mt-1 text-xs text-slate-500">
-                      Send this id when a key should be locked to this computer.
+                      Support may ask for this installation id.
                     </p>
                   </div>
                 </dl>
+
+                {status.state === 'active' && canActivate ? (
+                  <div className="rounded-xl border border-slate-200 px-4 py-3 dark:border-slate-700">
+                    <p className="text-sm font-semibold">Moving to another computer?</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Deactivate here first — a key works on one computer at a time.
+                    </p>
+                    <Button
+                      variant="secondary"
+                      className="mt-3"
+                      onClick={() => void deactivate()}
+                      disabled={deactivating}
+                    >
+                      {deactivating ? 'Deactivating…' : 'Deactivate this computer'}
+                    </Button>
+                  </div>
+                ) : null}
               </>
             ) : null}
           </CardContent>
@@ -207,8 +244,8 @@ export function LicensePage(): JSX.Element {
                   </Button>
                 </div>
                 <p className="text-xs text-slate-500">
-                  Activation is offline: the key is checked on this computer and never sent
-                  anywhere. Lost the key?{' '}
+                  Activation needs the internet once: the key locks to this computer, then works
+                  offline. The same key will not activate a second computer. Lost the key?{' '}
                   <button
                     type="button"
                     className="font-medium text-brand-600 underline-offset-2 hover:underline"

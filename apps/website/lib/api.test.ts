@@ -110,7 +110,7 @@ describe('fetchOrder', () => {
 
     const order = await fetchOrder('ord with space');
     const calls = fetchMock.mock.calls as unknown as Array<[string, RequestInit]>;
-    expect(calls[0]?.[0]).toBe('http://localhost:3002/api/checkout/ord%20with%20space');
+    expect(calls[0]?.[0]).toBe('/api/checkout/ord%20with%20space');
     expect(order).toEqual(ORDER);
   });
 });
@@ -123,7 +123,7 @@ describe('retrieveKey', () => {
 
     const order = await retrieveKey(' ord_abc123 ', 'ADA@example.com');
     const calls = fetchMock.mock.calls as unknown as Array<[string, RequestInit]>;
-    expect(calls[0]?.[0]).toBe('http://localhost:3002/api/licence/retrieve');
+    expect(calls[0]?.[0]).toBe('/api/licence/retrieve');
     expect(JSON.parse(String(calls[0]?.[1].body))).toEqual({
       reference: ' ord_abc123 ',
       email: 'ADA@example.com',
@@ -165,7 +165,7 @@ describe('submitLead', () => {
     });
 
     const calls = fetchMock.mock.calls as unknown as Array<[string, RequestInit]>;
-    expect(calls[0]?.[0]).toBe('http://localhost:3002/api/leads');
+    expect(calls[0]?.[0]).toBe('/api/leads');
     expect(JSON.parse(String(calls[0]?.[1].body))).toMatchObject({
       kind: 'demo',
       name: 'Ada Obi',

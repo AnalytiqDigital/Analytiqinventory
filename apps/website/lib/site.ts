@@ -6,10 +6,10 @@ export const SUPPORT_HOURS = 'Monday–Saturday, 9:00–18:00 WAT';
 export const COMPANY_SITE = 'https://www.analytiq.ng';
 export const COMPANY_SITE_LABEL = 'www.analytiq.ng';
 export const DOWNLOAD_FALLBACK_PATH = '/download';
-export const INSTALLER_VERSION = '1.2.1';
+export const INSTALLER_VERSION = '1.2.2';
 export const DEFAULT_INSTALLER_URL = `https://github.com/AnalytiqDigital/analytiq-downloads/releases/download/v${INSTALLER_VERSION}/AnalytIQ-Inventory-${INSTALLER_VERSION}-Windows.zip`;
 export const INSTALLER_SHA256 =
-  '33a85106731f2dccd3cc30c55bbc5fbc62a3bdfe6508991bff384c8ebd6067de';
+  '85898c6668142187088e2c9c64f09213b4a39eacf93d45c6fcba18794c7b03ec';
 export const INSTALLER_SIZE_LABEL = '95 MB';
 
 /** Starting anchor for the multi-location cloud version, per location per year. */

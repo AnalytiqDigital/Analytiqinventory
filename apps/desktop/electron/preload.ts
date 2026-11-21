@@ -316,6 +316,8 @@ const api = {
     key: string
   ): Promise<{ ok: boolean; status?: unknown; error?: string; code?: string }> =>
     ipcRenderer.invoke('license:activate', key),
+  licenseDeactivate: (): Promise<{ ok: boolean; status?: unknown; error?: string; code?: string }> =>
+    ipcRenderer.invoke('license:deactivate'),
 
   // --- Batch 12: update check + safe external links ---
   updateCheck: (): Promise<{ ok: boolean; [key: string]: unknown }> =>

@@ -1,7 +1,7 @@
 {
   "name": "@analytiq/desktop",
   "productName": "AnalytIQ Inventory & POS",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "private": true,
   "main": "dist-electron/main.js",
   "scripts": {
@@ -60,6 +60,7 @@
   "build": {
     "appId": "com.analytiq.inventory",
     "productName": "AnalytIQ Inventory & POS",
+    "afterPack": "scripts/after-pack.cjs",
     "directories": {
       "output": "release",
       "buildResources": "build"

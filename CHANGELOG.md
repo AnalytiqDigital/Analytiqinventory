@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.2.2 — 21 November 2026
+
+Fixes the setup crash in the 1.2.1 Windows installer and adds one-key-one-computer
+licensing.
+
+- **Installer fix**: the packaged database driver was built for the Node.js on
+  the build machine instead of the Electron runtime, so completing setup failed
+  with `NODE_MODULE_VERSION 137 … requires 125`. The build now swaps in the
+  Electron 31 prebuild after packaging and smoke-tests it before the installer
+  is written.
+- **One key, one computer**: the first activation records the key against that
+  computer through the website (a Google Sheet keeps the list). The same key is
+  refused on a second computer with "already activated on another computer".
+  This step needs the internet once; afterwards the app works offline.
+- **Deactivate**: Settings → Licence now has **Deactivate this computer**,
+  which releases the binding so the key can move to another PC. If the old PC
+  is gone, support can clear the row in the **AnalytIQ activations** sheet.
+- Keys issued before 1.2.2 have no binding yet, so their first activation in
+  this version becomes their one computer.
+
 ## 1.2.1 — 21 November 2026
 
 Follow-up to the 1.2.0 audit. 1.2.0 remains the tested baseline; this build
