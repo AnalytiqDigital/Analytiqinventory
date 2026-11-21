@@ -221,6 +221,12 @@ img {
   background: #0a4d39;
 }
 
+/* Nav links set their own colour; the header CTA must stay white. */
+.btn.btn-primary,
+.btn.btn-primary:hover {
+  color: #ffffff;
+}
+
 .btn-outline {
   color: #ffffff;
   background: var(--ink);
