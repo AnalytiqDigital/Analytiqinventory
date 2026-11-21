@@ -39,6 +39,10 @@
 - **Sidebar contrast**: menu items, group headings and the app subtitle are
   darker on light backgrounds and brighter in dark mode so the menu is easier
   to read on till screens.
+- **Website 1.2.0**: the hero now shows the refined reports dashboard
+  screenshot instead of the illustrated mock, the download buttons point at
+  the v1.2.0 GitHub release with its SHA-256, and a new Tutorial section holds
+  the walkthrough video frame (a WhatsApp demo link until the video id is set).
 
 ## Unreleased — Batch 16: shop masters, returns, labels and report menu
 

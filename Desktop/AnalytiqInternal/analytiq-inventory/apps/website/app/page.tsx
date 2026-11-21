@@ -11,6 +11,7 @@ import {
   INSTALLER_SIZE_LABEL,
   INSTALLER_VERSION,
   SUPPORT_WHATSAPP_LABEL,
+  TUTORIAL_YOUTUBE_ID,
   downloadUrl,
   whatsappUrl,
 } from '../lib/site';
@@ -21,7 +22,6 @@ export const metadata: Metadata = {
     'Offline-first inventory and point-of-sale software for Windows. Record sales, track stock and print receipts without internet. 14-day free trial.',
 };
 
-const weekBars = [38, 62, 48, 74, 56, 88, 70];
 const reportBars = [30, 52, 44, 68, 40, 82, 58];
 
 const promises = [
@@ -351,55 +351,27 @@ export default function HomePage() {
             </p>
           </div>
 
-          <div className="mock" aria-label="Illustration of the AnalytIQ dashboard">
-            <div className="mock-head">
-              <span className="mock-dots" aria-hidden="true">
+          <figure className="hero-shot" aria-label="The AnalytIQ dashboard">
+            <div className="hero-shot-bar" aria-hidden="true">
+              <span className="mock-dots">
                 <i />
                 <i />
                 <i />
               </span>
-              <span className="mock-title">AnalytIQ POS</span>
-              <span className="mock-live">
-                <i aria-hidden="true" /> Offline mode
-              </span>
+              <span>AnalytIQ — reports dashboard</span>
             </div>
-            <div className="mock-stats">
-              <div>
-                <label>Today&apos;s sales</label>
-                <strong>₦186,450</strong>
-                <span>42 receipts</span>
-              </div>
-              <div>
-                <label>Items in stock</label>
-                <strong>1,284</strong>
-                <span>across 312 products</span>
-              </div>
-              <div>
-                <label>Low stock</label>
-                <strong className="warn">07</strong>
-                <span>needs a reorder</span>
-              </div>
-            </div>
-            <div className="mock-chart">
-              <div className="mock-chart-head">
-                <span>Last 7 days</span>
-                <span>Nov 12 – Nov 18</span>
-              </div>
-              <div className="bars">
-                {weekBars.map((height, index) => (
-                  <span key={index} style={{ height: `${height}%` }} />
-                ))}
-              </div>
-            </div>
-            <div className="mock-receipt">
-              <span className="receipt-check" aria-hidden="true">
-                ✓
-              </span>
-              Receipt #0042 printed
-              <span className="paid-tag">Paid</span>
-            </div>
-            <p className="mock-note">Illustration of the AnalytIQ dashboard. Sample data.</p>
-          </div>
+            <Image
+              src="/app-reports-dashboard.png"
+              alt="AnalytIQ dashboard with tiles for gross sales, gross profit, tax, stock value, low stock and credit"
+              width={2656}
+              height={1643}
+              sizes="(max-width: 1040px) 100vw, 600px"
+              priority
+            />
+            <figcaption>
+              Your dashboard, calculated from your own ledger. Sample data from a fresh shop.
+            </figcaption>
+          </figure>
         </div>
       </section>
 
@@ -697,6 +669,48 @@ export default function HomePage() {
               </ul>
             </article>
           </div>
+        </div>
+      </section>
+
+      <section className="section section-tutorial" id="tutorial">
+        <div className="container">
+          <div className="section-head">
+            <span className="eyebrow">Video tutorial</span>
+            <h2>Watch the app being used, start to finish</h2>
+            <p>
+              Set up the shop, ring a sale, take cash and transfer, print a receipt, make a refund
+              and read the day report — in one walkthrough.
+            </p>
+          </div>
+          <div className="video-frame">
+            {TUTORIAL_YOUTUBE_ID ? (
+              <iframe
+                src={`https://www.youtube-nocookie.com/embed/${TUTORIAL_YOUTUBE_ID}`}
+                title="AnalytIQ Inventory & POS tutorial"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                referrerPolicy="strict-origin-when-cross-origin"
+                allowFullScreen
+                loading="lazy"
+              />
+            ) : (
+              <div className="video-placeholder">
+                <span className="video-play" aria-hidden="true">
+                  ▶
+                </span>
+                <strong>The tutorial video is on its way</strong>
+                <p>
+                  Want a walkthrough now? Book a live demo on WhatsApp and we will screen-share the
+                  app with you.
+                </p>
+                <a className="btn btn-primary" href={demo} target="_blank" rel="noreferrer">
+                  Book a 20-minute demo
+                </a>
+              </div>
+            )}
+          </div>
+          <p className="video-note">
+            Prefer reading? The <a href="/docs/usage">usage guide</a> covers the same steps.
+          </p>
         </div>
       </section>
 

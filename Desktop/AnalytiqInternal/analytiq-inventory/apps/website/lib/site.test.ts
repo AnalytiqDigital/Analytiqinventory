@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   DEFAULT_INSTALLER_URL,
   DOWNLOAD_FALLBACK_PATH,
+  INSTALLER_VERSION,
   SUPPORT_WHATSAPP,
   downloadUrl,
   isInstallerHosted,
@@ -49,7 +50,9 @@ describe('downloadUrl', () => {
   it('defaults to the public GitHub release when no host is configured', () => {
     delete process.env.NEXT_PUBLIC_DOWNLOAD_URL;
     expect(downloadUrl()).toBe(DEFAULT_INSTALLER_URL);
-    expect(DEFAULT_INSTALLER_URL).toContain('analytiq-downloads/releases/download/v1.1.0/');
+    expect(DEFAULT_INSTALLER_URL).toContain(
+      `analytiq-downloads/releases/download/v${INSTALLER_VERSION}/`
+    );
     expect(isInstallerHosted()).toBe(true);
   });
 
