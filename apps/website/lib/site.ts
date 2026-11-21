@@ -16,10 +16,7 @@ export const INSTALLER_SIZE_LABEL = '95 MB';
 export const TUTORIAL_YOUTUBE_ID = '';
 
 export function whatsappUrl(message?: string): string {
-  const configured = process.env.NEXT_PUBLIC_WHATSAPP?.trim();
-  const digits = (configured ?? '').replace(/\D/g, '');
-  const number = digits.length > 0 ? digits : SUPPORT_WHATSAPP;
-  const base = `https://wa.me/${number}`;
+  const base = `https://wa.me/${SUPPORT_WHATSAPP}`;
   const text = message?.trim();
   return text ? `${base}?text=${encodeURIComponent(text)}` : base;
 }
