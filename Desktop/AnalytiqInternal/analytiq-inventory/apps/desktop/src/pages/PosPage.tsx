@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Banknote,
   CheckCircle2,
@@ -27,7 +27,7 @@ import { RequirePermission } from '../components/RequirePermission';
 import { hasModule } from '../components/layout/nav';
 import { ipc } from '../lib/ipc';
 import { formatKobo, parseNairaToKobo } from '../lib/money';
-import { printSale } from '../lib/printing';
+import { printKitchenTicket, printSale } from '../lib/printing';
 import { useBarcodeScanner } from '../lib/use-barcode-scanner';
 import { cn } from '../lib/cn';
 import { ProductThumb } from '../lib/product-media';
@@ -44,6 +44,17 @@ import type {
 } from '../types/global';
 
 type PaymentMethod = 'cash' | 'transfer' | 'pos' | 'credit';
+type OrderType = 'dine_in' | 'takeaway' | 'delivery';
+
+const ORDER_TYPES: OrderType[] = ['dine_in', 'takeaway', 'delivery'];
+
+/** Five rows of five tiles per page on a full-size till screen. */
+const PRODUCT_PAGE_SIZE = 25;
+const ORDER_TYPE_LABELS: Record<OrderType, string> = {
+  dine_in: 'Dine-in',
+  takeaway: 'Takeaway',
+  delivery: 'Delivery',
+};
 
 interface CartLine {
   product: ProductRow;
@@ -93,6 +104,7 @@ export function PosPage(): JSX.Element {
   const [search, setSearch] = useState('');
   const [debounced, setDebounced] = useState('');
   const [categoryId, setCategoryId] = useState('');
+  const [productPage, setProductPage] = useState(1);
   const [cart, setCart] = useState<CartLine[]>([]);
   const [headerDiscount, setHeaderDiscount] = useState('0.00');
   const [tenderOpen, setTenderOpen] = useState(false);
@@ -103,6 +115,11 @@ export function PosPage(): JSX.Element {
   const [receiptNotice, setReceiptNotice] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [tableId, setTableId] = useState<string>('');
+  const [orderType, setOrderType] = useState<OrderType>('takeaway');
+  const [waiterName, setWaiterName] = useState('');
+  const [serviceChargePct, setServiceChargePct] = useState('');
+  const [serviceChargeTouched, setServiceChargeTouched] = useState(false);
+  const [tipInput, setTipInput] = useState('0.00');
   const [customerId, setCustomerId] = useState<string>('');
   const [redeemPoints, setRedeemPoints] = useState('');
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
@@ -112,6 +129,7 @@ export function PosPage(): JSX.Element {
   const customersEnabled = hasModule(businessType, 'customers', sessionUser?.modules);
   const priceTiersEnabled = hasModule(businessType, 'priceTiers', sessionUser?.modules);
   const loyaltyEnabled = hasModule(businessType, 'loyalty', sessionUser?.modules);
+  const restaurantEnabled = hasModule(businessType, 'tables', sessionUser?.modules);
   const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -154,20 +172,34 @@ export function PosPage(): JSX.Element {
     },
   });
 
+  useEffect(() => {
+    setProductPage(1);
+  }, [debounced, categoryId]);
+
   const productsQuery = useQuery({
-    queryKey: ['pos-products', debounced, categoryId],
+    queryKey: ['pos-products', debounced, categoryId, productPage],
+    placeholderData: keepPreviousData,
     queryFn: async () => {
       const res = await ipc.products({
         search: debounced,
         categoryId: categoryId || null,
         includeInactive: false,
-        page: 1,
-        pageSize: 60,
+        page: productPage,
+        pageSize: PRODUCT_PAGE_SIZE,
       });
       if (!res.ok) throw new Error(res.error ?? 'Could not load products');
       return res as { items: ProductRow[]; total: number };
     },
   });
+
+  const productTotal = productsQuery.data?.total ?? 0;
+  const productPages = Math.max(1, Math.ceil(productTotal / PRODUCT_PAGE_SIZE));
+  const firstOnPage = productTotal === 0 ? 0 : (productPage - 1) * PRODUCT_PAGE_SIZE + 1;
+  const lastOnPage = Math.min(productPage * PRODUCT_PAGE_SIZE, productTotal);
+
+  useEffect(() => {
+    if (productsQuery.data && productPage > productPages) setProductPage(productPages);
+  }, [productsQuery.data, productPage, productPages]);
 
   const tablesQuery = useQuery({
     queryKey: ['pos-tables'],
@@ -217,6 +249,25 @@ export function PosPage(): JSX.Element {
       return res.settings ?? null;
     },
   });
+
+  const restaurantSettingsQuery = useQuery({
+    queryKey: ['restaurant-settings'],
+    enabled: restaurantEnabled,
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const res = await ipc.restaurantSettings();
+      if (!res.ok) throw new Error(res.error ?? 'Could not load restaurant settings');
+      return (res.settings ?? null) as { serviceChargeBp?: number } | null;
+    },
+  });
+
+  // Seed the service charge percentage from settings, but never overwrite what
+  // the cashier typed.
+  useEffect(() => {
+    if (!restaurantEnabled || serviceChargeTouched) return;
+    const bp = restaurantSettingsQuery.data?.serviceChargeBp ?? 0;
+    setServiceChargePct((bp / 100).toFixed(2).replace(/\.?0+$/, ''));
+  }, [restaurantEnabled, restaurantSettingsQuery.data, serviceChargeTouched]);
 
   const loyaltyBalanceQuery = useQuery({
     queryKey: ['pos-loyalty-balance', customerId],
@@ -278,6 +329,9 @@ export function PosPage(): JSX.Element {
     }, 0);
     const taxable = netSubtotal - header;
     const beforeLoyalty = taxable + taxEstimate;
+    const pct = restaurantEnabled ? Math.max(0, Math.min(100, Number(serviceChargePct) || 0)) : 0;
+    const serviceCharge = Math.round((taxable * Math.round(pct * 100)) / 10000);
+    const tip = restaurantEnabled ? (parseNairaToKobo(tipInput) ?? 0) : 0;
     const loyalty = loyaltyEnabled ? loyaltySettingsQuery.data : null;
     const pointValue = loyalty?.enabled ? loyalty.pointValueKobo : 0;
     const requested = Math.max(0, Math.floor(Number.parseInt(redeemPoints || '0', 10) || 0));
@@ -291,9 +345,11 @@ export function PosPage(): JSX.Element {
       header,
       taxEstimate,
       beforeLoyalty,
+      serviceCharge,
+      tip,
       pointsUsed,
       loyaltyDiscount,
-      total: beforeLoyalty - loyaltyDiscount,
+      total: beforeLoyalty + serviceCharge + tip - loyaltyDiscount,
     };
   }, [
     cart,
@@ -303,6 +359,9 @@ export function PosPage(): JSX.Element {
     loyaltySettingsQuery.data,
     loyaltyBalanceQuery.data,
     redeemPoints,
+    restaurantEnabled,
+    serviceChargePct,
+    tipInput,
   ]);
 
   const paidTotal = payments.reduce((s, p) => s + p.amountKobo, 0);
@@ -372,6 +431,10 @@ export function PosPage(): JSX.Element {
         tableId: tableId === '' ? null : tableId,
         customerId: customerId === '' ? null : customerId,
         redeemPoints: totals.pointsUsed,
+        orderType: restaurantEnabled ? orderType : 'takeaway',
+        waiterName: restaurantEnabled ? waiterName.trim() : '',
+        serviceChargeKobo: totals.serviceCharge,
+        tipKobo: totals.tip,
         payments: payments.map((p) => ({
           method: p.method,
           amountKobo: p.amountKobo,
@@ -389,6 +452,9 @@ export function PosPage(): JSX.Element {
       setRedeemPoints('');
       setHeaderDiscount('0.00');
       setPayments([{ method: 'cash', amountKobo: 0, reference: '' }]);
+      setWaiterName('');
+      setTipInput('0.00');
+      setServiceChargeTouched(false);
       setError(null);
       setReceiptNotice(null);
       await queryClient.invalidateQueries({ queryKey: ['pos-products'] });
@@ -406,6 +472,12 @@ export function PosPage(): JSX.Element {
             const outcome = await printSale(sale, businessQuery.data ?? null);
             if (!outcome.ok) {
               setReceiptNotice(outcome.error ?? 'Could not print the receipt');
+            }
+          }
+          if (usePrinter.getState().kitchenTicket) {
+            const ticket = await printKitchenTicket(sale);
+            if (!ticket.ok) {
+              setReceiptNotice(ticket.error ?? 'Could not print the kitchen ticket');
             }
           }
         }
@@ -634,7 +706,7 @@ export function PosPage(): JSX.Element {
                 hint="Try a different search, or add the product first."
               />
             ) : null}
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 2xl:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 xl:grid-rows-5">
               {productsQuery.data?.items.map((p) => {
                 const inCart = cart.find((l) => l.product.id === p.id)?.qty ?? 0;
                 const out = p.onHand <= 0;
@@ -677,6 +749,59 @@ export function PosPage(): JSX.Element {
                 );
               })}
             </div>
+            {productTotal > 0 ? (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm shadow-card dark:border-slate-700 dark:bg-slate-900">
+                <span className="text-slate-600 dark:text-slate-300">
+                  Showing {firstOnPage}–{lastOnPage} of {productTotal}
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setProductPage((p) => Math.max(1, p - 1))}
+                    disabled={productPage <= 1}
+                  >
+                    Previous
+                  </Button>
+                  {Array.from({ length: productPages }, (_, i) => i + 1)
+                    .filter(
+                      (p) =>
+                        p === 1 ||
+                        p === productPages ||
+                        Math.abs(p - productPage) <= 1
+                    )
+                    .map((p, index, shown) => (
+                      <span key={p} className="flex items-center gap-2">
+                        {index > 0 && p - shown[index - 1]! > 1 ? (
+                          <span className="text-slate-400">…</span>
+                        ) : null}
+                        <button
+                          type="button"
+                          onClick={() => setProductPage(p)}
+                          aria-label={`Page ${p}`}
+                          aria-current={p === productPage ? 'page' : undefined}
+                          className={cn(
+                            'h-8 min-w-8 rounded-lg px-2 text-sm font-semibold tabular-nums transition-colors',
+                            p === productPage
+                              ? 'bg-brand-600 text-white shadow-sm'
+                              : 'text-slate-600 hover:bg-brand-50 dark:text-slate-300 dark:hover:bg-slate-800'
+                          )}
+                        >
+                          {p}
+                        </button>
+                      </span>
+                    ))}
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setProductPage((p) => Math.min(productPages, p + 1))}
+                    disabled={productPage >= productPages}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            ) : null}
           </div>
 
           {/* Sticky cart */}
@@ -766,6 +891,53 @@ export function PosPage(): JSX.Element {
                 </ul>
               )}
               {error ? <p className="text-sm font-medium text-red-600">{error}</p> : null}
+              {restaurantEnabled ? (
+                <div className="space-y-2 rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                  <div className="flex flex-wrap gap-1.5">
+                    {ORDER_TYPES.map((t) => (
+                      <Button
+                        key={t}
+                        size="sm"
+                        variant={orderType === t ? 'primary' : 'secondary'}
+                        onClick={() => setOrderType(t)}
+                      >
+                        {ORDER_TYPE_LABELS[t]}
+                      </Button>
+                    ))}
+                  </div>
+                  <Input
+                    aria-label="Waiter name"
+                    placeholder="Waiter name (optional)"
+                    value={waiterName}
+                    maxLength={60}
+                    onChange={(e) => setWaiterName(e.target.value)}
+                    className="h-9"
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                      Service charge %
+                      <Input
+                        inputMode="decimal"
+                        value={serviceChargePct}
+                        onChange={(e) => {
+                          setServiceChargeTouched(true);
+                          setServiceChargePct(e.target.value.replace(/[^0-9.]/g, ''));
+                        }}
+                        className="mt-1 h-9 text-right tabular-nums"
+                      />
+                    </label>
+                    <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                      Tip (₦)
+                      <Input
+                        inputMode="decimal"
+                        value={tipInput}
+                        onChange={(e) => setTipInput(e.target.value)}
+                        className="mt-1 h-9 text-right tabular-nums"
+                      />
+                    </label>
+                  </div>
+                </div>
+              ) : null}
               <div className="space-y-1.5 border-t border-dashed border-slate-200 pt-3 text-sm dark:border-slate-700">
                 <div className="flex justify-between text-slate-600 dark:text-slate-300">
                   <span>Subtotal</span>
@@ -791,6 +963,18 @@ export function PosPage(): JSX.Element {
                   <span>Tax (est.)</span>
                   <span className="tabular-nums">{formatKobo(totals.taxEstimate)}</span>
                 </div>
+                {totals.serviceCharge > 0 ? (
+                  <div className="flex justify-between text-slate-600 dark:text-slate-300">
+                    <span>Service charge</span>
+                    <span className="tabular-nums">{formatKobo(totals.serviceCharge)}</span>
+                  </div>
+                ) : null}
+                {totals.tip > 0 ? (
+                  <div className="flex justify-between text-slate-600 dark:text-slate-300">
+                    <span>Tip</span>
+                    <span className="tabular-nums">{formatKobo(totals.tip)}</span>
+                  </div>
+                ) : null}
                 {totals.loyaltyDiscount > 0 ? (
                   <div className="flex justify-between text-amber-700 dark:text-amber-400">
                     <span>Loyalty points ({totals.pointsUsed})</span>
@@ -1081,6 +1265,12 @@ function ReceiptView({
           {sale.cashierName ? ` · ${sale.cashierName}` : ''}
         </p>
         {sale.tableName ? <p className="text-center font-bold">{sale.tableName}</p> : null}
+        {sale.orderType && sale.orderType !== 'takeaway' ? (
+          <p className="text-center">
+            {ORDER_TYPE_LABELS[sale.orderType as OrderType] ?? sale.orderType}
+          </p>
+        ) : null}
+        {sale.waiterName ? <p className="text-center">Waiter: {sale.waiterName}</p> : null}
         <table className="w-full">
           <tbody>
             {sale.items.map((i) => (
@@ -1120,6 +1310,18 @@ function ReceiptView({
               <td>Tax</td>
               <td className="text-right">{formatKobo(sale.taxKobo)}</td>
             </tr>
+            {sale.serviceChargeKobo > 0 && (
+              <tr>
+                <td>Service charge</td>
+                <td className="text-right">{formatKobo(sale.serviceChargeKobo)}</td>
+              </tr>
+            )}
+            {sale.tipKobo > 0 && (
+              <tr>
+                <td>Tip</td>
+                <td className="text-right">{formatKobo(sale.tipKobo)}</td>
+              </tr>
+            )}
             <tr>
               <td>
                 <strong>Total</strong>

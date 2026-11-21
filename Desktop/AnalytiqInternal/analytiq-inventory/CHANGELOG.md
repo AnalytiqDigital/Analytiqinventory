@@ -1,5 +1,45 @@
 # Changelog
 
+## Unreleased — Batch 17: cash & bank ledgers and restaurant service flow
+
+- **Cash & Bank** (`/accounts`, Finance): create cash drawer, bank, POS and
+  mobile-money accounts with an opening balance. Each account shows its live
+  balance, can be renamed, made default or archived (only at zero balance).
+  A **Move money** dialog transfers between accounts with a paired
+  `transfer_out`/`transfer_in` entry, and **Adjust** records a signed float
+  top-up or withdrawal with a reason. Every write is audited and blocked from
+  taking an account overdrawn (`ACCOUNT_INSUFFICIENT`).
+- **Automatic posting**: sales, refunds, voids, expenses and customer payments
+  now post to an account inside the same SQLite transaction, so the ledger and
+  the books can never disagree. Cash tenders post net of change; credit tenders
+  post nothing until the customer pays. Expenses gain a "Paid from" account
+  (edits reverse the old posting and repost), and deleting an expense reverses
+  it. The ledger screen lists every movement with in/out totals.
+- **Payment mapping**: the Cash & Bank screen lets a business pin each tender
+  (cash, bank transfer, POS) to a specific account instead of the default by
+  account type.
+- **Restaurant service flow** (POS, when Tables is installed): order type
+  (dine-in / takeaway / delivery), waiter name, service charge percentage and
+  tip. The service charge pre-fills from Settings → Restaurant service charge
+  and is computed on the net bill after discounts; service charge and tip are
+  stored on the sale and shown on the receipt and sale detail.
+- **Kitchen order tickets**: a new toggle prints a price-free kitchen ticket
+  (receipt number, time, order type, table, waiter, quantity × item) after each
+  sale, optionally on a separate kitchen printer.
+- **REST parity**: `/api/accounts`, `/api/accounts/transactions`,
+  `/api/accounts/payment-map`, `/api/accounts/transfer`, `/api/accounts/adjust`
+  and `/api/restaurant/settings` are served by the LAN server and mapped in the
+  desktop LAN client, so a client till behaves like the primary machine.
+- **Modules**: `accounts` is a new optional module, on by default for every
+  business type; it can be switched off in Install Modules.
+- **POS product grid**: the sell screen now shows a fixed five-by-five grid
+  (25 tiles) at full width with Previous / numbered / Next paging and a
+  "Showing X–Y of N" count. Search and category changes return to page 1, and
+  the previous page stays visible while the next one loads.
+- **Sidebar contrast**: menu items, group headings and the app subtitle are
+  darker on light backgrounds and brighter in dark mode so the menu is easier
+  to read on till screens.
+
 ## Unreleased — Batch 16: shop masters, returns, labels and report menu
 
 - **Grouped, collapsible sidebar**: the menu now mirrors the reference ERP with

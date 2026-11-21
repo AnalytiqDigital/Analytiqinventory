@@ -249,6 +249,28 @@ function fallbackApi(): AnalytiqApi {
     cloudBackupRun: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
     cloudBackupUploads: () =>
       Promise.resolve({ ok: false, items: [], error: 'Unavailable in browser preview' }),
+    accounts: () =>
+      Promise.resolve({ ok: false, items: [], totalKobo: 0, error: 'Unavailable in browser preview' }),
+    accountCreate: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    accountUpdate: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    accountTransfer: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    accountAdjust: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    accountTransactions: () =>
+      Promise.resolve({
+        ok: false,
+        items: [],
+        moneyInKobo: 0,
+        moneyOutKobo: 0,
+        error: 'Unavailable in browser preview',
+      }),
+    accountPaymentMap: () =>
+      Promise.resolve({ ok: false, map: {}, error: 'Unavailable in browser preview' }),
+    accountPaymentMapSet: () =>
+      Promise.resolve({ ok: false, map: {}, error: 'Unavailable in browser preview' }),
+    restaurantSettings: () =>
+      Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    restaurantSettingsSet: () =>
+      Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
   };
 }
 

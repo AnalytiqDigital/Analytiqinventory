@@ -8,6 +8,7 @@ import {
   CalendarClock,
   CircleHelp,
   ClipboardList,
+  Landmark,
   LayoutDashboard,
   Package,
   Percent,
@@ -215,6 +216,14 @@ export const NAV_ITEMS: NavItem[] = [
     group: 'Finance',
     permission: 'finance.manage',
     module: 'expenses',
+  },
+  {
+    to: '/accounts',
+    label: 'Cash & Bank',
+    icon: Landmark,
+    group: 'Finance',
+    permission: 'finance.manage',
+    module: 'accounts',
   },
   {
     to: '/staff',

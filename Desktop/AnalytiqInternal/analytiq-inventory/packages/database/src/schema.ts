@@ -436,6 +436,11 @@ export const sales = sqliteTable(
     totalKobo: integer('total_kobo').notNull().default(0),
     amountPaidKobo: integer('amount_paid_kobo').notNull().default(0),
     changeKobo: integer('change_kobo').notNull().default(0),
+    /** Service flow: dine_in | takeaway | delivery. */
+    orderType: text('order_type').notNull().default('takeaway'),
+    waiterName: text('waiter_name').notNull().default(''),
+    serviceChargeKobo: integer('service_charge_kobo').notNull().default(0),
+    tipKobo: integer('tip_kobo').notNull().default(0),
     tableId: text('table_id').references(() => diningTables.id),
     customerId: text('customer_id').references(() => customers.id),
     loyaltyPointsRedeemed: integer('loyalty_points_redeemed').notNull().default(0),
@@ -763,6 +768,8 @@ export const expenses = sqliteTable(
     amountKobo: integer('amount_kobo').notNull(),
     paidAt: integer('paid_at', { mode: 'timestamp' }).notNull(),
     createdBy: text('created_by'),
+    /** Cash/bank account the expense was paid from; null = business cash default. */
+    accountId: text('account_id'),
     version: integer('version').notNull().default(1),
     ...timestamps(),
   },
@@ -1157,3 +1164,67 @@ export const purchaseReturnItems = sqliteTable(
 );
 
 export type PurchaseReturnItem = typeof purchaseReturnItems.$inferSelect;
+
+// --- Batch 17: cash & bank accounts -----------------------------------------
+// Every movement of money lands in one account ledger, so the shop can see
+// what is physically in the drawer, the bank and the POS settlement account.
+
+export const accounts = sqliteTable(
+  'accounts',
+  {
+    id: text('id').primaryKey(),
+    businessId: text('business_id')
+      .notNull()
+      .references(() => businesses.id),
+    name: text('name').notNull(),
+    /** cash | bank | pos | mobile */
+    kind: text('kind').notNull(),
+    openingBalanceKobo: integer('opening_balance_kobo').notNull().default(0),
+    isDefault: integer('is_default').notNull().default(0),
+    archived: integer('archived').notNull().default(0),
+    version: integer('version').notNull().default(1),
+    ...timestamps(),
+  },
+  (t) => ({
+    accountsBusinessNameUnique: uniqueIndex('accounts_business_name_unique').on(
+      t.businessId,
+      t.name
+    ),
+    accountsBusinessIdx: index('accounts_business_idx').on(t.businessId),
+  })
+);
+
+export type Account = typeof accounts.$inferSelect;
+
+export const accountTransactions = sqliteTable(
+  'account_transactions',
+  {
+    id: text('id').primaryKey(),
+    businessId: text('business_id')
+      .notNull()
+      .references(() => businesses.id),
+    accountId: text('account_id')
+      .notNull()
+      .references(() => accounts.id),
+    /** sale | refund | expense | expense_reversal | customer_payment |
+     *  transfer_in | transfer_out | adjustment | sale_void */
+    kind: text('kind').notNull(),
+    /** Signed: positive money in, negative money out. */
+    amountKobo: integer('amount_kobo').notNull(),
+    reference: text('reference').notNull().default(''),
+    note: text('note').notNull().default(''),
+    /** sale | refund | expense | customer_payment | transfer | manual */
+    source: text('source').notNull().default(''),
+    sourceId: text('source_id'),
+    userId: text('user_id'),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  },
+  (t) => ({
+    accountTxAccountIdx: index('account_tx_account_created_idx').on(t.accountId, t.createdAt),
+    accountTxBusinessIdx: index('account_tx_business_created_idx').on(t.businessId, t.createdAt),
+    accountTxSourceIdx: index('account_tx_source_idx').on(t.source, t.sourceId),
+  })
+);
+
+export type AccountTransaction = typeof accountTransactions.$inferSelect;
+

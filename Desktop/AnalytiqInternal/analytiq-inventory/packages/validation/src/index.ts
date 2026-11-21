@@ -213,6 +213,16 @@ export type MovementsQuery = z.infer<typeof movementsQuerySchema>;
 export const PAYMENT_METHODS = ['cash', 'transfer', 'pos', 'credit'] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
+/** Restaurant service flow. takeaway is the default for any shop till. */
+export const ORDER_TYPES = ['dine_in', 'takeaway', 'delivery'] as const;
+export type OrderType = (typeof ORDER_TYPES)[number];
+
+export const ORDER_TYPE_LABELS: Record<OrderType, string> = {
+  dine_in: 'Dine in',
+  takeaway: 'Takeaway',
+  delivery: 'Delivery',
+};
+
 export const saleItemInputSchema = z.object({
   productId: z.string().trim().min(1, 'Product is required'),
   qty: z.coerce.number().int().min(1, 'Quantity must be at least 1').max(1_000_000),
@@ -238,6 +248,12 @@ export const saleCreateSchema = z.object({
   payments: z.array(salePaymentInputSchema).min(1, 'Add at least one payment').max(10),
   tableId: z.string().trim().min(1).nullish(),
   customerId: z.string().trim().min(1).nullish(),
+  /** Restaurant service flow: dine-in, takeaway or delivery. */
+  orderType: z.enum(ORDER_TYPES).default('takeaway'),
+  waiterName: z.string().trim().max(60).default(''),
+  /** Service charge is added after tax and is not itself taxed. */
+  serviceChargeKobo: koboAmountSchema.max(MAX_KOBO).default(0),
+  tipKobo: koboAmountSchema.max(MAX_KOBO).default(0),
   /** Loyalty points the cashier chose to redeem on this sale. */
   redeemPoints: z.coerce.number().int().min(0).max(10_000_000).default(0),
   /**
@@ -327,6 +343,7 @@ export const CORE_MODULES = ['pos', 'products', 'inventory', 'reports'] as const
 /** Optional modules that a business type can switch on. */
 export const OPTIONAL_MODULES = [
   'tables',
+  'accounts',
   'taxCategories',
   'purchases',
   'suppliers',
@@ -349,6 +366,7 @@ export type AppModule = (typeof CORE_MODULES)[number] | OptionalModule;
  */
 const DEFAULT_MODULES: Record<BusinessType, OptionalModule[]> = {
   retail: [
+    'accounts',
     'taxCategories',
     'purchases',
     'suppliers',
@@ -361,6 +379,7 @@ const DEFAULT_MODULES: Record<BusinessType, OptionalModule[]> = {
     'transfers',
   ],
   supermarket: [
+    'accounts',
     'taxCategories',
     'purchases',
     'suppliers',
@@ -374,6 +393,7 @@ const DEFAULT_MODULES: Record<BusinessType, OptionalModule[]> = {
     'transfers',
   ],
   wholesale: [
+    'accounts',
     'taxCategories',
     'purchases',
     'suppliers',
@@ -388,6 +408,7 @@ const DEFAULT_MODULES: Record<BusinessType, OptionalModule[]> = {
   ],
   restaurant: [
     'tables',
+    'accounts',
     'taxCategories',
     'purchases',
     'suppliers',
@@ -399,6 +420,7 @@ const DEFAULT_MODULES: Record<BusinessType, OptionalModule[]> = {
   ],
   bar: [
     'tables',
+    'accounts',
     'taxCategories',
     'purchases',
     'suppliers',
@@ -409,6 +431,7 @@ const DEFAULT_MODULES: Record<BusinessType, OptionalModule[]> = {
     'returns',
   ],
   pharmacy: [
+    'accounts',
     'taxCategories',
     'purchases',
     'suppliers',
@@ -421,6 +444,7 @@ const DEFAULT_MODULES: Record<BusinessType, OptionalModule[]> = {
     'transfers',
   ],
   electronics: [
+    'accounts',
     'taxCategories',
     'purchases',
     'suppliers',
@@ -433,6 +457,7 @@ const DEFAULT_MODULES: Record<BusinessType, OptionalModule[]> = {
     'transfers',
   ],
   boutique: [
+    'accounts',
     'taxCategories',
     'purchases',
     'suppliers',
@@ -444,6 +469,7 @@ const DEFAULT_MODULES: Record<BusinessType, OptionalModule[]> = {
     'transfers',
   ],
   services: [
+    'accounts',
     'taxCategories',
     'purchases',
     'customers',
@@ -453,6 +479,7 @@ const DEFAULT_MODULES: Record<BusinessType, OptionalModule[]> = {
     'returns',
   ],
   other: [
+    'accounts',
     'taxCategories',
     'purchases',
     'suppliers',
@@ -602,6 +629,8 @@ export const customerPaymentSchema = z.object({
   amountKobo: z.number().int().min(1, 'Amount must be greater than zero').max(1_000_000_000_00),
   method: z.enum(['cash', 'transfer', 'pos']).default('cash'),
   reference: z.string().trim().max(120).default(''),
+  /** Cash/bank account to credit; defaults to the account mapped for the method. */
+  accountId: z.string().trim().min(1).nullish(),
 });
 
 export type CustomerPaymentInput = z.infer<typeof customerPaymentSchema>;
@@ -1032,6 +1061,7 @@ export const expenseCreateSchema = z.object({
   amountKobo: z.number().int().positive('Enter an amount above zero'),
   paidAt: z.coerce.date().optional(),
   locationId: z.string().trim().min(1).nullish(),
+  accountId: z.string().trim().min(1).nullish(),
 });
 
 export type ExpenseCreateInput = z.infer<typeof expenseCreateSchema>;
@@ -1043,6 +1073,7 @@ export const expenseUpdateSchema = z
     amountKobo: z.number().int().positive('Enter an amount above zero').optional(),
     paidAt: z.coerce.date().optional(),
     locationId: z.string().trim().min(1).nullish(),
+    accountId: z.string().trim().min(1).nullish(),
   })
   .refine((value) => Object.values(value).some((v) => v !== undefined), 'Nothing to update');
 
@@ -1221,3 +1252,85 @@ export const moduleOverridesSchema = z.object({
 });
 
 export type ModuleOverridesInput = z.infer<typeof moduleOverridesSchema>;
+
+// --- Batch 17: cash & bank accounts + restaurant service flow --------------
+
+export const ACCOUNT_KINDS = ['cash', 'bank', 'pos', 'mobile'] as const;
+export type AccountKind = (typeof ACCOUNT_KINDS)[number];
+
+export const ACCOUNT_KIND_LABELS: Record<AccountKind, string> = {
+  cash: 'Cash drawer',
+  bank: 'Bank account',
+  pos: 'POS terminal',
+  mobile: 'Mobile money',
+};
+
+export const accountSchema = z.object({
+  name: z.string().trim().min(1, 'Account name is required').max(80),
+  kind: z.enum(ACCOUNT_KINDS),
+  openingBalanceKobo: z.coerce.number().int().min(0).max(MAX_KOBO).default(0),
+  isDefault: z.coerce.boolean().default(false),
+});
+
+export type AccountInput = z.infer<typeof accountSchema>;
+
+export const accountUpdateSchema = z
+  .object({
+    name: z.string().trim().min(1, 'Account name is required').max(80).optional(),
+    kind: z.enum(ACCOUNT_KINDS).optional(),
+    openingBalanceKobo: z.coerce.number().int().min(0).max(MAX_KOBO).optional(),
+    isDefault: z.coerce.boolean().optional(),
+    archived: z.coerce.boolean().optional(),
+  })
+  .refine((value) => Object.values(value).some((v) => v !== undefined), 'Nothing to update');
+
+export type AccountUpdateInput = z.infer<typeof accountUpdateSchema>;
+
+export const accountTransferSchema = z
+  .object({
+    fromAccountId: z.string().trim().min(1, 'Choose the account money leaves'),
+    toAccountId: z.string().trim().min(1, 'Choose the account money enters'),
+    amountKobo: z.number().int().positive('Enter an amount above zero').max(MAX_KOBO),
+    note: z.string().trim().max(300).default(''),
+  })
+  .refine((value) => value.fromAccountId !== value.toAccountId, 'Choose two different accounts');
+
+export type AccountTransferInput = z.infer<typeof accountTransferSchema>;
+
+export const accountAdjustSchema = z.object({
+  accountId: z.string().trim().min(1),
+  /** Positive = money in, negative = money out. */
+  amountKobo: z
+    .number()
+    .int()
+    .refine((value) => value !== 0, 'Enter an amount above zero')
+    .refine((value) => Math.abs(value) <= MAX_KOBO, 'Amount is too large'),
+  note: z.string().trim().min(3, 'Say what moved the money').max(300),
+});
+
+export type AccountAdjustInput = z.infer<typeof accountAdjustSchema>;
+
+export const accountTransactionsQuerySchema = z.object({
+  accountId: z.string().trim().min(1).nullish(),
+  from: z.coerce.date().optional(),
+  to: z.coerce.date().optional(),
+  limit: z.coerce.number().int().min(1).max(500).default(100),
+});
+
+export type AccountTransactionsQuery = z.infer<typeof accountTransactionsQuerySchema>;
+
+export const accountPaymentMapSchema = z.object({
+  cash: z.string().trim().min(1).nullish(),
+  transfer: z.string().trim().min(1).nullish(),
+  pos: z.string().trim().min(1).nullish(),
+});
+
+export type AccountPaymentMapInput = z.infer<typeof accountPaymentMapSchema>;
+
+export const restaurantSettingsSchema = z.object({
+  /** Default service charge in basis points of the net bill (0–50%). */
+  serviceChargeBp: z.coerce.number().int().min(0).max(5000).default(0),
+});
+
+export type RestaurantSettingsInput = z.infer<typeof restaurantSettingsSchema>;
+

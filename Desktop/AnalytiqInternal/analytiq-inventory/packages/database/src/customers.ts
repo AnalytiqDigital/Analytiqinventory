@@ -21,6 +21,7 @@ import { newId } from './auth';
 import type { LocalDb } from './connection';
 import { requirePermission } from './permissions';
 import { writeAuditSync } from './service';
+import { postCustomerPaymentSync } from './accounts';
 import { customerGroups, customerPayments, customers, priceTiers, sales } from './schema';
 
 function codedError(message: string, code: string): Error {
@@ -388,29 +389,42 @@ export async function recordCustomerPayment(
   }
 
   const id = newId('cp');
-  local.db
-    .insert(customerPayments)
-    .values({
-      id,
-      businessId,
-      customerId: input.customerId,
-      saleId: input.saleId ?? null,
+  const write = local.raw.transaction(() => {
+    local.db
+      .insert(customerPayments)
+      .values({
+        id,
+        businessId,
+        customerId: input.customerId,
+        saleId: input.saleId ?? null,
+        amountKobo: input.amountKobo,
+        method: input.method,
+        reference: input.reference,
+        userId,
+        createdAt: new Date(),
+      })
+      .run();
+
+    postCustomerPaymentSync(local, businessId, {
+      paymentId: id,
       amountKobo: input.amountKobo,
       method: input.method,
       reference: input.reference,
+      accountId: input.accountId ?? null,
+      customerName: customer.name,
       userId,
-      createdAt: new Date(),
-    })
-    .run();
+    });
 
-  writeAuditSync(local, {
-    businessId,
-    userId,
-    action: 'customer.payment',
-    entity: 'customer_payment',
-    entityId: id,
-    details: { customerId: input.customerId, amountKobo: input.amountKobo, method: input.method },
+    writeAuditSync(local, {
+      businessId,
+      userId,
+      action: 'customer.payment',
+      entity: 'customer_payment',
+      entityId: id,
+      details: { customerId: input.customerId, amountKobo: input.amountKobo, method: input.method },
+    });
   });
+  write();
 
   return { id, balanceKobo: balanceOf(local, businessId, input.customerId) };
 }

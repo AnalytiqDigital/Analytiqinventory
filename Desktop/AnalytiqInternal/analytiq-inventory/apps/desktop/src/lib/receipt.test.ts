@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildReceiptHtml, escapeHtml, sampleTestSale } from './receipt';
+import { buildKitchenTicketHtml, buildReceiptHtml, escapeHtml, sampleTestSale } from './receipt';
 import type { BusinessProfile } from '../types/global';
 
 const BUSINESS: BusinessProfile = {
@@ -57,5 +57,38 @@ describe('buildReceiptHtml', () => {
     expect(html).toContain('*** VOIDED ***');
     expect(html).not.toContain('Line discounts');
     expect(html).not.toContain('Change');
+  });
+
+  it('adds service charge, tip, order type and waiter for restaurant bills', () => {
+    const sale = sampleTestSale(BUSINESS);
+    sale.orderType = 'dine_in';
+    sale.waiterName = 'Ada <Waitress>';
+    sale.serviceChargeKobo = 7500;
+    sale.tipKobo = 5000;
+    const html = buildReceiptHtml(sale, BUSINESS);
+    expect(html).toContain('Dine-in');
+    expect(html).toContain('Waiter: Ada &lt;Waitress&gt;');
+    expect(html).toContain('Service charge');
+    expect(html).toContain('₦75.00');
+    expect(html).toContain('Tip');
+    expect(html).toContain('₦50.00');
+  });
+});
+
+describe('buildKitchenTicketHtml', () => {
+  it('lists quantities and names without prices', () => {
+    const sale = sampleTestSale(BUSINESS);
+    sale.orderType = 'dine_in';
+    sale.tableName = 'Table 4';
+    sale.waiterName = 'Ada';
+    const html = buildKitchenTicketHtml(sale, { widthMm: 58 });
+    expect(html).toContain('KITCHEN ORDER TICKET');
+    expect(html).toContain('TEST-0001');
+    expect(html).toContain('Table 4');
+    expect(html).toContain('Waiter: Ada');
+    expect(html).toContain('2×');
+    expect(html).toContain('Sample product');
+    expect(html).not.toContain('₦');
+    expect(html).toContain('@page { size: 58mm auto; margin: 0; }');
   });
 });

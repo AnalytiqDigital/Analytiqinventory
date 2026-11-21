@@ -18,6 +18,10 @@ const MODULE_INFO: Record<OptionalModule, { label: string; blurb: string }> = {
   suppliers: { label: 'Suppliers', blurb: 'Keep supplier records for purchases.' },
   customers: { label: 'Customers & credit', blurb: 'Customer records, credit limits and debtors.' },
   expenses: { label: 'Expenses', blurb: 'Record rent, salaries and other running costs.' },
+  accounts: {
+    label: 'Cash & bank',
+    blurb: 'Cash drawer and bank balances, transfers and payment mapping.',
+  },
   finance: { label: 'Finance', blurb: 'Expenses and net profit alongside sales.' },
   expiry: {
     label: 'Batches & expiry',
@@ -41,6 +45,7 @@ const MODULE_ORDER: OptionalModule[] = [
   'suppliers',
   'taxCategories',
   'expenses',
+  'accounts',
   'finance',
 ];
 

@@ -1288,6 +1288,97 @@ describe('LAN server API', () => {
     expect(relogin.statusCode).toBe(200);
   });
 
+  it('serves cash and bank ledgers and restaurant service settings over REST', async () => {
+    const { token } = await signIn();
+    const productId = await newProduct(token);
+
+    const created = await call(
+      'POST',
+      '/api/accounts',
+      { name: 'GTBank main', kind: 'bank', openingBalanceKobo: 100_000 },
+      token
+    );
+    expect(created.statusCode).toBe(200);
+    const bankId = (created.json() as { account: { id: string } }).account.id;
+
+    const sale = await call(
+      'POST',
+      '/api/sales',
+      {
+        items: [{ productId, qty: 1 }],
+        orderType: 'dine_in',
+        waiterName: 'Ada',
+        serviceChargeKobo: 750,
+        tipKobo: 500,
+        payments: [{ method: 'cash', amountKobo: 60_000 }],
+      },
+      token
+    );
+    expect(sale.statusCode).toBe(200);
+    const saleBody = sale.json() as { id: string; totalKobo: number };
+    expect(saleBody.totalKobo).toBeGreaterThanOrEqual(46_250);
+    const saleTotal = saleBody.totalKobo;
+
+    const detail = await call('GET', `/api/sales/${saleBody.id}`, undefined, token);
+    expect(detail.statusCode).toBe(200);
+    const detailSale = (detail.json() as {
+      sale: { orderType: string; waiterName: string; totalKobo: number };
+    }).sale;
+    expect(detailSale).toMatchObject({ orderType: 'dine_in', waiterName: 'Ada', totalKobo: saleTotal });
+
+    const list = await call('GET', '/api/accounts', undefined, token);
+    expect(list.statusCode).toBe(200);
+    const listed = list.json() as {
+      items: Array<{ id: string; kind: string; name: string; balanceKobo: number }>;
+      totalKobo: number;
+    };
+    const cash = listed.items.find((account) => account.kind === 'cash');
+    expect(cash).toBeTruthy();
+    expect(cash!.balanceKobo).toBe(saleTotal);
+
+    const adjusted = await call(
+      'POST',
+      '/api/accounts/adjust',
+      { accountId: bankId, amountKobo: 50_000, note: 'Opening float' },
+      token
+    );
+    expect(adjusted.statusCode).toBe(200);
+    expect((adjusted.json() as { balanceKobo: number }).balanceKobo).toBe(150_000);
+
+    const transfer = await call(
+      'POST',
+      '/api/accounts/transfer',
+      { fromAccountId: bankId, toAccountId: cash!.id, amountKobo: 25_000, note: 'Drawer float' },
+      token
+    );
+    expect(transfer.statusCode).toBe(200);
+
+    const ledger = await call('GET', '/api/accounts/transactions?limit=100', undefined, token);
+    expect(ledger.statusCode).toBe(200);
+    const ledgerBody = ledger.json() as {
+      items: Array<{ kind: string; amountKobo: number }>;
+      moneyInKobo: number;
+      moneyOutKobo: number;
+    };
+    expect(ledgerBody.items.some((tx) => tx.kind === 'sale' && tx.amountKobo === saleTotal)).toBe(true);
+    expect(ledgerBody.items.some((tx) => tx.kind === 'transfer_in')).toBe(true);
+    expect(ledgerBody.moneyInKobo).toBeGreaterThan(0);
+
+    const mapped = await call('POST', '/api/accounts/payment-map', { cash: bankId }, token);
+    expect(mapped.statusCode).toBe(200);
+    expect((mapped.json() as { map: { cash?: string } }).map.cash).toBe(bankId);
+
+    const savedSettings = await call(
+      'POST',
+      '/api/restaurant/settings',
+      { serviceChargeBp: 500 },
+      token
+    );
+    expect(savedSettings.statusCode).toBe(200);
+    const settings = await call('GET', '/api/restaurant/settings', undefined, token);
+    expect(settings.json()).toMatchObject({ ok: true, settings: { serviceChargeBp: 500 } });
+  });
+
   it('keeps the health probe unchanged', async () => {
     const res = await call('GET', '/health');
     expect(res.statusCode).toBe(200);

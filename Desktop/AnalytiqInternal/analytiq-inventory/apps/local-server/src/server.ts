@@ -5,6 +5,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { join } from 'node:path';
 import {
+  adjustAccount,
   adjustLoyalty,
   adjustStock,
   addCustomerNote,
@@ -17,6 +18,7 @@ import {
   closeLocalDb,
   cloudBackupView,
   countStock,
+  createAccount,
   createBackup,
   createBatchIntake,
   createBrand,
@@ -53,8 +55,10 @@ import {
   getLoyaltySettings,
   getMenuReports,
   getModuleInstallView,
+  getPaymentMap,
   getProduct,
   getReportsSummary,
+  getRestaurantSettings,
   getSale,
   getSyncStatus,
   httpTransport,
@@ -66,6 +70,8 @@ import {
   ingestRecords,
   isFirstRun,
   isSyncEntity,
+  listAccountTransactions,
+  listAccounts,
   listAutomationMessages,
   listBackups,
   listBatches,
@@ -122,11 +128,15 @@ import {
   setCloudBackupSettings,
   setLoyaltySettings,
   setModuleInstall,
+  setPaymentMap,
+  setRestaurantSettings,
   setTableStatus,
   setSyncSettings,
   setTierPrices,
   syncNow,
   toAutomationView,
+  transferBetweenAccounts,
+  updateAccount,
   updateBrand,
   updateCategory,
   updateCustomer,
@@ -1253,6 +1263,126 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
         const { user, db: local } = userIdOf(request);
         await deleteExpense(local, user.businessId, user.id, user.permissions, request.params.id);
         return { ok: true };
+      });
+
+      // --- Cash and bank ledgers, plus restaurant service settings ---
+      scope.get('/accounts', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        const query = queryOf(request.query) as { includeArchived?: unknown };
+        return {
+          ok: true,
+          ...(await listAccounts(local, user.businessId, user.permissions, {
+            includeArchived: Boolean(query.includeArchived),
+          })),
+        };
+      });
+
+      scope.post('/accounts', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return {
+          ok: true,
+          ...(await createAccount(
+            local,
+            user.businessId,
+            user.id,
+            user.permissions,
+            request.body ?? {}
+          )),
+        };
+      });
+
+      scope.get('/accounts/transactions', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return {
+          ok: true,
+          ...(await listAccountTransactions(
+            local,
+            user.businessId,
+            user.permissions,
+            queryOf(request.query)
+          )),
+        };
+      });
+
+      scope.get('/accounts/payment-map', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return { ok: true, map: getPaymentMap(local, user.businessId) };
+      });
+
+      scope.post('/accounts/payment-map', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return {
+          ok: true,
+          ...(await setPaymentMap(
+            local,
+            user.businessId,
+            user.id,
+            user.permissions,
+            request.body ?? {}
+          )),
+        };
+      });
+
+      scope.post('/accounts/transfer', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return {
+          ok: true,
+          ...(await transferBetweenAccounts(
+            local,
+            user.businessId,
+            user.id,
+            user.permissions,
+            request.body ?? {}
+          )),
+        };
+      });
+
+      scope.post('/accounts/adjust', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return {
+          ok: true,
+          ...(await adjustAccount(
+            local,
+            user.businessId,
+            user.id,
+            user.permissions,
+            request.body ?? {}
+          )),
+        };
+      });
+
+      scope.patch<{ Params: { id: string } }>('/accounts/:id', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return {
+          ok: true,
+          ...(await updateAccount(
+            local,
+            user.businessId,
+            user.id,
+            user.permissions,
+            request.params.id,
+            request.body ?? {}
+          )),
+        };
+      });
+
+      scope.get('/restaurant/settings', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return { ok: true, settings: getRestaurantSettings(local, user.businessId) };
+      });
+
+      scope.post('/restaurant/settings', async (request) => {
+        const { user, db: local } = userIdOf(request);
+        return {
+          ok: true,
+          ...(await setRestaurantSettings(
+            local,
+            user.businessId,
+            user.id,
+            user.permissions,
+            request.body ?? {}
+          )),
+        };
       });
 
       // --- Batch 8: locations ---

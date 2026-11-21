@@ -27,6 +27,7 @@ import type { LocalDb } from './connection';
 import { requirePermission } from './permissions';
 import { getDefaultLocationId } from './inventory';
 import { writeAuditSync } from './service';
+import { postSalePaymentsSync, reverseSalePostingsSync } from './accounts';
 import {
   businesses,
   locations,
@@ -115,6 +116,10 @@ export interface SaleView {
   totalKobo: number;
   amountPaidKobo: number;
   changeKobo: number;
+  orderType: string;
+  waiterName: string;
+  serviceChargeKobo: number;
+  tipKobo: number;
   tableId: string | null;
   tableName: string | null;
   customerId: string | null;
@@ -332,7 +337,7 @@ export async function createSale(
     loyaltyPointsRedeemed = redemption.points;
     loyaltyDiscountKobo = redemption.discountKobo;
   }
-  const total = beforeLoyalty - loyaltyDiscountKobo;
+  const total = beforeLoyalty + input.serviceChargeKobo + input.tipKobo - loyaltyDiscountKobo;
   const loyaltyPointsEarned =
     loyalty.enabled && input.customerId != null ? pointsEarned(total, loyalty.earnKoboPerPoint) : 0;
 
@@ -436,6 +441,10 @@ export async function createSale(
         externalRef: input.externalRef?.trim() || null,
         amountPaidKobo: amountPaid,
         changeKobo: change,
+        orderType: input.orderType,
+        waiterName: input.waiterName,
+        serviceChargeKobo: input.serviceChargeKobo,
+        tipKobo: input.tipKobo,
         version: 1,
         createdAt: timestamp,
         updatedAt: timestamp,
@@ -469,6 +478,19 @@ export async function createSale(
         })
         .run();
     }
+
+    // Cash & bank ledgers: only money actually kept reaches an account.
+    postSalePaymentsSync(local, businessId, {
+      saleId,
+      receiptNo,
+      payments: input.payments.map((p) => ({
+        method: p.method as PaymentMethod,
+        amountKobo: p.amountKobo,
+      })),
+      changeKobo: change,
+      userId,
+      createdAt: timestamp,
+    });
 
     // Ledger: batches are consumed first-expiry-first-out, then any unbatched
     // stock (e.g. opening stock recorded before batch tracking was switched on).
@@ -744,6 +766,10 @@ export async function getSale(
     totalKobo: head.totalKobo,
     amountPaidKobo: head.amountPaidKobo,
     changeKobo: head.changeKobo,
+    orderType: head.orderType,
+    waiterName: head.waiterName,
+    serviceChargeKobo: head.serviceChargeKobo,
+    tipKobo: head.tipKobo,
     tableId: head.tableId,
     tableName: tbl?.name ?? null,
     customerId: head.customerId,
@@ -970,6 +996,7 @@ export async function voidSale(
       .set({ status: 'voided', updatedAt: timestamp, version: head.version + 1 })
       .where(eq(sales.id, saleId))
       .run();
+    reverseSalePostingsSync(local, businessId, saleId, head.receiptNo, userId, timestamp);
     writeAuditSync(local, {
       businessId,
       userId,

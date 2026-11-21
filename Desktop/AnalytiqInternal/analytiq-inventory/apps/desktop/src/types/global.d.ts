@@ -528,6 +528,60 @@ export interface AnalytiqApi {
     error?: string;
     code?: string;
   }>;
+
+  // --- Batch 17: cash & bank accounts + restaurant service flow ---
+  accounts: (query?: unknown) => Promise<{
+    ok: boolean;
+    items: AccountRow[];
+    totalKobo: number;
+    error?: string;
+    code?: string;
+  }>;
+  accountCreate: (
+    input: unknown
+  ) => Promise<{ ok: boolean; account?: AccountRow; error?: string; code?: string }>;
+  accountUpdate: (
+    id: string,
+    patch: unknown
+  ) => Promise<{ ok: boolean; account?: AccountRow; error?: string; code?: string }>;
+  accountTransfer: (
+    input: unknown
+  ) => Promise<{ ok: boolean; id?: string; error?: string; code?: string }>;
+  accountAdjust: (
+    input: unknown
+  ) => Promise<{ ok: boolean; id?: string; balanceKobo?: number; error?: string; code?: string }>;
+  accountTransactions: (query: unknown) => Promise<{
+    ok: boolean;
+    items: AccountTransactionRow[];
+    moneyInKobo: number;
+    moneyOutKobo: number;
+    error?: string;
+    code?: string;
+  }>;
+  accountPaymentMap: () => Promise<{
+    ok: boolean;
+    map: Partial<Record<'cash' | 'transfer' | 'pos', string>>;
+    error?: string;
+    code?: string;
+  }>;
+  accountPaymentMapSet: (input: unknown) => Promise<{
+    ok: boolean;
+    map?: Partial<Record<'cash' | 'transfer' | 'pos', string>>;
+    error?: string;
+    code?: string;
+  }>;
+  restaurantSettings: () => Promise<{
+    ok: boolean;
+    settings?: { serviceChargeBp: number };
+    error?: string;
+    code?: string;
+  }>;
+  restaurantSettingsSet: (input: unknown) => Promise<{
+    ok: boolean;
+    settings?: { serviceChargeBp: number };
+    error?: string;
+    code?: string;
+  }>;
 }
 
 export interface BatchRow {
@@ -896,8 +950,36 @@ export interface ExpenseRow {
   amountKobo: number;
   paidAt: string;
   locationId: string | null;
+  accountId: string | null;
+  accountName: string;
   createdBy: string | null;
   createdByName: string;
+  createdAt: string;
+}
+
+export type AccountKind = 'cash' | 'bank' | 'pos' | 'mobile';
+
+export interface AccountRow {
+  id: string;
+  name: string;
+  kind: AccountKind;
+  openingBalanceKobo: number;
+  balanceKobo: number;
+  isDefault: boolean;
+  archived: boolean;
+  createdAt: string;
+}
+
+export interface AccountTransactionRow {
+  id: string;
+  accountId: string;
+  accountName: string;
+  kind: string;
+  amountKobo: number;
+  reference: string;
+  note: string;
+  source: string;
+  sourceId: string | null;
   createdAt: string;
 }
 
@@ -1168,6 +1250,10 @@ export interface SaleDetail extends SaleSummaryRow {
   headerDiscountKobo: number;
   taxKobo: number;
   changeKobo: number;
+  orderType: string;
+  waiterName: string;
+  serviceChargeKobo: number;
+  tipKobo: number;
   tableId: string | null;
   tableName: string | null;
   customerId: string | null;

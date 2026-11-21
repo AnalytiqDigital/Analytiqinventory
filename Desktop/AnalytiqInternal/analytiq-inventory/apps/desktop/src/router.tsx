@@ -4,6 +4,7 @@ import { LicenseGate } from './components/LicenseGate';
 import { RequireAuth } from './components/RequireAuth';
 import { RequireModule } from './components/RequireModule';
 import { AccountingPage } from './pages/AccountingPage';
+import { AccountsPage } from './pages/AccountsPage';
 import { BatchesPage } from './pages/BatchesPage';
 import { CustomersPage } from './pages/CustomersPage';
 import { DebtorsPage } from './pages/DebtorsPage';
@@ -107,6 +108,10 @@ export const router: ReturnType<typeof createHashRouter> = createHashRouter([
               {
                 element: <RequireModule module="expenses" />,
                 children: [{ path: 'expenses', element: <ExpensesPage /> }],
+              },
+              {
+                element: <RequireModule module="accounts" />,
+                children: [{ path: 'accounts', element: <AccountsPage /> }],
               },
               { path: 'finance', element: <FinancePage /> },
               { path: 'modules', element: <ModulesPage /> },

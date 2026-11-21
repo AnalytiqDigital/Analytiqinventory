@@ -131,6 +131,36 @@ press **Back up now** or let the daily schedule run it.
 - Recent uploads and their sizes are listed in the card. Keep the local backup
   option on as well unless you have another plan for quick restores.
 
+## Cash and bank ledgers
+
+Finance → **Cash & Bank** (`/accounts`) keeps the money side of the books.
+An account has a name, a type (cash drawer, bank account, POS terminal,
+mobile money) and an opening balance; the balance shown is the opening balance
+plus every movement posted to it.
+
+- **Automatic posting.** Every completed sale posts its tenders to the matching
+  account (cash after change is given), refunds post a negative entry, voids
+  post reversing entries, expenses and customer payments post too. Posting
+  happens inside the same SQLite transaction as the sale, so a failed write
+  leaves neither a sale without money nor money without a sale. Credit tenders
+  post nothing until the customer pays.
+- **Payment mapping.** By default cash goes to the cash drawer, transfers to a
+  bank account and POS payments to the POS account. The business can pin a
+  tender to a specific account instead.
+- **Move money** transfers between two accounts with a paired out/in entry and
+  refuses to overdraw the source. **Adjust** records a signed correction
+  (positive = float added, negative = cash taken out) and requires a reason.
+- Accounts with a non-zero balance cannot be archived, and the default account
+  must be moved first. Every write is audited (`account.create`,
+  `account.update`, `account.transfer`, `account.adjust`).
+- The **ledger** table lists movements with the account, type, note/reference
+  and signed amount, plus money-in and money-out totals for the selection. It
+  can be filtered to one account.
+
+Restaurant service charge and tips are stored on the sale (`service_charge_kobo`,
+`tip_kobo`) and are part of the amount the customer tenders, so they reach the
+ledger as part of the sale posting.
+
 ## Permissions
 
 | What                                     | Permission                                         |
@@ -143,6 +173,8 @@ press **Back up now** or let the daily schedule run it.
 | Returns                                  | `sales.refund` (create), `sales.view` (history)    |
 | Transfers                                | `inventory.view` (UI), `inventory.adjust` (create) |
 | Debtors                                  | `customers.manage`                                 |
+| Cash & bank, expense "paid from"         | `finance.manage`                                   |
+| Service charge default                   | `settings.manage`                                  |
 
 Cashiers keep working with `sales.create`; nothing in this pack widens what a
 cashier can do except redeeming loyalty points, which is a discount on their

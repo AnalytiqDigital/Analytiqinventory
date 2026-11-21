@@ -502,6 +502,53 @@ Verification: validation 21/21, database 111/111, desktop 84/84, local-server
 24/24 (typecheck and lint clean; renderer build checked). Installer not
 re-packed for this batch.
 
+## Batch 17 — Cash & bank ledgers and restaurant service flow: DONE
+
+Implemented:
+
+- Cash & bank accounts (`accounts.ts`, migration `0015_restaurant_accounts.sql`):
+  `accounts`, `account_transactions` and `payment_account_map` tables. Balance
+  is the opening balance plus the signed sum of movements, never a counter.
+  Create/update/archive accounts (`cash`, `bank`, `pos`, `mobile`), move money
+  between accounts (paired out/in entries, overdraw refused), signed
+  adjustments with a reason, and a filterable ledger with in/out totals.
+- Automatic posting: every completed sale posts its tenders inside the sale
+  transaction (cash net of change, credit posts nothing), returns post
+  negative entries, voids post one idempotent reversing entry, expenses and
+  customer payments post too. Tender → account resolution: explicit payment
+  map, then account kind, then any active account, then a lazily created
+  "Cash" account.
+- Payment mapping screen pins cash/transfer/POS tenders to specific accounts.
+- Cash & Bank page (`/accounts`, `accounts` module, Finance group,
+  `finance.manage`): account cards with balances and default/archived badges,
+  ledger, move-money and adjust modals, payment mapping card.
+- Expenses gain a "Paid from" account (blank = automatic by tender type) and
+  list the resolved account name.
+- Restaurant service flow: when the Tables module is installed the POS shows
+  order type (Dine-in / Takeaway / Delivery), waiter name, service charge %
+  (pre-filled from Settings → Restaurant, editable per sale, computed on the
+  net bill) and a tip. Service charge and tip are added after tax, stored on
+  the sale (`service_charge_kobo`, `tip_kobo`), appear on the receipt and sale
+  detail, and count toward the tendered amount.
+- Kitchen order tickets: optional per-sale ticket with receipt number, time,
+  order type, table, waiter and quantity × item (no prices), printed to the
+  receipt printer or a separate kitchen printer, with the system print dialog
+  as fallback.
+- LAN REST parity: `/accounts`, `/accounts/transactions`,
+  `/accounts/payment-map`, `/accounts/transfer`, `/accounts/adjust`,
+  `PATCH /accounts/:id` and `/restaurant/settings`.
+- Tests: 1 new local-server REST test covering the account and restaurant
+  routes; 2 new receipt tests (restaurant bill lines, kitchen ticket); 3 new
+  Cash & Bank render tests; database suite 119/119; validation 21/21; desktop
+  89/89; local-server 25/25; renderer and electron typecheck clean; renderer
+  and electron bundles built.
+- Docs: `CHANGELOG.md`, `docs/BUSINESS_PACK.md` (Cash and bank ledgers),
+  `docs/POS.md` (service flow, kitchen tickets) and `docs/PRINTERS.md`
+  (kitchen tickets).
+
+Verification: validation 21/21, database 119/119, desktop 89/89, local-server
+25/25. Installer not re-packed for this batch.
+
 ## 1.0.0 — Release preparation: IN PROGRESS
 
 Done:

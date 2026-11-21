@@ -7,15 +7,16 @@ import { ExpensesPage } from './ExpensesPage';
 
 afterEach(cleanup);
 
-const { expenses, expenseCreate, expenseUpdate, expenseDelete } = vi.hoisted(() => ({
+const { expenses, expenseCreate, expenseUpdate, expenseDelete, accounts } = vi.hoisted(() => ({
   expenses: vi.fn(),
   expenseCreate: vi.fn(),
   expenseUpdate: vi.fn(),
   expenseDelete: vi.fn(),
+  accounts: vi.fn(),
 }));
 
 vi.mock('../lib/ipc', () => ({
-  ipc: { expenses, expenseCreate, expenseUpdate, expenseDelete },
+  ipc: { expenses, expenseCreate, expenseUpdate, expenseDelete, accounts },
 }));
 
 const items: ExpenseRow[] = [
@@ -26,6 +27,8 @@ const items: ExpenseRow[] = [
     amountKobo: 500_000,
     paidAt: '2026-11-02T12:00:00.000Z',
     locationId: 'loc-1',
+    accountId: 'acc-1',
+    accountName: 'Main bank',
     createdBy: 'u1',
     createdByName: 'Ada Admin',
     createdAt: '2026-11-02T12:00:00.000Z',
@@ -37,6 +40,8 @@ const items: ExpenseRow[] = [
     amountKobo: 20_000,
     paidAt: '2026-11-05T12:00:00.000Z',
     locationId: 'loc-1',
+    accountId: null,
+    accountName: '',
     createdBy: 'u1',
     createdByName: 'Ada Admin',
     createdAt: '2026-11-05T12:00:00.000Z',
@@ -58,7 +63,24 @@ describe('ExpensesPage', () => {
     expenseCreate.mockReset();
     expenseUpdate.mockReset();
     expenseDelete.mockReset();
+    accounts.mockReset();
     expenses.mockResolvedValue({ ok: true, items, totalKobo: 520_000 });
+    accounts.mockResolvedValue({
+      ok: true,
+      items: [
+        {
+          id: 'acc-1',
+          name: 'Main bank',
+          kind: 'bank',
+          openingBalanceKobo: 0,
+          balanceKobo: 100_000,
+          isDefault: true,
+          archived: false,
+          createdAt: '2026-11-01T00:00:00.000Z',
+        },
+      ],
+      totalKobo: 100_000,
+    });
     expenseCreate.mockResolvedValue({ ok: true });
     expenseUpdate.mockResolvedValue({ ok: true });
     expenseDelete.mockResolvedValue({ ok: true });

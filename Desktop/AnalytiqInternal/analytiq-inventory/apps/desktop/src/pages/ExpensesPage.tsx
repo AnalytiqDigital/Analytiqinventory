@@ -21,7 +21,7 @@ import { ConfirmDialog, ErrorState, LoadingState } from '../components/ui/states
 import { TD, TH, THead, TRow, Table } from '../components/ui/table';
 import { ipc } from '../lib/ipc';
 import { formatKobo, parseNairaToKobo } from '../lib/money';
-import type { ExpenseRow } from '../types/global';
+import type { AccountRow, ExpenseRow } from '../types/global';
 
 function dateInput(d: Date): string {
   const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -80,10 +80,11 @@ interface ExpenseForm {
   note: string;
   amount: string;
   paidAt: string;
+  accountId: string;
 }
 
 function emptyForm(): ExpenseForm {
-  return { category: 'Rent', note: '', amount: '', paidAt: dateInput(new Date()) };
+  return { category: 'Rent', note: '', amount: '', paidAt: dateInput(new Date()), accountId: '' };
 }
 
 export function ExpensesPage(): JSX.Element {
@@ -113,6 +114,16 @@ export function ExpensesPage(): JSX.Element {
       if (!res.ok) throw new Error(res.error ?? 'Could not load expenses');
       return res;
     },
+  });
+
+  const accountsQuery = useQuery({
+    queryKey: ['accounts'],
+    queryFn: async () => {
+      const res = await ipc.accounts({});
+      if (!res.ok) return [] as AccountRow[];
+      return (res.items ?? []).filter((account) => !account.archived);
+    },
+    staleTime: 60_000,
   });
 
   const items = expensesQuery.data?.items ?? [];
@@ -174,6 +185,7 @@ export function ExpensesPage(): JSX.Element {
       note: expense.note,
       amount: (expense.amountKobo / 100).toFixed(2),
       paidAt: dateInput(new Date(expense.paidAt)),
+      accountId: expense.accountId ?? '',
     });
     setFormError(null);
     setModalOpen(true);
@@ -190,6 +202,7 @@ export function ExpensesPage(): JSX.Element {
         note: values.note.trim(),
         amountKobo,
         paidAt: paidAt.toISOString(),
+        accountId: values.accountId || null,
       };
       const res = editing
         ? await ipc.expenseUpdate(editing.id, input)
@@ -376,6 +389,7 @@ export function ExpensesPage(): JSX.Element {
                       <TH>Date</TH>
                       <TH>Category</TH>
                       <TH>Note</TH>
+                      <TH>Paid from</TH>
                       <TH>Recorded by</TH>
                       <TH className="text-right">Amount</TH>
                       <TH className="text-right">Actions</TH>
@@ -391,6 +405,7 @@ export function ExpensesPage(): JSX.Element {
                         <TD className="max-w-[240px] truncate text-slate-500">
                           {expense.note || '—'}
                         </TD>
+                        <TD className="text-slate-500">{expense.accountName || '—'}</TD>
                         <TD className="text-slate-500">{expense.createdByName || '—'}</TD>
                         <TD className="tabular-nums text-right font-medium">
                           {formatKobo(expense.amountKobo)}
@@ -468,6 +483,26 @@ export function ExpensesPage(): JSX.Element {
             value={values.paidAt}
             onChange={(e) => setValues((v) => ({ ...v, paidAt: e.target.value }))}
           />
+          {(accountsQuery.data ?? []).length > 0 ? (
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">
+                Paid from
+              </label>
+              <select
+                aria-label="Paid from account"
+                className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-900"
+                value={values.accountId}
+                onChange={(e) => setValues((v) => ({ ...v, accountId: e.target.value }))}
+              >
+                <option value="">Automatic (by payment type)</option>
+                {(accountsQuery.data ?? []).map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {account.name} — {formatKobo(account.balanceKobo)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
           <Input
             label="Note (optional)"
             name="expense-note"

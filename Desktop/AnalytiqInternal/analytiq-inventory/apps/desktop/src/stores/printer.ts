@@ -7,10 +7,16 @@ interface PrinterState {
   paperWidthMm: ReceiptWidthMm;
   autoPrint: boolean;
   copies: number;
+  /** Send a kitchen order ticket to the kitchen printer after each sale. */
+  kitchenTicket: boolean;
+  /** Empty string = print kitchen tickets on the receipt printer. */
+  kitchenPrinterName: string;
   setPrinterName: (name: string) => void;
   setPaperWidth: (width: ReceiptWidthMm) => void;
   setAutoPrint: (enabled: boolean) => void;
   setCopies: (copies: number) => void;
+  setKitchenTicket: (enabled: boolean) => void;
+  setKitchenPrinterName: (name: string) => void;
 }
 
 const STORAGE_KEY = 'analytiq-printer';
@@ -20,10 +26,19 @@ interface Persisted {
   paperWidthMm: ReceiptWidthMm;
   autoPrint: boolean;
   copies: number;
+  kitchenTicket: boolean;
+  kitchenPrinterName: string;
 }
 
 function load(): Persisted {
-  const fallback: Persisted = { printerName: '', paperWidthMm: 80, autoPrint: true, copies: 1 };
+  const fallback: Persisted = {
+    printerName: '',
+    paperWidthMm: 80,
+    autoPrint: true,
+    copies: 1,
+    kitchenTicket: false,
+    kitchenPrinterName: '',
+  };
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return fallback;
@@ -34,6 +49,9 @@ function load(): Persisted {
       paperWidthMm: width,
       autoPrint: parsed.autoPrint !== false,
       copies: Math.min(Math.max(Math.round(parsed.copies ?? 1), 1), 3),
+      kitchenTicket: parsed.kitchenTicket === true,
+      kitchenPrinterName:
+        typeof parsed.kitchenPrinterName === 'string' ? parsed.kitchenPrinterName : '',
     };
   } catch {
     return fallback;
@@ -52,8 +70,9 @@ const initial = load();
 
 export const usePrinter = create<PrinterState>((set, get) => {
   const persist = (): void => {
-    const { printerName, paperWidthMm, autoPrint, copies } = get();
-    save({ printerName, paperWidthMm, autoPrint, copies });
+    const { printerName, paperWidthMm, autoPrint, copies, kitchenTicket, kitchenPrinterName } =
+      get();
+    save({ printerName, paperWidthMm, autoPrint, copies, kitchenTicket, kitchenPrinterName });
   };
   return {
     ...initial,
@@ -71,6 +90,14 @@ export const usePrinter = create<PrinterState>((set, get) => {
     },
     setCopies: (value) => {
       set({ copies: Math.min(Math.max(Math.round(value), 1), 3) });
+      persist();
+    },
+    setKitchenTicket: (kitchenTicket) => {
+      set({ kitchenTicket });
+      persist();
+    },
+    setKitchenPrinterName: (kitchenPrinterName) => {
+      set({ kitchenPrinterName });
       persist();
     },
   };

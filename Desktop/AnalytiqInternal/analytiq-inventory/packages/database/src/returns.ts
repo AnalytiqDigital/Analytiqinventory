@@ -15,6 +15,7 @@ import type { LocalDb } from './connection';
 import { requirePermission } from './permissions';
 import { getSale, type SaleView } from './sales';
 import { writeAuditSync } from './service';
+import { postRefundSync } from './accounts';
 import { locations, saleItems, saleReturnItems, saleReturns, sales, stockMovements } from './schema';
 
 function codedError(message: string, code: string): Error {
@@ -294,6 +295,19 @@ export async function createSaleReturn(
         .set({ status: 'refunded', updatedAt: timestamp, version: sale.version + 1 })
         .where(eq(sales.id, sale.id))
         .run();
+    }
+
+    // Money back to the account it came from (exchanges ring a new sale instead).
+    if (input.kind === 'refund') {
+      postRefundSync(local, businessId, {
+        saleId: sale.id,
+        returnId,
+        receiptNo: sale.receiptNo,
+        refundKobo,
+        method: input.refundMethod,
+        userId,
+        createdAt: timestamp,
+      });
     }
 
     writeAuditSync(local, {

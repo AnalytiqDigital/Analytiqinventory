@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, safeStorage, shell } from 'electron';
 import {
+  adjustAccount,
   adjustLoyalty,
   adjustStock,
   addCustomerNote,
@@ -8,6 +9,7 @@ import {
   archiveSupplier,
   cancelPurchase,
   cloudBackupView,
+  createAccount,
   createBackup,
   createBatchIntake,
   createBrand,
@@ -32,8 +34,12 @@ import {
   getLoyaltySettings,
   getMenuReports,
   getModuleInstallView,
+  getPaymentMap,
+  getRestaurantSettings,
   getSyncStatus,
   httpTransport,
+  listAccountTransactions,
+  listAccounts,
   listAutomationMessages,
   listBackups,
   listBatches,
@@ -71,8 +77,12 @@ import {
   setCloudBackupSettings,
   setLoyaltySettings,
   setModuleInstall,
+  setPaymentMap,
+  setRestaurantSettings,
   setTierPrices,
   toAutomationView,
+  transferBetweenAccounts,
+  updateAccount,
   updateCustomer,
   updateBrand,
   updateCustomerGroup,
@@ -1447,6 +1457,142 @@ function staffFinanceHandlers(): void {
   });
 }
 
+// --- Batch 17: cash & bank accounts + restaurant service settings -----------
+function accountsRestaurantHandlers(): void {
+  const fail = (err: unknown, extra: Record<string, unknown> = {}) => ({
+    ok: false,
+    ...safeError(err),
+    ...extra,
+  });
+
+  ipcMain.handle('accounts:list', async (_event, query: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      const includeArchived = Boolean((query as { includeArchived?: unknown } | null)?.includeArchived);
+      return {
+        ok: true,
+        ...(await listAccounts(db, user.businessId, user.permissions, { includeArchived })),
+      };
+    } catch (err: unknown) {
+      return fail(err, { items: [], totalKobo: 0 });
+    }
+  });
+
+  ipcMain.handle('accounts:create', async (_event, input: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      return {
+        ok: true,
+        ...(await createAccount(db, user.businessId, user.id, user.permissions, input)),
+      };
+    } catch (err: unknown) {
+      return fail(err);
+    }
+  });
+
+  ipcMain.handle(
+    'accounts:update',
+    async (_event, payload: { id?: unknown; patch?: unknown } | undefined) => {
+      try {
+        const { db, user } = await requireUser();
+        const id = payload?.id;
+        if (typeof id !== 'string' || id.length === 0) throw new Error('Account id is required');
+        return {
+          ok: true,
+          ...(await updateAccount(
+            db,
+            user.businessId,
+            user.id,
+            user.permissions,
+            id,
+            payload?.patch ?? {}
+          )),
+        };
+      } catch (err: unknown) {
+        return fail(err);
+      }
+    }
+  );
+
+  ipcMain.handle('accounts:transfer', async (_event, input: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      return {
+        ok: true,
+        ...(await transferBetweenAccounts(db, user.businessId, user.id, user.permissions, input)),
+      };
+    } catch (err: unknown) {
+      return fail(err);
+    }
+  });
+
+  ipcMain.handle('accounts:adjust', async (_event, input: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      return {
+        ok: true,
+        ...(await adjustAccount(db, user.businessId, user.id, user.permissions, input)),
+      };
+    } catch (err: unknown) {
+      return fail(err);
+    }
+  });
+
+  ipcMain.handle('accounts:transactions', async (_event, query: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      return {
+        ok: true,
+        ...(await listAccountTransactions(db, user.businessId, user.permissions, query ?? {})),
+      };
+    } catch (err: unknown) {
+      return fail(err, { items: [], moneyInKobo: 0, moneyOutKobo: 0 });
+    }
+  });
+
+  ipcMain.handle('accounts:payment-map', async () => {
+    try {
+      const { db, user } = await requireUser();
+      return { ok: true, map: getPaymentMap(db, user.businessId) };
+    } catch (err: unknown) {
+      return fail(err, { map: {} });
+    }
+  });
+
+  ipcMain.handle('accounts:payment-map-set', async (_event, input: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      return {
+        ok: true,
+        ...(await setPaymentMap(db, user.businessId, user.id, user.permissions, input)),
+      };
+    } catch (err: unknown) {
+      return fail(err);
+    }
+  });
+
+  ipcMain.handle('restaurant:settings', async () => {
+    try {
+      const { db, user } = await requireUser();
+      return { ok: true, settings: getRestaurantSettings(db, user.businessId) };
+    } catch (err: unknown) {
+      return fail(err);
+    }
+  });
+
+  ipcMain.handle('restaurant:settings-set', async (_event, input: unknown) => {
+    try {
+      const { db, user } = await requireUser();
+      return {
+        ok: true,
+        ...(await setRestaurantSettings(db, user.businessId, user.id, user.permissions, input)),
+      };
+    } catch (err: unknown) {
+      return fail(err);
+    }
+  });
+}
+
 // --- Batch 15: business pack. Batch tracking + expiry alerts, wholesale price
 // lists, loyalty + customer notes, counter returns, branch transfers, debtor
 // reminders and encrypted offsite backup. All licence- and session-gated.
@@ -1860,6 +2006,7 @@ void app.whenReady().then(async () => {
     importHandlers();
     staffFinanceHandlers();
     businessPackHandlers();
+    accountsRestaurantHandlers();
   }
   createWindow();
   app.on('activate', () => {

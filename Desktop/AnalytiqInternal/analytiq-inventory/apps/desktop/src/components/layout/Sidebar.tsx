@@ -51,7 +51,7 @@ export function Sidebar(): JSX.Element {
           <p className="truncate text-[15px] font-bold tracking-tight text-slate-900 dark:text-white">
             AnalytIQ
           </p>
-          <p className="text-[11px] font-medium text-slate-500">Inventory &amp; POS</p>
+          <p className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">Inventory &amp; POS</p>
         </div>
       </div>
       <nav className="flex-1 space-y-3 overflow-y-auto px-3 pb-4" aria-label="Primary">
@@ -66,7 +66,7 @@ export function Sidebar(): JSX.Element {
                   type="button"
                   onClick={() => toggle(group)}
                   aria-expanded={!isCollapsed}
-                  className="flex w-full items-center justify-between rounded-lg px-3 pb-1.5 pt-1 text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
+                  className="flex w-full items-center justify-between rounded-lg px-3 pb-1.5 pt-1 text-[10px] font-bold uppercase tracking-widest text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
                 >
                   {group}
                   <ChevronDown
@@ -83,7 +83,7 @@ export function Sidebar(): JSX.Element {
                       to={item.to}
                       className={({ isActive }) =>
                         cn(
-                          'group flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-brand-50 hover:text-brand-800 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white',
+                          'group flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-brand-50 hover:text-brand-900 dark:text-slate-100 dark:hover:bg-slate-800 dark:hover:text-white',
                           isActive &&
                             'bg-brand-600 text-white shadow-sm hover:bg-brand-600 hover:text-white dark:bg-brand-500 dark:hover:bg-brand-500 dark:hover:text-white'
                         )

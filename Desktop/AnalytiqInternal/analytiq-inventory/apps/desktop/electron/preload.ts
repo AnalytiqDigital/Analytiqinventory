@@ -531,6 +531,28 @@ const api = {
     ipcRenderer.invoke('cloud-backup:run'),
   cloudBackupUploads: (): Promise<{ ok: boolean; [key: string]: unknown }> =>
     ipcRenderer.invoke('cloud-backup:uploads'),
+
+  // --- Batch 17: cash & bank accounts + restaurant service settings ---
+  accounts: (query?: unknown): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('accounts:list', query ?? {}),
+  accountCreate: (input: unknown): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('accounts:create', input),
+  accountUpdate: (id: string, patch: unknown): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('accounts:update', { id, patch }),
+  accountTransfer: (input: unknown): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('accounts:transfer', input),
+  accountAdjust: (input: unknown): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('accounts:adjust', input),
+  accountTransactions: (query: unknown): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('accounts:transactions', query),
+  accountPaymentMap: (): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('accounts:payment-map'),
+  accountPaymentMapSet: (input: unknown): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('accounts:payment-map-set', input),
+  restaurantSettings: (): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('restaurant:settings'),
+  restaurantSettingsSet: (input: unknown): Promise<{ ok: boolean; [key: string]: unknown }> =>
+    ipcRenderer.invoke('restaurant:settings-set', input),
 };
 
 export type AnalytiqApi = typeof api;

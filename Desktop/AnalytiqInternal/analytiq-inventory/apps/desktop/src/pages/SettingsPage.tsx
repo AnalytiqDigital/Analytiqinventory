@@ -28,6 +28,8 @@ import { ConfirmDialog, ErrorState, LoadingState } from '../components/ui/states
 import { Stat } from '../components/ui/stat';
 import { useSession } from '../stores/session';
 import { CloudBackupCard, LoyaltySettingsCard } from '../components/settings/BusinessPackCards';
+import { RestaurantSettingsCard } from '../components/settings/RestaurantSettingsCard';
+import { hasModule } from '../components/layout/nav';
 import { ipc } from '../lib/ipc';
 import { ReceiptPrinterSettings } from '../components/ReceiptPrinterSettings';
 import type {
@@ -75,6 +77,7 @@ function messagePreview(message: AutomationMessage): string {
 export function SettingsPage(): JSX.Element {
   const queryClient = useQueryClient();
   const signOut = useSession((s) => s.signOut);
+  const sessionUser = useSession((s) => s.user);
   const [restoreTarget, setRestoreTarget] = useState<BackupRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<BackupRow | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -531,6 +534,10 @@ export function SettingsPage(): JSX.Element {
       </Card>
 
       <ReceiptPrinterSettings />
+
+      {hasModule(sessionUser?.businessType, 'tables', sessionUser?.modules) ? (
+        <RestaurantSettingsCard />
+      ) : null}
 
       <Card>
         <CardHeader>

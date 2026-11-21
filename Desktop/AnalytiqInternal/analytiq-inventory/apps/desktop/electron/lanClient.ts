@@ -338,6 +338,53 @@ const ROUTES: Record<string, Route> = {
     path: (a) => `/api/finance/expenses/${idArg(a)}`,
   },
 
+  'accounts:list': {
+    method: 'GET',
+    path: (a) => endpoint('/api/accounts', a[0]),
+    fallback: { items: [], totalKobo: 0 },
+  },
+  'accounts:create': { method: 'POST', path: () => '/api/accounts', body: (a) => a[0] },
+  'accounts:update': {
+    method: 'PATCH',
+    path: (a) => `/api/accounts/${pairArg(a).id}`,
+    body: (a) => pairArg(a).patch,
+  },
+  'accounts:transfer': {
+    method: 'POST',
+    path: () => '/api/accounts/transfer',
+    body: (a) => a[0],
+  },
+  'accounts:adjust': {
+    method: 'POST',
+    path: () => '/api/accounts/adjust',
+    body: (a) => a[0],
+  },
+  'accounts:transactions': {
+    method: 'GET',
+    path: (a) => endpoint('/api/accounts/transactions', a[0]),
+    fallback: { items: [], moneyInKobo: 0, moneyOutKobo: 0 },
+  },
+  'accounts:payment-map': {
+    method: 'GET',
+    path: () => '/api/accounts/payment-map',
+    fallback: { map: {} },
+  },
+  'accounts:payment-map-set': {
+    method: 'POST',
+    path: () => '/api/accounts/payment-map',
+    body: (a) => a[0],
+  },
+  'restaurant:settings': {
+    method: 'GET',
+    path: () => '/api/restaurant/settings',
+    fallback: { settings: null },
+  },
+  'restaurant:settings-set': {
+    method: 'POST',
+    path: () => '/api/restaurant/settings',
+    body: (a) => a[0],
+  },
+
   'business:profile': {
     method: 'GET',
     path: () => '/api/business',
