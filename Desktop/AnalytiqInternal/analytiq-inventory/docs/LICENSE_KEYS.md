@@ -55,7 +55,8 @@ confirming the customer on WhatsApp or phone. Keys issued with `--device` (the
 vendor CLI) are bound in the payload itself and activate offline; the registry
 is not consulted for them.
 
-The app calls `https://www.analytiq.ng` by default. To test against another
+The app calls the shop site, `https://analytiq-inventory.vercel.app`, by
+default. To test against another
 site (preview deploy, staging), build with `ANALYTIQ_ACTIVATION_URL` set to that
 origin; the LAN server's `activationUrl` option overrides it per process.
 

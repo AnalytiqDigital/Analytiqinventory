@@ -237,7 +237,7 @@ export function deactivateLicense(local: LocalDb): void {
  * the key then works offline. Keys already bound to a device at issue time
  * skip the network entirely.
  */
-export const ACTIVATION_SERVER = 'https://www.analytiq.ng';
+export const ACTIVATION_SERVER = 'https://analytiq-inventory.vercel.app';
 
 const ACTIVATION_OFFLINE_MESSAGE =
   'Cannot reach the AnalytIQ activation server. Connect to the internet and try again — a licence key can only be used on one computer.';
