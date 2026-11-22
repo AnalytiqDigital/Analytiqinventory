@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { closeLocalDb, openLocalDb, runMigrations, type LocalDb } from '@analytiq/database';
 import {
+  ACTIVATION_SERVER,
   activateLicense,
   activateLicenseOnline,
   deactivateLicense,
@@ -38,6 +39,7 @@ describe('offline license keys', () => {
   afterEach(() => {
     closeLocalDb(local);
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
   });
 
   function issue(days = 0, device: string | null = null, now = new Date()) {
@@ -190,6 +192,23 @@ describe('offline license keys', () => {
     expect(calls[0]?.url).toBe('https://shop.test/api/licence/activate');
     expect(calls[0]?.body).toEqual({ key, installId: getInstallId(local) });
     expect(readMeta(local, 'license.key')).toBe(key);
+  });
+
+  it('defaults to the shop site when no server is configured', async () => {
+    vi.stubEnv('ANALYTIQ_ACTIVATION_URL', undefined);
+    const urls: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      (async (input: RequestInfo | URL) => {
+        urls.push(String(input));
+        return Response.json({ ok: true, state: 'active' });
+      }) as typeof fetch
+    );
+    const { key } = issue(365);
+
+    await activateLicenseOnline(local, key, { publicKey: publicKeyPem });
+
+    expect(urls).toEqual([`${ACTIVATION_SERVER}/api/licence/activate`]);
   });
 
   it('refuses a key that is already in use on another computer', async () => {

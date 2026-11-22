@@ -41,7 +41,10 @@ missed or the page is refreshed, `/retrieve-key` still returns that key.
    - Who has access: **Anyone**
 7. **Deploy**, authorise the script with your Google account (Advanced → Go to
    project → Allow).
-8. Copy the **Web app URL** (it ends in `/exec`).
+8. Copy the **Web app URL** (it ends in `/exec`). Do not copy the
+   `script.googleusercontent.com/macros/echo?...` address the browser lands on
+   after loading it. In Apps Script, use **Deploy → Manage deployments → Web
+   app URL** to get the `/exec` link again.
 9. Test it: open that URL in a browser. You should see
    `{"ok":true,"service":"analytiq-mail"}`.
 
@@ -58,8 +61,8 @@ activation is refused (the trial still works).
 
 ## 2. Add the private key to Vercel
 
-Run this in PowerShell at the repository root. It prints the PEM on one line
-with literal `\n` escapes:
+Open **Windows PowerShell** (not Command Prompt) at the repository root. It
+prints the PEM on one line with literal `\n` escapes:
 
 ```powershell
 cd C:\Users\emman\Desktop\AnalytiqInternal\analytiq-inventory
