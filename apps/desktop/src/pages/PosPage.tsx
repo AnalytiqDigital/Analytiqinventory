@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
+
 import {
   Banknote,
   CheckCircle2,
@@ -21,6 +23,7 @@ import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { EmptyState, ErrorState, LoadingState } from '../components/ui/states';
+import { Pagination } from '../components/ui/pagination';
 import { Modal } from '../components/ui/modal';
 import { ImportDialog } from '../components/ImportDialog';
 import { RequirePermission } from '../components/RequirePermission';
@@ -28,6 +31,7 @@ import { hasModule } from '../components/layout/nav';
 import { ipc } from '../lib/ipc';
 import { formatKobo, parseNairaToKobo } from '../lib/money';
 import { printKitchenTicket, printSale } from '../lib/printing';
+import { usePosPageSize } from '../hooks/usePosPageSize';
 import { useBarcodeScanner } from '../lib/use-barcode-scanner';
 import { cn } from '../lib/cn';
 import { ProductThumb } from '../lib/product-media';
@@ -48,8 +52,6 @@ type OrderType = 'dine_in' | 'takeaway' | 'delivery';
 
 const ORDER_TYPES: OrderType[] = ['dine_in', 'takeaway', 'delivery'];
 
-/** Five rows of five tiles per page on a full-size till screen. */
-const PRODUCT_PAGE_SIZE = 25;
 const ORDER_TYPE_LABELS: Record<OrderType, string> = {
   dine_in: 'Dine-in',
   takeaway: 'Takeaway',
@@ -99,12 +101,102 @@ function scanBeep(ok: boolean): void {
   }
 }
 
+/** Shaped like the real tiles so the first page never jumps when data lands. */
+function ProductGridSkeleton(): JSX.Element {
+  return (
+    <div
+      aria-label="Loading products"
+      className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4"
+    >
+      {Array.from({ length: 12 }, (_, i) => (
+        <div
+          key={i}
+          className="h-44 animate-pulse rounded-2xl border border-slate-100 bg-slate-100 dark:border-slate-800 dark:bg-slate-800"
+        />
+      ))}
+    </div>
+  );
+}
+
+/** Shared by the till's cart pane and the mobile cart sheet. */
+function CartLines({
+  cart,
+  onRemove,
+  onChangeQty,
+}: {
+  cart: CartLine[];
+  onRemove: (id: string) => void;
+  onChangeQty: (id: string, qty: number) => void;
+}): JSX.Element {
+  return (
+    <ul className="space-y-2 pr-0.5">
+      {cart.map((l) => {
+        const gross = l.unitPriceKobo * l.qty;
+        const lineTotal = gross - Math.min(l.lineDiscountKobo, gross);
+        return (
+          <li
+            key={l.product.id}
+            className="rounded-xl border border-slate-100 bg-slate-50/60 p-2.5 dark:border-slate-800 dark:bg-slate-800/50"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold">{l.product.name}</p>
+                <p className="text-xs tabular-nums text-slate-500">
+                  {formatKobo(l.unitPriceKobo)} each
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => onRemove(l.product.id)}
+                aria-label={`Remove ${l.product.name}`}
+                className="rounded-lg p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1 rounded-full border border-slate-200 bg-white px-1 py-0.5 dark:border-slate-700 dark:bg-slate-900">
+                <button
+                  type="button"
+                  aria-label="Decrease quantity"
+                  onClick={() =>
+                    l.qty <= 1 ? onRemove(l.product.id) : onChangeQty(l.product.id, l.qty - 1)
+                  }
+                  className="rounded-full p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800"
+                >
+                  <Minus className="h-3.5 w-3.5" />
+                </button>
+                <span className="min-w-7 text-center text-sm font-bold tabular-nums">{l.qty}</span>
+                <button
+                  type="button"
+                  aria-label="Increase quantity"
+                  onClick={() => onChangeQty(l.product.id, Math.min(l.qty + 1, 1_000_000))}
+                  className="rounded-full p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              <span className="text-sm font-bold tabular-nums">{formatKobo(lineTotal)}</span>
+            </div>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 export function PosPage(): JSX.Element {
   const queryClient = useQueryClient();
-  const [search, setSearch] = useState('');
-  const [debounced, setDebounced] = useState('');
-  const [categoryId, setCategoryId] = useState('');
-  const [productPage, setProductPage] = useState(1);
+  const [searchParams, setSearchParams] = useSearchParams();
+  // The URL is the source of truth for the catalogue view: refresh and Back
+  // restore the exact page, category and search the cashier was looking at.
+  const debounced = searchParams.get('search') ?? '';
+  const categoryId = searchParams.get('category') ?? '';
+  const pageParam = Number.parseInt(searchParams.get('page') ?? '1', 10);
+  const productPage = Number.isFinite(pageParam) && pageParam > 0 ? pageParam : 1;
+  const [search, setSearch] = useState(debounced);
+  const pageSize = usePosPageSize();
+  const [cartSheetOpen, setCartSheetOpen] = useState(false);
   const [cart, setCart] = useState<CartLine[]>([]);
   const [headerDiscount, setHeaderDiscount] = useState('0.00');
   const [tenderOpen, setTenderOpen] = useState(false);
@@ -114,7 +206,7 @@ export function PosPage(): JSX.Element {
   const [completedSale, setCompletedSale] = useState<SaleDetail | null>(null);
   const [receiptNotice, setReceiptNotice] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [tableId, setTableId] = useState<string>('');
+  const [tableId, setTableId] = useState<string>(() => searchParams.get('table') ?? '');
   const [orderType, setOrderType] = useState<OrderType>('takeaway');
   const [waiterName, setWaiterName] = useState('');
   const [serviceChargePct, setServiceChargePct] = useState('');
@@ -131,22 +223,56 @@ export function PosPage(): JSX.Element {
   const loyaltyEnabled = hasModule(businessType, 'loyalty', sessionUser?.modules);
   const restaurantEnabled = hasModule(businessType, 'tables', sessionUser?.modules);
   const searchRef = useRef<HTMLInputElement>(null);
+  const searchDirty = useRef(false);
 
+  function writeParams(mutate: (next: URLSearchParams) => void, replace = false): void {
+    const next = new URLSearchParams(searchParams);
+    mutate(next);
+    setSearchParams(next, { replace });
+  }
+
+  function setProductPage(page: number): void {
+    writeParams((next) => {
+      if (page <= 1) next.delete('page');
+      else next.set('page', String(page));
+    });
+  }
+
+  function setCategoryId(id: string): void {
+    writeParams((next) => {
+      if (id) next.set('category', id);
+      else next.delete('category');
+      next.delete('page');
+    });
+  }
+
+  // Debounce keystrokes into the URL so Back/refresh keep the same view.
   useEffect(() => {
-    const t = setTimeout(() => setDebounced(search.trim()), 250);
+    const trimmed = search.trim();
+    // A URL change from Back/Forward is already the truth; don't write the
+    // stale input value back over it.
+    if (!searchDirty.current || trimmed === debounced) return;
+    const t = setTimeout(() => {
+      writeParams((next) => {
+        if (trimmed) next.set('search', trimmed);
+        else next.delete('search');
+        next.delete('page');
+      }, true);
+    }, 300);
     return () => clearTimeout(t);
-  }, [search]);
+  }, [search, debounced, searchParams]);
 
-  // Pick up global topbar search (?search=...) once.
+  // Topbar search and browser navigation change the URL behind our back.
   useEffect(() => {
-    const params = new URLSearchParams(window.location.hash.split('?')[1] ?? '');
-    const q = params.get('search');
-    if (q) setSearch(q);
-    const t = params.get('table');
-    if (t) setTableId(t);
+    searchDirty.current = false;
+    setSearch(debounced);
+  }, [debounced]);
+
+  useEffect(() => {
+    searchRef.current?.focus();
   }, []);
 
-  // Keyboard shortcuts: "/" focuses search, F9 opens tender.
+  // "/" focuses search, F9 takes payment, Alt+Shift+C clears the cart.
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       const target = e.target as HTMLElement;
@@ -157,11 +283,17 @@ export function PosPage(): JSX.Element {
       } else if (e.key === 'F9') {
         e.preventDefault();
         openTender();
+      } else if (e.altKey && e.shiftKey && e.key.toLowerCase() === 'c') {
+        e.preventDefault();
+        if (cart.length > 0) {
+          setCart([]);
+          setError(null);
+        }
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [cart, debounced]);
+  }, [cart]);
 
   const categoriesQuery = useQuery({
     queryKey: ['pos-categories'],
@@ -172,12 +304,8 @@ export function PosPage(): JSX.Element {
     },
   });
 
-  useEffect(() => {
-    setProductPage(1);
-  }, [debounced, categoryId]);
-
   const productsQuery = useQuery({
-    queryKey: ['pos-products', debounced, categoryId, productPage],
+    queryKey: ['pos-products', debounced, categoryId, productPage, pageSize],
     placeholderData: keepPreviousData,
     queryFn: async () => {
       const res = await ipc.products({
@@ -185,7 +313,7 @@ export function PosPage(): JSX.Element {
         categoryId: categoryId || null,
         includeInactive: false,
         page: productPage,
-        pageSize: PRODUCT_PAGE_SIZE,
+        pageSize,
       });
       if (!res.ok) throw new Error(res.error ?? 'Could not load products');
       return res as { items: ProductRow[]; total: number };
@@ -193,9 +321,9 @@ export function PosPage(): JSX.Element {
   });
 
   const productTotal = productsQuery.data?.total ?? 0;
-  const productPages = Math.max(1, Math.ceil(productTotal / PRODUCT_PAGE_SIZE));
-  const firstOnPage = productTotal === 0 ? 0 : (productPage - 1) * PRODUCT_PAGE_SIZE + 1;
-  const lastOnPage = Math.min(productPage * PRODUCT_PAGE_SIZE, productTotal);
+  const productPages = Math.max(1, Math.ceil(productTotal / pageSize));
+  const firstOnPage = productTotal === 0 ? 0 : (productPage - 1) * pageSize + 1;
+  const lastOnPage = Math.min(productPage * pageSize, productTotal);
 
   useEffect(() => {
     if (productsQuery.data && productPage > productPages) setProductPage(productPages);
@@ -490,6 +618,7 @@ export function PosPage(): JSX.Element {
     if (cart.length === 0) return;
     setPayments([{ method: 'cash', amountKobo: totals.total, reference: '' }]);
     setError(null);
+    setCartSheetOpen(false);
     setTenderOpen(true);
   }
 
@@ -497,7 +626,7 @@ export function PosPage(): JSX.Element {
 
   return (
     <RequirePermission permission="sales.create">
-      <div className="space-y-4">
+      <div className="space-y-4 pb-24 xl:pb-0">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Point of Sale</h1>
@@ -506,7 +635,15 @@ export function PosPage(): JSX.Element {
               <kbd className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold dark:bg-slate-800">
                 F9
               </kbd>{' '}
-              opens payment.
+              opens payment.{' '}
+              <kbd className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold dark:bg-slate-800">
+                /
+              </kbd>{' '}
+              focuses search,{' '}
+              <kbd className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold dark:bg-slate-800">
+                Alt+Shift+C
+              </kbd>{' '}
+              clears the cart.
             </p>
           </div>
           <Button variant="secondary" onClick={() => setHistoryOpen(true)}>
@@ -595,217 +732,155 @@ export function PosPage(): JSX.Element {
           </Card>
         ) : null}
 
-        <div className="grid items-start gap-4 xl:grid-cols-[200px_1fr_360px]">
-          {/* Category rail */}
-          <Card className="hidden shadow-card xl:block">
-            <CardContent className="space-y-1 p-3">
-              <button
-                type="button"
-                onClick={() => setCategoryId('')}
-                className={cn(
-                  'w-full rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition-colors',
-                  categoryId === ''
-                    ? 'bg-brand-600 text-white shadow-sm'
-                    : 'text-slate-600 hover:bg-brand-50 dark:text-slate-300 dark:hover:bg-slate-800'
-                )}
-              >
-                All items
-              </button>
-              {categories.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => setCategoryId(c.id)}
-                  className={cn(
-                    'w-full truncate rounded-xl px-3 py-2.5 text-left text-sm font-medium transition-colors',
-                    categoryId === c.id
-                      ? 'bg-brand-600 text-white shadow-sm'
-                      : 'text-slate-600 hover:bg-brand-50 dark:text-slate-300 dark:hover:bg-slate-800'
-                  )}
-                >
-                  {c.name}
-                </button>
-              ))}
+        <div className="grid h-[calc(100dvh-14rem)] min-h-[22rem] gap-3 xl:h-[calc(100vh-11rem)] xl:grid-cols-[minmax(0,1fr)_380px]">
+          {/* Bounded catalogue: the grid scrolls, the pager stays put. */}
+          <Card className="flex min-h-0 flex-col overflow-hidden shadow-card">
+            <CardContent className="flex min-h-0 flex-1 flex-col gap-3 p-3">
+              <div className="flex min-h-0 flex-1 flex-col gap-3">
+                <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-card focus-within:border-brand-400 dark:border-slate-700 dark:bg-slate-900">
+                  <Search className="h-5 w-5 shrink-0 text-slate-400" aria-hidden />
+                  <input
+                    ref={searchRef}
+                    className="w-full bg-transparent text-[15px] outline-none placeholder:text-slate-400 dark:text-white"
+                    placeholder="Search name, SKU, or scan barcode… (Enter adds first match)"
+                    aria-label="Search products"
+                    value={search}
+                    onChange={(e) => {
+                      searchDirty.current = true;
+                      setSearch(e.target.value);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        const code = search.trim();
+                        if (!code) return;
+                        void (async () => {
+                          const scanned = await addScannedCode(code);
+                          if (!scanned) {
+                            const first = productsQuery.data?.items[0];
+                            if (first) {
+                              addToCart(first);
+                              setSearch('');
+                            }
+                          }
+                        })();
+                      }
+                    }}
+                  />
+                  {search ? (
+                    <button
+                      type="button"
+                      onClick={() => setSearch('')}
+                      aria-label="Clear search"
+                      className="text-slate-400 hover:text-slate-600"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  ) : null}
+                </div>
+                {/* Category chips stay horizontal at every width. */}
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                  <button
+                    type="button"
+                    onClick={() => setCategoryId('')}
+                    className={cn(
+                      'shrink-0 rounded-full px-4 py-1.5 text-sm font-semibold',
+                      categoryId === ''
+                        ? 'bg-brand-600 text-white'
+                        : 'bg-white text-slate-600 dark:bg-slate-900 dark:text-slate-300'
+                    )}
+                  >
+                    All
+                  </button>
+                  {categories.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => setCategoryId(c.id)}
+                      className={cn(
+                        'shrink-0 rounded-full px-4 py-1.5 text-sm font-medium',
+                        categoryId === c.id
+                          ? 'bg-brand-600 text-white'
+                          : 'bg-white text-slate-600 dark:bg-slate-900 dark:text-slate-300'
+                      )}
+                    >
+                      {c.name}
+                    </button>
+                  ))}
+                </div>
+                {productsQuery.isPending && <ProductGridSkeleton />}
+                {productsQuery.isPlaceholderData ? (
+                  <span className="shrink-0 text-xs font-medium text-slate-500">Updating…</span>
+                ) : null}
+                {productsQuery.isError && <ErrorState message="Could not load products" />}
+                {productsQuery.data && productsQuery.data.items.length === 0 ? (
+                  <EmptyState
+                    title="No products found"
+                    hint="Try a different search, or add the product first."
+                  />
+                ) : null}
+                <div className="grid min-h-0 flex-1 auto-rows-min grid-cols-2 gap-3 overflow-y-auto pr-1 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4">
+                  {productsQuery.data?.items.map((p) => {
+                    const inCart = cart.find((l) => l.product.id === p.id)?.qty ?? 0;
+                    const out = p.onHand <= 0;
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => !out && addToCart(p)}
+                        disabled={out}
+                        className={cn(
+                          'group relative flex flex-col rounded-2xl border bg-white p-4 text-left shadow-card transition-all hover:-translate-y-0.5 hover:shadow-pop active:scale-[0.98] dark:bg-slate-900',
+                          inCart > 0
+                            ? 'border-brand-500 ring-1 ring-brand-500'
+                            : 'border-slate-200 dark:border-slate-700',
+                          out &&
+                            'cursor-not-allowed opacity-50 hover:translate-y-0 hover:shadow-card'
+                        )}
+                      >
+                        {inCart > 0 ? (
+                          <span className="absolute -right-2 -top-2 flex h-7 min-w-7 items-center justify-center rounded-full bg-brand-600 px-1.5 text-xs font-bold text-white shadow">
+                            {inCart}
+                          </span>
+                        ) : null}
+                        <ProductThumb
+                          imagePath={p.imagePath}
+                          name={p.name}
+                          size="md"
+                          className="mb-1"
+                        />
+                        <span className="mt-2 line-clamp-2 min-h-10 text-sm font-semibold leading-snug">
+                          {p.name}
+                        </span>
+                        <span className="mt-0.5 text-xs text-slate-500">{p.onHand} in stock</span>
+                        <span className="mt-1 text-[15px] font-bold tabular-nums text-brand-700 dark:text-brand-300">
+                          {formatKobo(p.sellingPriceKobo)}
+                        </span>
+                        {out ? (
+                          <span className="mt-1 text-xs font-bold text-red-500">Out of stock</span>
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                </div>
+                {productTotal > 0 ? (
+                  <div className="shrink-0 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-card dark:border-slate-700 dark:bg-slate-900">
+                    <span className="mb-1 block text-xs text-slate-500">
+                      Showing {firstOnPage}–{lastOnPage} of {productTotal}
+                    </span>
+                    <Pagination
+                      page={productPage}
+                      pageCount={productPages}
+                      total={productTotal}
+                      onPageChange={setProductPage}
+                    />
+                  </div>
+                ) : null}
+              </div>
             </CardContent>
           </Card>
 
-          {/* Product grid */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-card focus-within:border-brand-400 dark:border-slate-700 dark:bg-slate-900">
-              <Search className="h-5 w-5 shrink-0 text-slate-400" aria-hidden />
-              <input
-                ref={searchRef}
-                className="w-full bg-transparent text-[15px] outline-none placeholder:text-slate-400 dark:text-white"
-                placeholder="Search name, SKU, or scan barcode… (Enter adds first match)"
-                aria-label="Search products"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    const code = search.trim();
-                    if (!code) return;
-                    void (async () => {
-                      const scanned = await addScannedCode(code);
-                      if (!scanned) {
-                        const first = productsQuery.data?.items[0];
-                        if (first) {
-                          addToCart(first);
-                          setSearch('');
-                        }
-                      }
-                    })();
-                  }
-                }}
-              />
-              {search ? (
-                <button
-                  type="button"
-                  onClick={() => setSearch('')}
-                  aria-label="Clear search"
-                  className="text-slate-400 hover:text-slate-600"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              ) : null}
-            </div>
-            {/* Mobile category chips */}
-            <div className="flex gap-2 overflow-x-auto pb-1 xl:hidden">
-              <button
-                type="button"
-                onClick={() => setCategoryId('')}
-                className={cn(
-                  'shrink-0 rounded-full px-4 py-1.5 text-sm font-semibold',
-                  categoryId === ''
-                    ? 'bg-brand-600 text-white'
-                    : 'bg-white text-slate-600 dark:bg-slate-900 dark:text-slate-300'
-                )}
-              >
-                All
-              </button>
-              {categories.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => setCategoryId(c.id)}
-                  className={cn(
-                    'shrink-0 rounded-full px-4 py-1.5 text-sm font-medium',
-                    categoryId === c.id
-                      ? 'bg-brand-600 text-white'
-                      : 'bg-white text-slate-600 dark:bg-slate-900 dark:text-slate-300'
-                  )}
-                >
-                  {c.name}
-                </button>
-              ))}
-            </div>
-            {productsQuery.isLoading && <LoadingState label="Loading products…" />}
-            {productsQuery.isError && <ErrorState message="Could not load products" />}
-            {productsQuery.data && productsQuery.data.items.length === 0 ? (
-              <EmptyState
-                title="No products found"
-                hint="Try a different search, or add the product first."
-              />
-            ) : null}
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 xl:grid-rows-5">
-              {productsQuery.data?.items.map((p) => {
-                const inCart = cart.find((l) => l.product.id === p.id)?.qty ?? 0;
-                const out = p.onHand <= 0;
-                return (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => !out && addToCart(p)}
-                    disabled={out}
-                    className={cn(
-                      'group relative flex flex-col rounded-2xl border bg-white p-4 text-left shadow-card transition-all hover:-translate-y-0.5 hover:shadow-pop active:scale-[0.98] dark:bg-slate-900',
-                      inCart > 0
-                        ? 'border-brand-500 ring-1 ring-brand-500'
-                        : 'border-slate-200 dark:border-slate-700',
-                      out && 'cursor-not-allowed opacity-50 hover:translate-y-0 hover:shadow-card'
-                    )}
-                  >
-                    {inCart > 0 ? (
-                      <span className="absolute -right-2 -top-2 flex h-7 min-w-7 items-center justify-center rounded-full bg-brand-600 px-1.5 text-xs font-bold text-white shadow">
-                        {inCart}
-                      </span>
-                    ) : null}
-                    <ProductThumb
-                      imagePath={p.imagePath}
-                      name={p.name}
-                      size="md"
-                      className="mb-1"
-                    />
-                    <span className="mt-2 line-clamp-2 min-h-10 text-sm font-semibold leading-snug">
-                      {p.name}
-                    </span>
-                    <span className="mt-0.5 text-xs text-slate-500">{p.onHand} in stock</span>
-                    <span className="mt-1 text-[15px] font-bold tabular-nums text-brand-700 dark:text-brand-300">
-                      {formatKobo(p.sellingPriceKobo)}
-                    </span>
-                    {out ? (
-                      <span className="mt-1 text-xs font-bold text-red-500">Out of stock</span>
-                    ) : null}
-                  </button>
-                );
-              })}
-            </div>
-            {productTotal > 0 ? (
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm shadow-card dark:border-slate-700 dark:bg-slate-900">
-                <span className="text-slate-600 dark:text-slate-300">
-                  Showing {firstOnPage}–{lastOnPage} of {productTotal}
-                </span>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setProductPage((p) => Math.max(1, p - 1))}
-                    disabled={productPage <= 1}
-                  >
-                    Previous
-                  </Button>
-                  {Array.from({ length: productPages }, (_, i) => i + 1)
-                    .filter(
-                      (p) =>
-                        p === 1 ||
-                        p === productPages ||
-                        Math.abs(p - productPage) <= 1
-                    )
-                    .map((p, index, shown) => (
-                      <span key={p} className="flex items-center gap-2">
-                        {index > 0 && p - shown[index - 1]! > 1 ? (
-                          <span className="text-slate-400">…</span>
-                        ) : null}
-                        <button
-                          type="button"
-                          onClick={() => setProductPage(p)}
-                          aria-label={`Page ${p}`}
-                          aria-current={p === productPage ? 'page' : undefined}
-                          className={cn(
-                            'h-8 min-w-8 rounded-lg px-2 text-sm font-semibold tabular-nums transition-colors',
-                            p === productPage
-                              ? 'bg-brand-600 text-white shadow-sm'
-                              : 'text-slate-600 hover:bg-brand-50 dark:text-slate-300 dark:hover:bg-slate-800'
-                          )}
-                        >
-                          {p}
-                        </button>
-                      </span>
-                    ))}
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setProductPage((p) => Math.min(productPages, p + 1))}
-                    disabled={productPage >= productPages}
-                  >
-                    Next
-                  </Button>
-                </div>
-              </div>
-            ) : null}
-          </div>
-
-          {/* Sticky cart */}
-          <Card className="shadow-card xl:sticky xl:top-20">
+          {/* Cart stays pinned beside the till; on phones it becomes a sheet. */}
+          <Card className="hidden min-h-0 flex-col overflow-hidden shadow-card xl:flex">
             <CardHeader>
               <CardTitle className="flex items-center justify-between text-base">
                 <span className="flex items-center gap-2">
@@ -824,185 +899,215 @@ export function PosPage(): JSX.Element {
                 ) : null}
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
-              {cart.length === 0 ? (
-                <EmptyState title="Cart is empty" hint="Tap any product to add it here." />
-              ) : (
-                <ul className="max-h-72 space-y-2 overflow-y-auto pr-0.5">
-                  {cart.map((l) => {
-                    const gross = l.unitPriceKobo * l.qty;
-                    const lineTotal = gross - Math.min(l.lineDiscountKobo, gross);
-                    return (
-                      <li
-                        key={l.product.id}
-                        className="rounded-xl border border-slate-100 bg-slate-50/60 p-2.5 dark:border-slate-800 dark:bg-slate-800/50"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold">{l.product.name}</p>
-                            <p className="text-xs tabular-nums text-slate-500">
-                              {formatKobo(l.unitPriceKobo)} each
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => removeLine(l.product.id)}
-                            aria-label={`Remove ${l.product.name}`}
-                            className="rounded-lg p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                        <div className="mt-2 flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-1 rounded-full border border-slate-200 bg-white px-1 py-0.5 dark:border-slate-700 dark:bg-slate-900">
-                            <button
-                              type="button"
-                              aria-label="Decrease quantity"
-                              onClick={() =>
-                                l.qty <= 1
-                                  ? removeLine(l.product.id)
-                                  : updateLine(l.product.id, { qty: l.qty - 1 })
-                              }
-                              className="rounded-full p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800"
-                            >
-                              <Minus className="h-3.5 w-3.5" />
-                            </button>
-                            <span className="min-w-7 text-center text-sm font-bold tabular-nums">
-                              {l.qty}
-                            </span>
-                            <button
-                              type="button"
-                              aria-label="Increase quantity"
-                              onClick={() =>
-                                updateLine(l.product.id, { qty: Math.min(l.qty + 1, 1_000_000) })
-                              }
-                              className="rounded-full p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800"
-                            >
-                              <Plus className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                          <span className="text-sm font-bold tabular-nums">
-                            {formatKobo(lineTotal)}
-                          </span>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-              {error ? <p className="text-sm font-medium text-red-600">{error}</p> : null}
-              {restaurantEnabled ? (
-                <div className="space-y-2 rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
-                  <div className="flex flex-wrap gap-1.5">
-                    {ORDER_TYPES.map((t) => (
-                      <Button
-                        key={t}
-                        size="sm"
-                        variant={orderType === t ? 'primary' : 'secondary'}
-                        onClick={() => setOrderType(t)}
-                      >
-                        {ORDER_TYPE_LABELS[t]}
-                      </Button>
-                    ))}
-                  </div>
-                  <Input
-                    aria-label="Waiter name"
-                    placeholder="Waiter name (optional)"
-                    value={waiterName}
-                    maxLength={60}
-                    onChange={(e) => setWaiterName(e.target.value)}
-                    className="h-9"
+            <CardContent className="flex min-h-0 flex-1 flex-col gap-3 p-4">
+              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+                {cart.length === 0 ? (
+                  <EmptyState title="Cart is empty" hint="Tap any product to add it here." />
+                ) : (
+                  <CartLines
+                    cart={cart}
+                    onRemove={removeLine}
+                    onChangeQty={(id, qty) => updateLine(id, { qty })}
                   />
-                  <div className="grid grid-cols-2 gap-2">
-                    <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-                      Service charge %
-                      <Input
-                        inputMode="decimal"
-                        value={serviceChargePct}
-                        onChange={(e) => {
-                          setServiceChargeTouched(true);
-                          setServiceChargePct(e.target.value.replace(/[^0-9.]/g, ''));
-                        }}
-                        className="mt-1 h-9 text-right tabular-nums"
-                      />
-                    </label>
-                    <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-                      Tip (₦)
-                      <Input
-                        inputMode="decimal"
-                        value={tipInput}
-                        onChange={(e) => setTipInput(e.target.value)}
-                        className="mt-1 h-9 text-right tabular-nums"
-                      />
-                    </label>
-                  </div>
-                </div>
-              ) : null}
-              <div className="space-y-1.5 border-t border-dashed border-slate-200 pt-3 text-sm dark:border-slate-700">
-                <div className="flex justify-between text-slate-600 dark:text-slate-300">
-                  <span>Subtotal</span>
-                  <span className="tabular-nums">{formatKobo(totals.subtotal)}</span>
-                </div>
-                {totals.lineDiscount > 0 ? (
-                  <div className="flex justify-between text-emerald-600 dark:text-emerald-400">
-                    <span>Line discounts</span>
-                    <span className="tabular-nums">−{formatKobo(totals.lineDiscount)}</span>
-                  </div>
-                ) : null}
-                <div className="flex items-center justify-between gap-2 text-slate-600 dark:text-slate-300">
-                  <label htmlFor="pos-header-discount">Extra discount (₦)</label>
-                  <Input
-                    id="pos-header-discount"
-                    inputMode="decimal"
-                    value={headerDiscount}
-                    onChange={(e) => setHeaderDiscount(e.target.value)}
-                    className="h-8 w-24 px-2 text-right tabular-nums"
-                  />
-                </div>
-                <div className="flex justify-between text-slate-600 dark:text-slate-300">
-                  <span>Tax (est.)</span>
-                  <span className="tabular-nums">{formatKobo(totals.taxEstimate)}</span>
-                </div>
-                {totals.serviceCharge > 0 ? (
-                  <div className="flex justify-between text-slate-600 dark:text-slate-300">
-                    <span>Service charge</span>
-                    <span className="tabular-nums">{formatKobo(totals.serviceCharge)}</span>
+                )}
+                {error ? <p className="text-sm font-medium text-red-600">{error}</p> : null}
+                {restaurantEnabled ? (
+                  <div className="space-y-2 rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+                    <div className="flex flex-wrap gap-1.5">
+                      {ORDER_TYPES.map((t) => (
+                        <Button
+                          key={t}
+                          size="sm"
+                          variant={orderType === t ? 'primary' : 'secondary'}
+                          onClick={() => setOrderType(t)}
+                        >
+                          {ORDER_TYPE_LABELS[t]}
+                        </Button>
+                      ))}
+                    </div>
+                    <Input
+                      aria-label="Waiter name"
+                      placeholder="Waiter name (optional)"
+                      value={waiterName}
+                      maxLength={60}
+                      onChange={(e) => setWaiterName(e.target.value)}
+                      className="h-9"
+                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                        Service charge %
+                        <Input
+                          inputMode="decimal"
+                          value={serviceChargePct}
+                          onChange={(e) => {
+                            setServiceChargeTouched(true);
+                            setServiceChargePct(e.target.value.replace(/[^0-9.]/g, ''));
+                          }}
+                          className="mt-1 h-9 text-right tabular-nums"
+                        />
+                      </label>
+                      <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                        Tip (₦)
+                        <Input
+                          inputMode="decimal"
+                          value={tipInput}
+                          onChange={(e) => setTipInput(e.target.value)}
+                          className="mt-1 h-9 text-right tabular-nums"
+                        />
+                      </label>
+                    </div>
                   </div>
                 ) : null}
-                {totals.tip > 0 ? (
-                  <div className="flex justify-between text-slate-600 dark:text-slate-300">
-                    <span>Tip</span>
-                    <span className="tabular-nums">{formatKobo(totals.tip)}</span>
-                  </div>
-                ) : null}
-                {totals.loyaltyDiscount > 0 ? (
-                  <div className="flex justify-between text-amber-700 dark:text-amber-400">
-                    <span>Loyalty points ({totals.pointsUsed})</span>
-                    <span className="tabular-nums">−{formatKobo(totals.loyaltyDiscount)}</span>
-                  </div>
-                ) : null}
-                <div className="flex items-baseline justify-between pt-1">
-                  <span className="font-bold">Total</span>
-                  <span className="text-2xl font-black tabular-nums tracking-tight text-brand-700 dark:text-brand-300">
-                    {formatKobo(totals.total)}
-                  </span>
-                </div>
               </div>
-              <Button
-                size="lg"
-                className="w-full text-base"
-                disabled={cart.length === 0}
-                onClick={openTender}
-              >
-                Charge {formatKobo(totals.total)}
-              </Button>
-              {cart.length > 0 ? (
-                <Button variant="ghost" size="sm" className="w-full" onClick={() => setCart([])}>
-                  Clear cart
+              <div className="shrink-0 space-y-3">
+                <div className="space-y-1.5 border-t border-dashed border-slate-200 pt-3 text-sm dark:border-slate-700">
+                  <div className="flex justify-between text-slate-600 dark:text-slate-300">
+                    <span>Subtotal</span>
+                    <span className="tabular-nums">{formatKobo(totals.subtotal)}</span>
+                  </div>
+                  {totals.lineDiscount > 0 ? (
+                    <div className="flex justify-between text-emerald-600 dark:text-emerald-400">
+                      <span>Line discounts</span>
+                      <span className="tabular-nums">−{formatKobo(totals.lineDiscount)}</span>
+                    </div>
+                  ) : null}
+                  <div className="flex items-center justify-between gap-2 text-slate-600 dark:text-slate-300">
+                    <label htmlFor="pos-header-discount">Extra discount (₦)</label>
+                    <Input
+                      id="pos-header-discount"
+                      inputMode="decimal"
+                      value={headerDiscount}
+                      onChange={(e) => setHeaderDiscount(e.target.value)}
+                      className="h-8 w-24 px-2 text-right tabular-nums"
+                    />
+                  </div>
+                  <div className="flex justify-between text-slate-600 dark:text-slate-300">
+                    <span>Tax (est.)</span>
+                    <span className="tabular-nums">{formatKobo(totals.taxEstimate)}</span>
+                  </div>
+                  {totals.serviceCharge > 0 ? (
+                    <div className="flex justify-between text-slate-600 dark:text-slate-300">
+                      <span>Service charge</span>
+                      <span className="tabular-nums">{formatKobo(totals.serviceCharge)}</span>
+                    </div>
+                  ) : null}
+                  {totals.tip > 0 ? (
+                    <div className="flex justify-between text-slate-600 dark:text-slate-300">
+                      <span>Tip</span>
+                      <span className="tabular-nums">{formatKobo(totals.tip)}</span>
+                    </div>
+                  ) : null}
+                  {totals.loyaltyDiscount > 0 ? (
+                    <div className="flex justify-between text-amber-700 dark:text-amber-400">
+                      <span>Loyalty points ({totals.pointsUsed})</span>
+                      <span className="tabular-nums">−{formatKobo(totals.loyaltyDiscount)}</span>
+                    </div>
+                  ) : null}
+                  <div className="flex items-baseline justify-between pt-1">
+                    <span className="font-bold">Total</span>
+                    <span className="text-2xl font-black tabular-nums tracking-tight text-brand-700 dark:text-brand-300">
+                      {formatKobo(totals.total)}
+                    </span>
+                  </div>
+                </div>
+                <Button
+                  size="lg"
+                  className="w-full text-base"
+                  disabled={cart.length === 0}
+                  onClick={openTender}
+                >
+                  Charge {formatKobo(totals.total)}
                 </Button>
-              ) : null}
+                {cart.length > 0 ? (
+                  <Button variant="ghost" size="sm" className="w-full" onClick={() => setCart([])}>
+                    Clear cart
+                  </Button>
+                ) : null}
+              </div>
             </CardContent>
           </Card>
+
+          {/* Mobile checkout stays pinned while the catalog scrolls behind it. */}
+          <div className="fixed inset-x-0 bottom-0 z-30 flex items-center gap-3 border-t border-slate-200 bg-white/95 p-3 shadow-[0_-8px_24px_rgba(15,23,42,0.12)] backdrop-blur xl:hidden dark:border-slate-700 dark:bg-slate-900/95">
+            <button
+              type="button"
+              onClick={() => setCartSheetOpen(true)}
+              className="min-w-0 flex-1 text-left"
+              aria-label={`View cart, ${cartCount} items`}
+            >
+              <span className="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                {cartCount} {cartCount === 1 ? 'item' : 'items'} · View cart
+              </span>
+              <span className="block truncate text-xl font-black tabular-nums text-slate-900 dark:text-white">
+                {formatKobo(totals.total)}
+              </span>
+            </button>
+            <Button
+              size="lg"
+              className="shrink-0 px-7"
+              disabled={cart.length === 0}
+              onClick={openTender}
+            >
+              Pay
+            </Button>
+          </div>
+
+          {cartSheetOpen ? (
+            <div className="fixed inset-0 z-40 xl:hidden">
+              <button
+                type="button"
+                aria-label="Close cart"
+                className="absolute inset-0 bg-slate-950/60"
+                onClick={() => setCartSheetOpen(false)}
+              />
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-label="Cart"
+                className="absolute inset-x-0 bottom-0 flex max-h-[85vh] flex-col rounded-t-3xl bg-white shadow-2xl dark:bg-slate-900"
+              >
+                <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-700">
+                  <h2 className="text-base font-bold">Cart ({cartCount})</h2>
+                  <Button variant="ghost" size="sm" onClick={() => setCartSheetOpen(false)}>
+                    Close
+                  </Button>
+                </div>
+                <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
+                  <CartLines
+                    cart={cart}
+                    onRemove={removeLine}
+                    onChangeQty={(id, qty) => updateLine(id, { qty })}
+                  />
+                </div>
+                <div className="shrink-0 space-y-3 border-t border-slate-200 p-4 dark:border-slate-700">
+                  <div className="flex items-baseline justify-between">
+                    <span className="font-bold">Total</span>
+                    <span className="text-2xl font-black tabular-nums text-brand-700 dark:text-brand-300">
+                      {formatKobo(totals.total)}
+                    </span>
+                  </div>
+                  <Button
+                    size="lg"
+                    className="w-full"
+                    disabled={cart.length === 0}
+                    onClick={openTender}
+                  >
+                    Pay {formatKobo(totals.total)}
+                  </Button>
+                  {cart.length > 0 ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => setCart([])}
+                    >
+                      Clear cart
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
 

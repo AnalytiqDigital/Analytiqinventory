@@ -7,3 +7,4 @@ export * from './modal';
 export * from './drawer';
 export * from './states';
 export * from './stat';
+export * from './pagination';
