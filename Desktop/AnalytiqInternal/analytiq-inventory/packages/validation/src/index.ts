@@ -954,10 +954,7 @@ export const importTemplates = {
     'receipt,date,sku,qty,unit_price,line_discount,tender,customer,tax',
     'INV-0001,2026-11-02,IND-70,2,450.00,0,cash,,0',
   ],
-  'opening-stock': [
-    'sku,barcode,name,qty,location',
-    'IND-70,,Indomie 70g,100,',
-  ],
+  'opening-stock': ['sku,barcode,name,qty,location', 'IND-70,,Indomie 70g,100,'],
   contacts: [
     'name,type,phone,email,address,group',
     'Ada Obi,customer,08030000000,ada@example.com,Lagos,Wholesale',
@@ -1001,12 +998,53 @@ export function findLicensePlan(id: string): LicensePlan | undefined {
   return licensePlans.find((plan) => plan.id === id);
 }
 
+// Launch promotion. Amounts are kobo, like the plans above. `active` can be
+// flipped off later without breaking verification of paid historical orders.
+export const promotions = [
+  {
+    code: 'SAVE20000',
+    label: 'Launch discount',
+    kind: 'fixed',
+    amountKobo: 2_000_000,
+    active: true,
+  },
+] as const;
+
+export type Promotion = (typeof promotions)[number];
+export type PromotionCode = Promotion['code'];
+export type ActivePromotion = Extract<Promotion, { active: true }>;
+
+function normaliseCode(raw: string): string {
+  return raw.trim().toUpperCase();
+}
+
+/** Includes inactive codes so an older paid order can still be verified. */
+export function findPromotion(raw: string): Promotion | undefined {
+  const code = normaliseCode(raw);
+  return promotions.find((promotion) => promotion.code === code);
+}
+
+/** Only codes a customer may apply at checkout right now. */
+export function findActivePromotion(raw: string): ActivePromotion | undefined {
+  const code = normaliseCode(raw);
+  return promotions.find(
+    (promotion): promotion is ActivePromotion =>
+      promotion.active === true && promotion.code === code
+  );
+}
+
+export function priceWithPromotion(plan: LicensePlan, promotion: Promotion | undefined): number {
+  if (!promotion) return plan.priceKobo;
+  return Math.max(0, plan.priceKobo - promotion.amountKobo);
+}
+
 export const checkoutSchema = z.object({
   plan: z.enum(licensePlanIds),
   business: z.string().trim().min(2, 'Enter the business name').max(120),
   name: z.string().trim().max(120).default(''),
   email: z.string().trim().toLowerCase().email('Enter a valid email').max(200),
   phone: z.string().trim().max(32).default(''),
+  discountCode: z.string().trim().max(40).optional(),
 });
 
 export type CheckoutInput = z.infer<typeof checkoutSchema>;
@@ -1366,4 +1404,3 @@ export const restaurantSettingsSchema = z.object({
 });
 
 export type RestaurantSettingsInput = z.infer<typeof restaurantSettingsSchema>;
-

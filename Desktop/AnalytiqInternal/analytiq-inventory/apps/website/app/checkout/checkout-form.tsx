@@ -1,27 +1,44 @@
 'use client';
 
-import { checkoutSchema, licensePlans } from '@analytiq/validation';
+import {
+  checkoutSchema,
+  findActivePromotion,
+  licensePlans,
+  priceWithPromotion,
+} from '@analytiq/validation';
 import { useState, type FormEvent } from 'react';
 import { CheckoutError, startCheckout } from '../../lib/api';
 import { formatNaira } from '../../lib/format';
 
-type Field = 'business' | 'name' | 'email' | 'phone';
+type Field = 'business' | 'name' | 'email' | 'phone' | 'discountCode';
 
 interface FieldErrors {
   business?: string;
   email?: string;
+  discountCode?: string;
 }
 
 export default function CheckoutForm() {
-  const [form, setForm] = useState({ business: '', name: '', email: '', phone: '' });
+  const [form, setForm] = useState({
+    business: '',
+    name: '',
+    email: '',
+    phone: '',
+    discountCode: '',
+  });
   const [errors, setErrors] = useState<FieldErrors>({});
   const [failure, setFailure] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const plan = licensePlans[0];
+  const discountCode = form.discountCode.trim().toUpperCase();
+  const promotion = discountCode ? findActivePromotion(discountCode) : undefined;
+  const invalidDiscountCode = discountCode.length > 0 && !promotion;
+  const payableKobo = priceWithPromotion(plan, promotion);
 
   function update(field: Field, value: string): void {
-    setForm((current) => ({ ...current, [field]: value }));
+    const nextValue = field === 'discountCode' ? value.trimStart().toUpperCase() : value;
+    setForm((current) => ({ ...current, [field]: nextValue }));
     setErrors((current) => ({ ...current, [field]: undefined }));
     setFailure('');
   }
@@ -30,14 +47,20 @@ export default function CheckoutForm() {
     event.preventDefault();
     setFailure('');
 
-    const parsed = checkoutSchema.safeParse({ plan: plan.id, ...form });
+    const parsed = checkoutSchema.safeParse({ plan: plan.id, ...form, discountCode });
     if (!parsed.success) {
       const next: FieldErrors = {};
       for (const issue of parsed.error.issues) {
         const field = issue.path[0];
-        if (field === 'business' || field === 'email') next[field] ??= issue.message;
+        if (field === 'business' || field === 'email' || field === 'discountCode') {
+          next[field] ??= issue.message;
+        }
       }
       setErrors(next);
+      return;
+    }
+    if (invalidDiscountCode) {
+      setErrors({ discountCode: 'That discount code is not valid' });
       return;
     }
 
@@ -141,6 +164,27 @@ export default function CheckoutForm() {
                 </span>
               ) : null}
             </div>
+            <div className="field full">
+              <label htmlFor="discountCode">Discount code (optional)</label>
+              <input
+                id="discountCode"
+                name="discountCode"
+                value={form.discountCode}
+                onChange={(event) => update('discountCode', event.target.value)}
+                placeholder="SAVE20000"
+                autoComplete="off"
+                spellCheck={false}
+              />
+              {errors.discountCode || invalidDiscountCode ? (
+                <span className="hint" style={{ color: 'var(--danger)' }}>
+                  {errors.discountCode ?? 'That discount code is not valid'}
+                </span>
+              ) : promotion ? (
+                <span className="hint" style={{ color: 'var(--brand)' }}>
+                  {promotion.label} applied — {formatNaira(promotion.amountKobo)} off
+                </span>
+              ) : null}
+            </div>
           </div>
 
           <p className="fine-print">
@@ -149,7 +193,7 @@ export default function CheckoutForm() {
           </p>
 
           <button className="btn btn-primary btn-block" type="submit" disabled={submitting}>
-            {submitting ? 'Opening Paystack…' : `Pay ${formatNaira(plan.priceKobo)}`}
+            {submitting ? 'Opening Paystack…' : `Pay ${formatNaira(payableKobo)}`}
           </button>
         </form>
       </div>
@@ -169,6 +213,24 @@ export default function CheckoutForm() {
             <span>Key delivery</span>
             <strong>Shown here after payment</strong>
           </div>
+          <div className="summary-line">
+            <span>Plan price</span>
+            <strong
+              style={
+                promotion ? { textDecoration: 'line-through', color: 'var(--muted)' } : undefined
+              }
+            >
+              {formatNaira(plan.priceKobo)}
+            </strong>
+          </div>
+          {promotion ? (
+            <div className="summary-line">
+              <span>Discount ({promotion.code})</span>
+              <strong style={{ color: 'var(--brand)' }}>
+                −{formatNaira(promotion.amountKobo)}
+              </strong>
+            </div>
+          ) : null}
         </div>
         <ul
           style={{
@@ -186,7 +248,7 @@ export default function CheckoutForm() {
         </ul>
         <div className="summary-total">
           <span>Total</span>
-          <span>{formatNaira(plan.priceKobo)}</span>
+          <span>{formatNaira(payableKobo)}</span>
         </div>
         <p className="fine-print">
           Payment is handled by Paystack. AnalytIQ never sees your card details. Your licence works

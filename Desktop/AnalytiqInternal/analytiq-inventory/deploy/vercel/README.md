@@ -49,10 +49,13 @@ missed or the page is refreshed, `/retrieve-key` still returns that key.
    `{"ok":true,"service":"analytiq-mail"}`.
 
 The script sends keys with `GmailApp`, appends demo/quote requests to a Google
-Sheet called **AnalytIQ leads**, and keeps activation records in a second sheet
-called **AnalytIQ activations**. Both sheets are created automatically the first
-time they are needed. Free Gmail allows about 100 recipients a day, which is
-plenty for the first sales.
+Sheet called **AnalytIQ leads**, keeps activation records in **AnalytIQ
+activations**, and records paid orders and installer clicks in **AnalytIQ
+analytics** (`orders` and `downloads` tabs). These sheets are created
+automatically the first time they are needed. Redeploy the script when updating
+from the earlier mailer version so the `order`, `download` and `stats` actions
+are present. Free Gmail allows about 100 recipients a day, which is plenty for
+the first sales.
 
 **Single-use activation needs this script and the site to be live before you
 ship an app build that requires it.** The app asks the site to bind a key to the
@@ -75,17 +78,25 @@ it into chat, or email it.
 
 In Vercel: **Project → Settings → Environment Variables → Production**.
 
-| Name | Value |
-| ---- | ----- |
-| `PAYSTACK_SECRET_KEY` | `sk_test_...` first, then `sk_live_...` |
-| `LICENSE_PRIVATE_KEY` | the single-line PEM from above |
-| `APPS_SCRIPT_URL` | the `/exec` URL from step 1 |
-| `APPS_SCRIPT_SECRET` | the same `SECRET` you put in the script |
-| `WEBSITE_URL` | your production site, e.g. `https://analytiq-inventory.vercel.app` |
+| Name                    | Value                                                                   |
+| ----------------------- | ----------------------------------------------------------------------- |
+| `PAYSTACK_SECRET_KEY`   | `sk_test_...` first, then `sk_live_...`                                 |
+| `LICENSE_PRIVATE_KEY`   | the single-line PEM from above                                          |
+| `APPS_SCRIPT_URL`       | the `/exec` URL from step 1                                             |
+| `APPS_SCRIPT_SECRET`    | the same `SECRET` you put in the script                                 |
+| `WEBSITE_URL`           | your production site, e.g. `https://analytiq-inventory.vercel.app`      |
+| `ADMIN_DASHBOARD_TOKEN` | a long random string for `/admin`; generate it the same way as `SECRET` |
 
 Also **delete `NEXT_PUBLIC_API_URL`** if it is set. While it is set, the site
 keeps calling the old hosted API instead of its own `/api` routes. Saving the
 variable changes needs a redeploy: **Deployments → latest → ⋯ → Redeploy**.
+
+Open `https://<your-site>/admin` and paste the `ADMIN_DASHBOARD_TOKEN` value.
+The browser keeps it in session storage and sends it as `x-admin-token` to
+`/api/admin/stats`; the server never exposes the Apps Script secret. If the
+variable is unset the API returns 503, and a wrong token returns 401. Location
+in the dashboard comes from Vercel/Cloudflare country and city headers, so it
+is approximate and no IP addresses are stored.
 
 ## 3. Point Paystack at the webhook
 
@@ -120,27 +131,32 @@ webhook URL or the other way round.
 
 ## 5. Where to look after a sale
 
-| What | Where |
-| ---- | ----- |
-| Payment, amount, customer email, reference | Paystack Dashboard → Transactions |
-| Demo and quote requests | Google Sheet **AnalytIQ leads** |
-| Activation bindings (which computer holds a key) | Google Sheet **AnalytIQ activations** |
-| Key | Success page, the customer's email, or `/retrieve-key` |
-| Email failures | Apps Script → Executions; the success page still shows the key |
+| What                                             | Where                                                          |
+| ------------------------------------------------ | -------------------------------------------------------------- |
+| Payment, amount, customer email, reference       | Paystack Dashboard → Transactions                              |
+| Demo and quote requests                          | Google Sheet **AnalytIQ leads**                                |
+| Activation bindings (which computer holds a key) | Google Sheet **AnalytIQ activations**                          |
+| Paid orders, discount redemption, country/city   | `/admin` or Google Sheet **AnalytIQ analytics** → `orders`     |
+| Installer-link clicks and downloaders            | `/admin` or Google Sheet **AnalytIQ analytics** → `downloads`  |
+| Key                                              | Success page, the customer's email, or `/retrieve-key`         |
+| Email failures                                   | Apps Script → Executions; the success page still shows the key |
 
 ## Troubleshooting
 
-| Symptom | Cause and fix |
-| ------- | ------------- |
-| Checkout says "Online card payment is not configured yet" | `PAYSTACK_SECRET_KEY` is empty. Add it and redeploy. |
-| Success page says "The license issuer has no private key configured" | `LICENSE_PRIVATE_KEY` is missing or has real line breaks instead of `\n`. Re-run the PowerShell command. |
-| Key page stays "Waiting for Paystack…" | The customer has not completed payment, or the Paystack key is for a different mode. Check the transaction in Paystack. |
-| Webhook returns 401 in Paystack's log | `PAYSTACK_SECRET_KEY` does not match the mode of the webhook URL. Fix the key and redeploy. |
-| Email never arrives | Check Apps Script → Executions. Confirm both `APPS_SCRIPT_*` variables are set and the script's `SECRET` matches. The key is still on screen. |
-| App says "Cannot reach the AnalytIQ activation server" | The site (or `APPS_SCRIPT_URL`) is unreachable. Connect the shop computer to the internet, check `https://<your-site>/health`, then try again. |
-| App says "already activated on another computer" | The key is bound to the first computer. Deactivate it there (Settings → Licence), or clear the Install id cell in the **AnalytIQ activations** sheet when the old computer is gone. |
-| `retrieve-key` says not found | The email must match the one typed at checkout. The reference is on the Paystack receipt. |
-| Changed the plan price or lifetime | New checkouts use the new values. Paid keys are derived from the lifetime stored in their own transaction, so old keys do not change. |
+| Symptom                                                              | Cause and fix                                                                                                                                                                       |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Checkout says "Online card payment is not configured yet"            | `PAYSTACK_SECRET_KEY` is empty. Add it and redeploy.                                                                                                                                |
+| Success page says "The license issuer has no private key configured" | `LICENSE_PRIVATE_KEY` is missing or has real line breaks instead of `\n`. Re-run the PowerShell command.                                                                            |
+| Key page stays "Waiting for Paystack…"                               | The customer has not completed payment, or the Paystack key is for a different mode. Check the transaction in Paystack.                                                             |
+| Webhook returns 401 in Paystack's log                                | `PAYSTACK_SECRET_KEY` does not match the mode of the webhook URL. Fix the key and redeploy.                                                                                         |
+| Email never arrives                                                  | Check Apps Script → Executions. Confirm both `APPS_SCRIPT_*` variables are set and the script's `SECRET` matches. The key is still on screen.                                       |
+| App says "Cannot reach the AnalytIQ activation server"               | The site (or `APPS_SCRIPT_URL`) is unreachable. Connect the shop computer to the internet, check `https://<your-site>/health`, then try again.                                      |
+| App says "already activated on another computer"                     | The key is bound to the first computer. Deactivate it there (Settings → Licence), or clear the Install id cell in the **AnalytIQ activations** sheet when the old computer is gone. |
+| `retrieve-key` says not found                                        | The email must match the one typed at checkout. The reference is on the Paystack receipt.                                                                                           |
+| Changed the plan price or lifetime                                   | New checkouts use the new values. Paid keys are derived from the lifetime stored in their own transaction, so old keys do not change.                                               |
+| `/admin` says the dashboard is not configured                        | Add `ADMIN_DASHBOARD_TOKEN` in Vercel and redeploy.                                                                                                                                 |
+| `/admin` says Unauthorized                                           | The pasted token does not match `ADMIN_DASHBOARD_TOKEN`.                                                                                                                            |
+| Dashboard shows no location                                          | The visitor was not served through Vercel/Cloudflare headers; location is best-effort.                                                                                              |
 
 ## Notes and limits
 
@@ -160,14 +176,16 @@ webhook URL or the other way round.
 
 ## Endpoints added to the site
 
-| Method | Path | Purpose |
-| ------ | ---- | ------- |
-| GET | `/health` | Liveness |
-| GET | `/api/plans` | Public plan catalogue |
-| POST | `/api/checkout` | Validate the form, start Paystack |
-| GET | `/api/checkout/:reference` | Order status; the key appears once paid |
-| POST | `/api/licence/retrieve` | Reference + email → key |
-| POST | `/api/licence/activate` | Binds a signed key to the first computer (one key, one computer) |
-| POST | `/api/licence/deactivate` | Releases that binding so the key can move |
-| POST | `/api/leads` | Demo/quote request to the Apps Script sheet |
-| POST | `/api/payments/paystack/webhook` | HMAC-verified Paystack event; emails the key |
+| Method | Path                             | Purpose                                                          |
+| ------ | -------------------------------- | ---------------------------------------------------------------- |
+| GET    | `/health`                        | Liveness                                                         |
+| GET    | `/api/plans`                     | Public plan catalogue                                            |
+| POST   | `/api/checkout`                  | Validate the form, start Paystack                                |
+| GET    | `/api/checkout/:reference`       | Order status; the key appears once paid                          |
+| POST   | `/api/licence/retrieve`          | Reference + email → key                                          |
+| POST   | `/api/licence/activate`          | Binds a signed key to the first computer (one key, one computer) |
+| POST   | `/api/licence/deactivate`        | Releases that binding so the key can move                        |
+| POST   | `/api/leads`                     | Demo/quote request to the Apps Script sheet                      |
+| POST   | `/api/payments/paystack/webhook` | HMAC-verified Paystack event; emails the key                     |
+| GET    | `/api/download`                  | Records an installer click, then redirects to the installer      |
+| GET    | `/api/admin/stats`               | Token-protected dashboard data from Apps Script                  |

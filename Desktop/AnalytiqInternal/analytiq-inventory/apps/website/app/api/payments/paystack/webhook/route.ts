@@ -1,5 +1,10 @@
 import { loadWebConfig } from '../../../../../lib/server/config';
-import { deliverEmail, licenceEmail } from '../../../../../lib/server/delivery';
+import {
+  deliverEmail,
+  licenceEmail,
+  locationFromHeaders,
+  recordPaidOrder,
+} from '../../../../../lib/server/delivery';
 import { errorResponse, isOrderReference, jsonError } from '../../../../../lib/server/http';
 import { isAnalytiqTransaction, issueFromTransaction } from '../../../../../lib/server/licences';
 import { PaystackClient } from '../../../../../lib/server/paystack';
@@ -48,8 +53,12 @@ export async function POST(request: Request): Promise<Response> {
 
     const { order } = issueFromTransaction(transaction, config.licensePrivateKeyPem);
     const website = config.websiteUrl || new URL(request.url).origin;
-    // Delivery never fails the acknowledgement; the success page is canonical.
-    const delivered = await deliverEmail(licenceEmail(order, website), config);
+    // Neither email nor analytics may fail the acknowledgement; the success
+    // page is canonical and its poll records the same order if needed.
+    const [delivered] = await Promise.all([
+      deliverEmail(licenceEmail(order, website), config),
+      recordPaidOrder(order, locationFromHeaders(request.headers), config),
+    ]);
 
     return Response.json({ ok: true, status: 'paid', delivered });
   } catch (error) {

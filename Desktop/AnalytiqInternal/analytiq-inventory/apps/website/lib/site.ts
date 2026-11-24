@@ -8,8 +8,7 @@ export const COMPANY_SITE_LABEL = 'www.analytiq.ng';
 export const DOWNLOAD_FALLBACK_PATH = '/download';
 export const INSTALLER_VERSION = '1.2.2';
 export const DEFAULT_INSTALLER_URL = `https://github.com/AnalytiqDigital/analytiq-downloads/releases/download/v${INSTALLER_VERSION}/AnalytIQ-Inventory-${INSTALLER_VERSION}-Windows.zip`;
-export const INSTALLER_SHA256 =
-  'e5cab4798b5b4047a0868571d0761baa9e72502d940bae7372fc648666ac5086';
+export const INSTALLER_SHA256 = 'e5cab4798b5b4047a0868571d0761baa9e72502d940bae7372fc648666ac5086';
 export const INSTALLER_SIZE_LABEL = '95 MB';
 
 /** Starting anchor for the multi-location cloud version, per location per year. */
@@ -51,4 +50,24 @@ export function downloadUrl(): string {
 
 export function isInstallerHosted(): boolean {
   return downloadUrl() !== DOWNLOAD_FALLBACK_PATH;
+}
+
+export type DownloadSource = 'success' | 'public' | 'retrieve' | 'docs';
+
+/** All installer links go through /api/download so clicks can be counted. */
+export function trackedDownloadUrl(
+  options: {
+    reference?: string;
+    email?: string;
+    business?: string;
+    source?: DownloadSource;
+  } = {}
+): string {
+  const params = new URLSearchParams();
+  if (options.reference) params.set('ref', options.reference);
+  if (options.email) params.set('email', options.email);
+  if (options.business) params.set('business', options.business);
+  if (options.source) params.set('source', options.source);
+  const query = params.toString();
+  return `/api/download${query ? `?${query}` : ''}`;
 }

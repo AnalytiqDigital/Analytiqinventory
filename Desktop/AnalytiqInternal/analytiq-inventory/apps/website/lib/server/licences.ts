@@ -1,5 +1,5 @@
 import { createPrivateKey } from 'node:crypto';
-import { findLicensePlan, type LicensePlan } from '@analytiq/validation';
+import { findLicensePlan, findPromotion, type LicensePlan } from '@analytiq/validation';
 import { issueLicense } from '@analytiq/licensing/dist/key';
 import type { OrderView } from '../types';
 import { PaymentError, type PaystackTransaction } from './paystack';
@@ -35,31 +35,65 @@ export function isAnalytiqTransaction(transaction: PaystackTransaction): boolean
 }
 
 export function planOf(transaction: PaystackTransaction): LicensePlan | undefined {
-  return findLicensePlan(text(metadataOf(transaction).plan) || 'standard');
+  return findLicensePlan(text(metadataOf(transaction).plan));
 }
 
-export function expectedKobo(transaction: PaystackTransaction, plan: LicensePlan): number {
-  const recorded = Number(metadataOf(transaction).amountKobo);
-  return Number.isFinite(recorded) && recorded > 0 ? recorded : plan.priceKobo;
+export interface AmountBreakdown {
+  originalAmountKobo: number;
+  discountKobo: number;
+  discountCode: string;
+  amountKobo: number;
 }
 
-function assertPaidAmount(transaction: PaystackTransaction): LicensePlan {
+function positiveKobo(value: unknown): number | undefined {
+  const amount = Number(value);
+  return Number.isFinite(amount) && amount >= 0 ? Math.trunc(amount) : undefined;
+}
+
+/**
+ * Recompute the total from the metadata this server sent to Paystack. A bad
+ * code or altered discount means the order was tampered with.
+ */
+export function amountBreakdown(
+  transaction: PaystackTransaction,
+  plan: LicensePlan
+): AmountBreakdown {
   const meta = metadataOf(transaction);
-  const plan = findLicensePlan(text(meta.plan));
-  if (!plan) {
-    throw new PaymentError(
-      'This payment has no AnalytIQ plan attached. Contact us on WhatsApp before paying again.',
-      500,
-      'ORDER_INCOMPLETE'
-    );
+  const discountCode = text(meta.discountCode).toUpperCase();
+  const recordedOriginal = positiveKobo(meta.originalAmountKobo);
+  const recordedAmount = positiveKobo(meta.amountKobo);
+  const originalAmountKobo = recordedOriginal ?? recordedAmount ?? plan.priceKobo;
+
+  if (discountCode) {
+    const promotion = findPromotion(discountCode);
+    const recordedDiscount = positiveKobo(meta.discountKobo) ?? 0;
+    if (!promotion || recordedDiscount !== promotion.amountKobo) {
+      throw new PaymentError('The paid amount does not match the order', 400, 'AMOUNT_MISMATCH');
+    }
+    const amountKobo = Math.max(0, originalAmountKobo - promotion.amountKobo);
+    if (recordedAmount !== undefined && recordedAmount !== amountKobo) {
+      throw new PaymentError('The paid amount does not match the order', 400, 'AMOUNT_MISMATCH');
+    }
+    return { originalAmountKobo, discountKobo: promotion.amountKobo, discountCode, amountKobo };
   }
+
+  const recordedDiscount = positiveKobo(meta.discountKobo) ?? 0;
+  if (recordedDiscount > 0) {
+    throw new PaymentError('The paid amount does not match the order', 400, 'AMOUNT_MISMATCH');
+  }
+  const amountKobo = recordedAmount ?? originalAmountKobo;
+  return { originalAmountKobo, discountKobo: 0, discountCode: '', amountKobo };
+}
+
+function assertPaidAmount(transaction: PaystackTransaction, plan: LicensePlan): AmountBreakdown {
   if (transaction.currency !== 'NGN') {
     throw new PaymentError('This order is priced in NGN', 400, 'CURRENCY_MISMATCH');
   }
-  if (transaction.amount < expectedKobo(transaction, plan)) {
+  const breakdown = amountBreakdown(transaction, plan);
+  if (transaction.amount !== breakdown.amountKobo) {
     throw new PaymentError('The paid amount does not match the order', 400, 'AMOUNT_MISMATCH');
   }
-  return plan;
+  return breakdown;
 }
 
 /**
@@ -83,7 +117,15 @@ export function issueFromTransaction(
       'ORDER_INCOMPLETE'
     );
   }
-  const plan = assertPaidAmount(transaction);
+  const plan = planOf(transaction);
+  if (!plan) {
+    throw new PaymentError(
+      'This payment has no AnalytIQ plan attached. Contact us on WhatsApp before paying again.',
+      500,
+      'ORDER_INCOMPLETE'
+    );
+  }
+  const breakdown = assertPaidAmount(transaction, plan);
   if (!transaction.paid_at || !Number.isFinite(Date.parse(transaction.paid_at))) {
     throw new PaymentError(
       'Paystack has not recorded a payment time for this order yet.',
@@ -130,7 +172,10 @@ export function issueFromTransaction(
       business,
       name: text(meta.name),
       email,
-      amountKobo: transaction.amount || expectedKobo(transaction, plan),
+      originalAmountKobo: breakdown.originalAmountKobo,
+      discountKobo: breakdown.discountKobo,
+      discountCode: breakdown.discountCode,
+      amountKobo: breakdown.amountKobo,
       status: 'paid',
       licenseKey: issued.key,
       createdAt: transaction.transaction_date ?? paidAt,
@@ -152,11 +197,12 @@ export function orderView(transaction: PaystackTransaction, privateKeyPem: strin
     return issueFromTransaction(transaction, privateKeyPem).order;
   }
   const meta = metadataOf(transaction);
-  const plan = findLicensePlan(text(meta.plan)) ?? findLicensePlan('standard');
+  const plan = findLicensePlan(text(meta.plan));
   if (!plan) {
     throw new PaymentError('That order does not exist', 404, 'ORDER_NOT_FOUND');
   }
   const failed = ['failed', 'reversed', 'abandoned'].includes(transaction.status);
+  const breakdown = amountBreakdown(transaction, plan);
   return {
     reference: transaction.reference,
     planId: plan.id,
@@ -164,7 +210,10 @@ export function orderView(transaction: PaystackTransaction, privateKeyPem: strin
     business: text(meta.business),
     name: text(meta.name),
     email: text(transaction.customer?.email) || text(meta.email),
-    amountKobo: transaction.amount || expectedKobo(transaction, plan),
+    originalAmountKobo: breakdown.originalAmountKobo,
+    discountKobo: breakdown.discountKobo,
+    discountCode: breakdown.discountCode,
+    amountKobo: breakdown.amountKobo,
     status: failed ? 'failed' : 'pending',
     licenseKey: null,
     createdAt: transaction.transaction_date ?? '',

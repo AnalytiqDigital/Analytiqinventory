@@ -21,6 +21,7 @@ import {
   YOUTUBE_CHANNEL_LABEL,
   callUrl,
   downloadUrl,
+  trackedDownloadUrl,
   whatsappUrl,
 } from '../lib/site';
 
@@ -1141,15 +1142,14 @@ export default function HomePage() {
             <article className="company-card">
               <h3>Who we are</h3>
               <p>
-                We build and support the software ourselves, and publish the app, the guides and
-                the licence terms on this site.
+                We build and support the software ourselves, and publish the app, the guides and the
+                licence terms on this site.
               </p>
             </article>
             <article className="company-card">
               <h3>Contact</h3>
               <p>
-                WhatsApp: {SUPPORT_WHATSAPP_LABEL} · Calls: {SUPPORT_PHONE_LABEL}.{' '}
-                {SUPPORT_HOURS}.
+                WhatsApp: {SUPPORT_WHATSAPP_LABEL} · Calls: {SUPPORT_PHONE_LABEL}. {SUPPORT_HOURS}.
               </p>
               <a className="text-link" href={support} target="_blank" rel="noreferrer">
                 Open WhatsApp →
@@ -1202,7 +1202,7 @@ export default function HomePage() {
               walkthrough and we will set it up with you on WhatsApp.
             </p>
             <div className="hero-actions" style={{ justifyContent: 'center' }}>
-              <a className="btn btn-primary" href={installer}>
+              <a className="btn btn-primary" href={trackedDownloadUrl({ source: 'public' })}>
                 Download the free trial
               </a>
               <a className="btn btn-outline" href={demo} target="_blank" rel="noreferrer">

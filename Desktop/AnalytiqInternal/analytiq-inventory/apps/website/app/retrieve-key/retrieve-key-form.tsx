@@ -4,7 +4,7 @@ import { useState, type FormEvent } from 'react';
 import { CheckoutError, retrieveKey, type OrderView } from '../../lib/api';
 import { formatDate, formatNaira } from '../../lib/format';
 import { findLicensePlan } from '@analytiq/validation';
-import { downloadUrl, whatsappUrl } from '../../lib/site';
+import { trackedDownloadUrl, whatsappUrl } from '../../lib/site';
 
 function deliveryNote(order: OrderView): string {
   const sent: string[] = [];
@@ -77,7 +77,14 @@ export default function RetrieveKeyForm() {
           <button className="btn btn-primary" type="button" onClick={() => void copyKey()}>
             {copied ? 'Copied' : 'Copy licence key'}
           </button>
-          <a className="btn btn-outline" href={downloadUrl()}>
+          <a
+            className="btn btn-outline"
+            href={trackedDownloadUrl({
+              reference: order.reference,
+              email: order.email,
+              source: 'retrieve',
+            })}
+          >
             Download the installer
           </a>
         </div>
