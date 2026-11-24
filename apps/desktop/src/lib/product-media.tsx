@@ -21,7 +21,12 @@ export const IMAGE_ACCEPT = 'image/png,image/jpeg,image/webp';
 /** True when a stored value can be handed straight to an <img src>. */
 export function isRenderableImage(value: string): boolean {
   const v = value.trim();
-  return v.startsWith('data:image/') || v.startsWith('http://') || v.startsWith('https://') || v.startsWith('file://');
+  return (
+    v.startsWith('data:image/') ||
+    v.startsWith('http://') ||
+    v.startsWith('https://') ||
+    v.startsWith('file://')
+  );
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -99,7 +104,12 @@ const SIZES: Record<NonNullable<ProductThumbProps['size']>, string> = {
 };
 
 /** Product photo with a branded fallback tile when none is set. */
-export function ProductThumb({ imagePath, name, size = 'sm', className = '' }: ProductThumbProps): JSX.Element {
+export function ProductThumb({
+  imagePath,
+  name,
+  size = 'sm',
+  className = '',
+}: ProductThumbProps): JSX.Element {
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [imagePath]);
 
@@ -112,7 +122,9 @@ export function ProductThumb({ imagePath, name, size = 'sm', className = '' }: P
         aria-hidden
         className={`${box} grid place-items-center bg-brand-50 text-brand-400 dark:bg-brand-900/30 dark:text-brand-300`}
       >
-        <UtensilsCrossed className={size === 'sm' ? 'h-4 w-4' : size === 'md' ? 'h-5 w-5' : 'h-7 w-7'} />
+        <UtensilsCrossed
+          className={size === 'sm' ? 'h-4 w-4' : size === 'md' ? 'h-5 w-5' : 'h-7 w-7'}
+        />
       </div>
     );
   }
@@ -122,6 +134,7 @@ export function ProductThumb({ imagePath, name, size = 'sm', className = '' }: P
       src={imagePath}
       alt={name}
       loading="lazy"
+      decoding="async"
       onError={() => setFailed(true)}
       className={`${box} bg-white object-cover ring-1 ring-slate-200 dark:ring-slate-700`}
     />

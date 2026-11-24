@@ -1,5 +1,10 @@
 import { randomBytes } from 'node:crypto';
-import { checkoutSchema, findLicensePlan } from '@analytiq/validation';
+import {
+  checkoutSchema,
+  findActivePromotion,
+  findLicensePlan,
+  priceWithPromotion,
+} from '@analytiq/validation';
 import { loadWebConfig } from '../../../lib/server/config';
 import { errorResponse, jsonError, readJson, validationError } from '../../../lib/server/http';
 import { PaystackClient } from '../../../lib/server/paystack';
@@ -17,12 +22,21 @@ export async function POST(request: Request): Promise<Response> {
     const plan = findLicensePlan(input.plan);
     if (!plan) return jsonError(400, 'Choose a plan', 'VALIDATION');
 
+    const promotion = input.discountCode ? findActivePromotion(input.discountCode) : undefined;
+    if (input.discountCode?.trim() && !promotion) {
+      return jsonError(400, 'That discount code is not valid', 'INVALID_DISCOUNT_CODE');
+    }
+
+    const originalAmountKobo = plan.priceKobo;
+    const discountKobo = promotion?.amountKobo ?? 0;
+    const amountKobo = priceWithPromotion(plan, promotion);
+
     const config = loadWebConfig();
     const reference = `ord_${randomBytes(12).toString('hex')}`;
     const website = config.websiteUrl || new URL(request.url).origin;
     const payment = await new PaystackClient(config.paystackSecretKey).initialize({
       email: input.email,
-      amountKobo: plan.priceKobo,
+      amountKobo,
       reference,
       callbackUrl: `${website}/checkout/success`,
       metadata: {
@@ -32,7 +46,10 @@ export async function POST(request: Request): Promise<Response> {
         name: input.name,
         email: input.email,
         phone: input.phone,
-        amountKobo: plan.priceKobo,
+        originalAmountKobo,
+        discountKobo,
+        discountCode: promotion?.code ?? '',
+        amountKobo,
         licenceDays: plan.days,
       },
     });
@@ -44,7 +61,10 @@ export async function POST(request: Request): Promise<Response> {
       business: input.business,
       name: input.name,
       email: input.email,
-      amountKobo: plan.priceKobo,
+      originalAmountKobo,
+      discountKobo,
+      discountCode: promotion?.code ?? '',
+      amountKobo,
       status: 'pending',
       licenseKey: null,
       createdAt: new Date().toISOString(),

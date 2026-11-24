@@ -45,26 +45,23 @@ function transaction(overrides: Partial<PaystackTransaction> = {}): PaystackTran
 }
 
 function stubPaystack(data: PaystackTransaction, calls: Call[] = []): Call[] {
-  vi.stubGlobal(
-    'fetch',
-    (async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      calls.push({ url, init });
-      if (url.endsWith('/transaction/initialize')) {
-        return Response.json({
-          status: true,
-          data: { authorization_url: 'https://checkout.paystack.test/abc' },
-        });
-      }
-      if (url.includes('/transaction/verify/')) {
-        return Response.json({ status: true, data });
-      }
-      if (url === APPS_URL) {
-        return new Response('', { status: 302 });
-      }
-      throw new Error(`unexpected fetch ${url}`);
-    }) as typeof fetch
-  );
+  vi.stubGlobal('fetch', (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    calls.push({ url, init });
+    if (url.endsWith('/transaction/initialize')) {
+      return Response.json({
+        status: true,
+        data: { authorization_url: 'https://checkout.paystack.test/abc' },
+      });
+    }
+    if (url.includes('/transaction/verify/')) {
+      return Response.json({ status: true, data });
+    }
+    if (url === APPS_URL) {
+      return new Response('', { status: 302 });
+    }
+    throw new Error(`unexpected fetch ${url}`);
+  }) as typeof fetch);
   return calls;
 }
 
@@ -127,9 +124,12 @@ describe('Vercel checkout routes', () => {
     vi.stubEnv('LICENSE_PRIVATE_KEY', privateKeyPem);
     stubPaystack(transaction());
 
-    const response = await statusRoute.GET(new Request(`https://shop.example/api/checkout/${REF}`), {
-      params: { reference: REF },
-    });
+    const response = await statusRoute.GET(
+      new Request(`https://shop.example/api/checkout/${REF}`),
+      {
+        params: { reference: REF },
+      }
+    );
 
     expect(response.status).toBe(200);
     const body = (await response.json()) as {
@@ -249,18 +249,18 @@ describe('single-use licence activation', () => {
     vi.stubEnv('APPS_SCRIPT_SECRET', 'shared-secret');
   }
 
-  function stubRegistry(state: 'bound' | 'taken' | 'released' | 'unbound', calls: Call[] = []): Call[] {
-    vi.stubGlobal(
-      'fetch',
-      (async (input: RequestInfo | URL, init?: RequestInit) => {
-        calls.push({ url: String(input), init });
-        return Response.json({
-          ok: true,
-          state,
-          boundAt: state === 'taken' ? '2026-11-20T09:00:00.000Z' : '2026-11-21T10:00:00.000Z',
-        });
-      }) as typeof fetch
-    );
+  function stubRegistry(
+    state: 'bound' | 'taken' | 'released' | 'unbound',
+    calls: Call[] = []
+  ): Call[] {
+    vi.stubGlobal('fetch', (async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ url: String(input), init });
+      return Response.json({
+        ok: true,
+        state,
+        boundAt: state === 'taken' ? '2026-11-20T09:00:00.000Z' : '2026-11-21T10:00:00.000Z',
+      });
+    }) as typeof fetch);
     return calls;
   }
 
@@ -365,5 +365,113 @@ describe('single-use licence activation', () => {
 
     expect(response.status).toBe(409);
     expect(await response.json()).toMatchObject({ code: 'LICENSE_DEVICE_MISMATCH' });
+  });
+  function codedTransaction(overrides: Partial<PaystackTransaction> = {}): PaystackTransaction {
+    return transaction({
+      amount: 6_000_000,
+      metadata: {
+        order_reference: REF,
+        plan: 'standard',
+        business: 'Ada Stores',
+        name: 'Ada Obi',
+        email: 'ada@example.com',
+        originalAmountKobo: 8_000_000,
+        discountKobo: 2_000_000,
+        discountCode: 'SAVE20000',
+        amountKobo: 6_000_000,
+        licenceDays: 365,
+      },
+      ...overrides,
+    });
+  }
+
+  it('charges the discounted amount and records the code in Paystack metadata', async () => {
+    vi.stubEnv('PAYSTACK_SECRET_KEY', SECRET);
+    vi.stubEnv('WEBSITE_URL', 'https://shop.example');
+    const calls = stubPaystack(codedTransaction());
+
+    const response = await checkoutRoute.POST(
+      jsonRequest('https://shop.example/api/checkout', {
+        plan: 'standard',
+        business: 'Ada Stores',
+        name: 'Ada Obi',
+        email: 'ada@example.com',
+        discountCode: 'save20000',
+      })
+    );
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      order: {
+        originalAmountKobo: number;
+        discountKobo: number;
+        discountCode: string;
+        amountKobo: number;
+      };
+    };
+    expect(body.order).toMatchObject({
+      originalAmountKobo: 8_000_000,
+      discountKobo: 2_000_000,
+      discountCode: 'SAVE20000',
+      amountKobo: 6_000_000,
+    });
+    const init = calls.find((call) => call.url.endsWith('/transaction/initialize'));
+    expect(JSON.parse(String(init?.init?.body))).toMatchObject({
+      amount: 6_000_000,
+      metadata: {
+        originalAmountKobo: 8_000_000,
+        discountKobo: 2_000_000,
+        discountCode: 'SAVE20000',
+        amountKobo: 6_000_000,
+      },
+    });
+  });
+
+  it('refuses an invalid discount code before calling Paystack', async () => {
+    vi.stubEnv('PAYSTACK_SECRET_KEY', SECRET);
+    const calls = stubPaystack(transaction());
+
+    const response = await checkoutRoute.POST(
+      jsonRequest('https://shop.example/api/checkout', {
+        plan: 'standard',
+        business: 'Ada Stores',
+        email: 'ada@example.com',
+        discountCode: 'NOPE',
+      })
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ code: 'INVALID_DISCOUNT_CODE' });
+    expect(calls).toHaveLength(0);
+  });
+
+  it('issues a key only when the coded amount is exactly the discounted price', async () => {
+    vi.stubEnv('PAYSTACK_SECRET_KEY', SECRET);
+    vi.stubEnv('LICENSE_PRIVATE_KEY', privateKeyPem);
+    stubPaystack(codedTransaction());
+
+    const response = await statusRoute.GET(
+      new Request(`https://shop.example/api/checkout/${REF}`),
+      {
+        params: { reference: REF },
+      }
+    );
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { order: { amountKobo: number; discountCode: string } };
+    expect(body.order).toMatchObject({ amountKobo: 6_000_000, discountCode: 'SAVE20000' });
+
+    vi.stubGlobal('fetch', (async (input: RequestInfo | URL) => {
+      if (String(input).includes('/transaction/verify/')) {
+        return Response.json({ status: true, data: codedTransaction({ amount: 5_999_999 }) });
+      }
+      return new Response('', { status: 302 });
+    }) as typeof fetch);
+    const underpaid = await statusRoute.GET(
+      new Request(`https://shop.example/api/checkout/${REF}`),
+      {
+        params: { reference: REF },
+      }
+    );
+    expect(underpaid.status).toBe(400);
   });
 });

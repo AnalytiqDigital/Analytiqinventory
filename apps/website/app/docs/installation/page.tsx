@@ -5,7 +5,7 @@ import {
   SUPPORT_PHONE_LABEL,
   SUPPORT_WHATSAPP_LABEL,
   callUrl,
-  downloadUrl,
+  trackedDownloadUrl,
   whatsappUrl,
 } from '../../../lib/site';
 
@@ -15,7 +15,6 @@ export const metadata: Metadata = {
 };
 
 export default function InstallationPage() {
-  const installer = downloadUrl();
   return (
     <main className="docs-page">
       <div className="container">
@@ -46,7 +45,7 @@ export default function InstallationPage() {
               file is intact.
             </p>
             <p>
-              <a className="btn btn-primary" href={installer}>
+              <a className="btn btn-primary" href={trackedDownloadUrl({ source: 'docs' })}>
                 Download for Windows
               </a>
             </p>

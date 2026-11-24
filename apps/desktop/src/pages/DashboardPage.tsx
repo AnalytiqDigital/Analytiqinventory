@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   AlertTriangle,
@@ -26,8 +27,8 @@ import { formatKobo } from '../lib/money';
 import { percentOf } from '../lib/statements';
 import type { ReportsSummary } from '../types/global';
 
-function startOfTodayIso(): string {
-  const d = new Date();
+function startOfTodayIso(from: Date = new Date()): string {
+  const d = new Date(from);
   d.setHours(0, 0, 0, 0);
   return d.toISOString();
 }
@@ -39,6 +40,10 @@ function startOfMonthIso(now: Date): string {
 function useSummary(period: 'today' | 'month', from: string, to: string) {
   return useQuery({
     queryKey: ['dashboard-summary', period, from, to],
+    // The window is frozen for this mount; refetches must reuse the same key.
+    staleTime: 30_000,
+    retry: 1,
+    refetchInterval: 60_000,
     queryFn: async (): Promise<ReportsSummary> => {
       const res = await ipc.reportsSummary({ from, to, topLimit: 5 });
       if (!res.ok || !res.summary) throw new Error(res.error ?? 'Could not load analytics');
@@ -166,11 +171,31 @@ function RestockCard({ summary }: { summary: ReportsSummary }): JSX.Element {
   );
 }
 
+function DashboardSkeleton(): JSX.Element {
+  return (
+    <div className="space-y-6">
+      <DashboardHeading />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4" aria-hidden>
+        {Array.from({ length: 4 }, (_, i) => (
+          <div
+            key={i}
+            className="rounded-2xl border border-slate-200 bg-white p-4 shadow-card dark:border-slate-800 dark:bg-slate-900"
+          >
+            <div className="h-3 w-24 animate-pulse rounded bg-slate-100 dark:bg-slate-800" />
+            <div className="mt-4 h-7 w-32 animate-pulse rounded bg-slate-100 dark:bg-slate-800" />
+          </div>
+        ))}
+      </div>
+      <LoadingState label="Loading your analytics…" />
+    </div>
+  );
+}
+
 function AnalyticsDashboard(): JSX.Element {
   const navigate = useNavigate();
-  const now = new Date();
-  const nowIso = now.toISOString();
-  const todayFrom = startOfTodayIso();
+  const [now] = useState(() => new Date());
+  const nowIso = useMemo(() => now.toISOString(), [now]);
+  const todayFrom = useMemo(() => startOfTodayIso(now), [now]);
   const monthFrom = startOfMonthIso(now);
 
   const todayQuery = useSummary('today', todayFrom, nowIso);
@@ -179,7 +204,7 @@ function AnalyticsDashboard(): JSX.Element {
   const loading = todayQuery.isLoading || monthQuery.isLoading;
   const error = (todayQuery.error as Error | null) ?? (monthQuery.error as Error | null);
 
-  if (loading) return <LoadingState label="Loading your analytics…" />;
+  if (loading) return <DashboardSkeleton />;
   if (error) {
     return (
       <div className="space-y-6">
@@ -197,7 +222,7 @@ function AnalyticsDashboard(): JSX.Element {
 
   const today = todayQuery.data;
   const month = monthQuery.data;
-  if (!today || !month) return <LoadingState label="Loading your analytics…" />;
+  if (!today || !month) return <DashboardSkeleton />;
 
   const trend = [...month.daily].sort((a, b) => a.date.localeCompare(b.date)).slice(-7);
   const trendPeak = trend.reduce((max, day) => Math.max(max, day.grossKobo), 0);

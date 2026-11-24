@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { CheckoutError, fetchOrder, type OrderView } from '../../../lib/api';
 import { formatDate, formatNaira } from '../../../lib/format';
-import { downloadUrl, whatsappUrl } from '../../../lib/site';
+import { trackedDownloadUrl, whatsappUrl } from '../../../lib/site';
 
 const POLL_MS = 3000;
 const MAX_ATTEMPTS = 40;
@@ -169,7 +169,17 @@ export default function SuccessStatus() {
             <strong>{order.planName}</strong>
           </div>
           <div className="summary-line">
-            <span>Amount</span>
+            <span>Plan price</span>
+            <strong>{formatNaira(order.originalAmountKobo)}</strong>
+          </div>
+          {order.discountKobo > 0 ? (
+            <div className="summary-line">
+              <span>Discount ({order.discountCode})</span>
+              <strong>−{formatNaira(order.discountKobo)}</strong>
+            </div>
+          ) : null}
+          <div className="summary-line">
+            <span>Total</span>
             <strong>{formatNaira(order.amountKobo)}</strong>
           </div>
         </div>
@@ -197,6 +207,23 @@ export default function SuccessStatus() {
         copy of this key stays on your order page.
       </p>
 
+      <div className="summary-lines" style={{ textAlign: 'left' }}>
+        <div className="summary-line">
+          <span>Plan price</span>
+          <strong>{formatNaira(order.originalAmountKobo)}</strong>
+        </div>
+        {order.discountKobo > 0 ? (
+          <div className="summary-line">
+            <span>Discount ({order.discountCode})</span>
+            <strong>−{formatNaira(order.discountKobo)}</strong>
+          </div>
+        ) : null}
+        <div className="summary-line">
+          <span>Paid</span>
+          <strong>{formatNaira(order.amountKobo)}</strong>
+        </div>
+      </div>
+
       <div className="key-box">
         <label htmlFor="license-key">Licence key</label>
         <textarea id="license-key" readOnly value={order.licenseKey ?? ''} />
@@ -212,9 +239,8 @@ export default function SuccessStatus() {
         {delivered.length > 0
           ? `A copy of this key was sent by ${delivered.join(' and ')}. `
           : null}
-        You can always recover it at{' '}
-        <a href="/retrieve-key">the key retrieval page</a> with this reference and your checkout
-        email.
+        You can always recover it at <a href="/retrieve-key">the key retrieval page</a> with this
+        reference and your checkout email.
       </p>
 
       <div className="download-box">
@@ -224,7 +250,15 @@ export default function SuccessStatus() {
           under Settings → Licence.
         </p>
         <div className="success-actions">
-          <a className="btn btn-primary" href={downloadUrl()}>
+          <a
+            className="btn btn-primary"
+            href={trackedDownloadUrl({
+              reference: order.reference,
+              email: order.email,
+              business: order.business,
+              source: 'success',
+            })}
+          >
             Download AnalytIQ installer
           </a>
           <a

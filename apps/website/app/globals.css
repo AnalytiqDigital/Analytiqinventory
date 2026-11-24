@@ -589,8 +589,7 @@ a:focus-visible,
 
 .section-tutorial {
   background:
-    radial-gradient(820px 380px at 50% 0%, rgba(15, 107, 79, 0.08), transparent 70%),
-    var(--bg);
+    radial-gradient(820px 380px at 50% 0%, rgba(15, 107, 79, 0.08), transparent 70%), var(--bg);
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
 }
@@ -1487,8 +1486,10 @@ a:focus-visible,
   margin-top: 4px;
   background: currentColor;
   color: var(--brand);
-  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / 14px 14px no-repeat;
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / 14px 14px no-repeat;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E")
+    center / 14px 14px no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E")
+    center / 14px 14px no-repeat;
 }
 
 .package .btn {
@@ -2553,8 +2554,10 @@ a:focus-visible,
   margin-top: 4px;
   background: currentColor;
   color: var(--brand);
-  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / 14px 14px no-repeat;
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / 14px 14px no-repeat;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E")
+    center / 14px 14px no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E")
+    center / 14px 14px no-repeat;
 }
 
 /* Plan comparison --------------------------------------------------------- */
@@ -2963,5 +2966,126 @@ a:focus-visible,
 
   .split-copy h2 {
     font-size: 1.7rem;
+  }
+}
+
+/* Internal sales dashboard ------------------------------------------------ */
+.admin-page {
+  padding: 54px 0 90px;
+}
+
+.admin-dashboard {
+  margin-top: 28px;
+}
+
+.admin-token {
+  display: grid;
+  gap: 16px;
+  max-width: 620px;
+}
+
+.admin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.admin-updated {
+  margin: 20px 0 14px;
+}
+
+.admin-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.admin-stat {
+  display: grid;
+  gap: 8px;
+  padding: 20px;
+}
+
+.admin-stat span {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.admin-stat strong {
+  font-size: 1.65rem;
+  line-height: 1.15;
+}
+
+.admin-section {
+  margin-top: 24px;
+  padding: 24px;
+}
+
+.admin-section h2 {
+  margin-bottom: 16px;
+  font-size: 1.25rem;
+}
+
+.admin-split {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.admin-split .admin-section {
+  margin-top: 24px;
+}
+
+.admin-table-wrap {
+  overflow-x: auto;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.admin-table th,
+.admin-table td {
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.admin-table th {
+  color: var(--ink-soft);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.admin-table tbody tr:last-child th,
+.admin-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.admin-code {
+  font-family: var(--mono);
+  font-weight: 600;
+}
+
+.admin-empty {
+  color: var(--muted);
+  padding: 12px 0;
+}
+
+.admin-welcome {
+  padding: 24px;
+}
+
+@media (max-width: 600px) {
+  .admin-section {
+    padding: 18px;
+  }
+
+  .admin-stat strong {
+    font-size: 1.35rem;
   }
 }
