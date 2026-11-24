@@ -9,6 +9,31 @@ export interface MailMessage {
 
 export type DeliveryState = 'sent' | 'failed' | 'skipped';
 
+export interface VisitLocation {
+  country: string;
+  city: string;
+}
+
+const LOCATION_HEADERS = {
+  country: ['x-vercel-ip-country', 'cf-ipcountry', 'x-country-code'],
+  city: ['x-vercel-ip-city', 'cf-ipcity', 'x-city'],
+} as const;
+
+/** Hosting/CDN geography only. No IP address is stored. */
+export function locationFromHeaders(headers: Headers): VisitLocation {
+  function first(names: readonly string[]): string {
+    for (const name of names) {
+      const value = headers.get(name)?.trim();
+      if (value) return value.slice(0, 80);
+    }
+    return '';
+  }
+  return {
+    country: first(LOCATION_HEADERS.country).toUpperCase(),
+    city: first(LOCATION_HEADERS.city),
+  };
+}
+
 export function licenceEmail(order: OrderView, website: string): MailMessage {
   return {
     to: order.email,
@@ -34,7 +59,8 @@ export function licenceEmail(order: OrderView, website: string): MailMessage {
 async function postAppsScript(
   config: WebConfig,
   payload: Record<string, unknown>,
-  fetchImpl: typeof fetch
+  fetchImpl: typeof fetch,
+  timeoutMs = 15_000
 ): Promise<boolean> {
   try {
     const response = await fetchImpl(config.appsScriptUrl, {
@@ -44,7 +70,7 @@ async function postAppsScript(
       redirect: 'manual',
       headers: { 'content-type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({ secret: config.appsScriptSecret, ...payload }),
-      signal: AbortSignal.timeout(15_000),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     return response.status >= 200 && response.status < 400;
   } catch {
@@ -99,4 +125,57 @@ export async function deliverLead(
 ): Promise<boolean> {
   if (!config.appsScriptUrl || !config.appsScriptSecret) return false;
   return postAppsScript(config, { action: 'lead', lead }, fetchImpl);
+}
+
+/**
+ * Paid orders are upserted by reference in the analytics sheet. The same call
+ * from the webhook and the success page cannot double-count a redemption.
+ * Analytics must never hold up licence delivery, so failures are swallowed.
+ */
+export async function recordPaidOrder(
+  order: OrderView,
+  location: VisitLocation,
+  config: WebConfig,
+  fetchImpl: typeof fetch = fetch
+): Promise<boolean> {
+  if (!config.appsScriptUrl || !config.appsScriptSecret) return false;
+  return postAppsScript(
+    config,
+    {
+      action: 'order',
+      order: {
+        reference: order.reference,
+        createdAt: order.createdAt,
+        paidAt: order.paidAt,
+        email: order.email,
+        business: order.business,
+        plan: order.planId,
+        originalAmountKobo: order.originalAmountKobo,
+        discountKobo: order.discountKobo,
+        discountCode: order.discountCode,
+        amountKobo: order.amountKobo,
+        ...location,
+      },
+    },
+    fetchImpl,
+    5_000
+  );
+}
+
+export interface DownloadEvent extends VisitLocation {
+  reference: string;
+  email: string;
+  business: string;
+  source: 'success' | 'public' | 'retrieve' | 'docs';
+  userAgent: string;
+  installerVersion: string;
+}
+
+export async function recordDownload(
+  event: DownloadEvent,
+  config: WebConfig,
+  fetchImpl: typeof fetch = fetch
+): Promise<boolean> {
+  if (!config.appsScriptUrl || !config.appsScriptSecret) return false;
+  return postAppsScript(config, { action: 'download', download: event }, fetchImpl, 5_000);
 }

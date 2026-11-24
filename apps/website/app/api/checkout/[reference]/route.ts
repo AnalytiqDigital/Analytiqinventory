@@ -1,4 +1,5 @@
 import { loadWebConfig } from '../../../../lib/server/config';
+import { locationFromHeaders, recordPaidOrder } from '../../../../lib/server/delivery';
 import { errorResponse, isOrderReference, jsonError } from '../../../../lib/server/http';
 import { orderView } from '../../../../lib/server/licences';
 import { PaystackClient } from '../../../../lib/server/paystack';
@@ -20,10 +21,12 @@ export async function GET(
     if (!transaction) {
       return jsonError(404, 'That order does not exist', 'ORDER_NOT_FOUND');
     }
-    return Response.json(
-      { ok: true, order: orderView(transaction, config.licensePrivateKeyPem) },
-      { headers: { 'cache-control': 'no-store' } }
-    );
+    const order = orderView(transaction, config.licensePrivateKeyPem);
+    if (order.status === 'paid') {
+      // Idempotent by reference, so a missed webhook and repeated polling are safe.
+      await recordPaidOrder(order, locationFromHeaders(_request.headers), config);
+    }
+    return Response.json({ ok: true, order }, { headers: { 'cache-control': 'no-store' } });
   } catch (error) {
     return errorResponse(error);
   }

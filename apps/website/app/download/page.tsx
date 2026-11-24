@@ -9,6 +9,7 @@ import {
   callUrl,
   downloadUrl,
   isInstallerHosted,
+  trackedDownloadUrl,
   whatsappUrl,
 } from '../../lib/site';
 
@@ -45,16 +46,14 @@ export default function DownloadPage() {
 
           {hosted ? (
             <>
-              <a className="btn btn-primary" href={installer}>
+              <a className="btn btn-primary" href={trackedDownloadUrl({ source: 'public' })}>
                 Download AnalytIQ for Windows
               </a>
               <p className="fine-print" style={{ marginTop: 12 }}>
                 The download is a ZIP file. Extract it, then run{' '}
-                <code>
-                  AnalytIQ-Inventory-Setup-{INSTALLER_VERSION}.exe
-                </code>{' '}
-                inside. On slow or expensive data, message us on WhatsApp and we can send the
-                installer or arrange a flash-drive copy.
+                <code>AnalytIQ-Inventory-Setup-{INSTALLER_VERSION}.exe</code> inside. On slow or
+                expensive data, message us on WhatsApp and we can send the installer or arrange a
+                flash-drive copy.
               </p>
             </>
           ) : (

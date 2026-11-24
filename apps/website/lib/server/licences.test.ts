@@ -79,9 +79,9 @@ describe('licences derived from a paid transaction', () => {
   });
 
   it('rejects underpayment, foreign currency and missing order metadata', () => {
-    expect(() => issueFromTransaction(transaction({ amount: 7_999_999 }), privateKeyPem)).toThrowError(
-      /does not match/
-    );
+    expect(() =>
+      issueFromTransaction(transaction({ amount: 7_999_999 }), privateKeyPem)
+    ).toThrowError(/does not match/);
     expect(() =>
       issueFromTransaction(transaction({ currency: 'USD' }), privateKeyPem)
     ).toThrowError(/NGN/);
@@ -155,5 +155,75 @@ describe('licences derived from a paid transaction', () => {
       },
     });
     expect(issueFromTransaction(older, privateKeyPem).order.amountKobo).toBe(7_500_000);
+  });
+  function discountedTransaction(
+    overrides: Partial<PaystackTransaction> = {}
+  ): PaystackTransaction {
+    return transaction({
+      amount: 6_000_000,
+      metadata: {
+        order_reference: REF,
+        plan: 'standard',
+        business: 'Ada Stores',
+        name: 'Ada Obi',
+        email: 'ada@example.com',
+        originalAmountKobo: 8_000_000,
+        discountKobo: 2_000_000,
+        discountCode: 'SAVE20000',
+        amountKobo: 6_000_000,
+      },
+      ...overrides,
+    });
+  }
+
+  it('accepts SAVE20000 only at the exact discounted price', () => {
+    const issued = issueFromTransaction(discountedTransaction(), privateKeyPem);
+    expect(issued.order).toMatchObject({
+      originalAmountKobo: 8_000_000,
+      discountKobo: 2_000_000,
+      discountCode: 'SAVE20000',
+      amountKobo: 6_000_000,
+    });
+  });
+
+  it('refuses underpayment, overpayment, bad codes and tampered discounts', () => {
+    expect(() =>
+      issueFromTransaction(discountedTransaction({ amount: 5_999_999 }), privateKeyPem)
+    ).toThrowError(/does not match/);
+    expect(() =>
+      issueFromTransaction(discountedTransaction({ amount: 6_000_001 }), privateKeyPem)
+    ).toThrowError(/does not match/);
+    expect(() =>
+      issueFromTransaction(
+        discountedTransaction({
+          metadata: {
+            order_reference: REF,
+            plan: 'standard',
+            business: 'Ada Stores',
+            originalAmountKobo: 8_000_000,
+            discountKobo: 2_000_000,
+            discountCode: 'NOPE',
+            amountKobo: 6_000_000,
+          },
+        }),
+        privateKeyPem
+      )
+    ).toThrowError(/does not match/);
+    expect(() =>
+      issueFromTransaction(
+        discountedTransaction({
+          metadata: {
+            order_reference: REF,
+            plan: 'standard',
+            business: 'Ada Stores',
+            originalAmountKobo: 8_000_000,
+            discountKobo: 3_000_000,
+            discountCode: 'SAVE20000',
+            amountKobo: 6_000_000,
+          },
+        }),
+        privateKeyPem
+      )
+    ).toThrowError(/does not match/);
   });
 });

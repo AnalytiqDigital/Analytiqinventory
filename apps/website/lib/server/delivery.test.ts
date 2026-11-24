@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { WebConfig } from './config';
-import {
-  deliverEmail,
-  deliverLead,
-  licenceEmail,
-  type MailMessage,
-} from './delivery';
+import { deliverEmail, deliverLead, licenceEmail, type MailMessage } from './delivery';
 import type { OrderView } from '../types';
 
 const APPS_URL = 'https://script.google.com/macros/s/abc/exec';
@@ -32,6 +27,9 @@ function order(overrides: Partial<OrderView> = {}): OrderView {
     business: 'Ada Stores',
     name: 'Ada Obi',
     email: 'ada@example.com',
+    originalAmountKobo: 8_000_000,
+    discountKobo: 0,
+    discountCode: '',
     amountKobo: 8_000_000,
     status: 'paid',
     licenseKey: 'ANQ1.payload.signature',
@@ -120,9 +118,7 @@ describe('Apps Script delivery', () => {
       action: 'lead',
       lead: { kind: 'demo', name: 'Ada' },
     });
-    expect(await deliverLead({ kind: 'demo' }, config({ appsScriptUrl: '' }), fetch)).toBe(
-      false
-    );
+    expect(await deliverLead({ kind: 'demo' }, config({ appsScriptUrl: '' }), fetch)).toBe(false);
   });
 });
 
@@ -131,7 +127,12 @@ describe('email fallbacks', () => {
     const { fetch, sent } = fakeFetch(200);
     const state = await deliverEmail(
       MESSAGE,
-      config({ appsScriptUrl: '', appsScriptSecret: '', resendApiKey: 're_test', emailFrom: 'keys@shop.example' }),
+      config({
+        appsScriptUrl: '',
+        appsScriptSecret: '',
+        resendApiKey: 're_test',
+        emailFrom: 'keys@shop.example',
+      }),
       fetch
     );
 
