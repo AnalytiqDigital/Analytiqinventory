@@ -91,7 +91,11 @@ function assertPaidAmount(transaction: PaystackTransaction, plan: LicensePlan): 
   }
   const breakdown = amountBreakdown(transaction, plan);
   if (transaction.amount !== breakdown.amountKobo) {
-    throw new PaymentError('The paid amount does not match the order', 400, 'AMOUNT_MISMATCH');
+    throw new PaymentError(
+      `The paid amount does not match the order (paid ${transaction.amount} kobo, expected ${breakdown.amountKobo} kobo)`,
+      400,
+      'AMOUNT_MISMATCH'
+    );
   }
   return breakdown;
 }
