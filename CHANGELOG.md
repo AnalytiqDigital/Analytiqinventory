@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.3.0 — 25 November 2026
+
+Adds pack dates to products, fixes an error on Print Labels, and makes saving a
+receipt optional.
+
+- **Manufacturing and expiry dates**: the product form now records a
+  manufacturing date alongside the expiry date, and Branch → Batches takes one
+  per intake. Opening stock lands in a batch that carries both dates, so expiry
+  alerts have the full pack life. Existing databases gain the column through
+  migration `0017`.
+- **Print Labels no longer errors**: the page asked the product list for 500
+  rows, more than the API allows, so it showed a raw validation dump. It now
+  pages at 200, and the same fix covers Stock Adjustments and Transfers.
+- **Receipts no longer force a PDF**: after a sale the receipt opens with
+  **Print**, **Save PDF** and **Close**. Printing sends straight to the printer
+  instead of opening the system dialog, and saving a copy to the PC is optional.
+
 ## 1.2.2 — 21 November 2026
 
 Fixes the setup crash in the 1.2.1 Windows installer and adds one-key-one-computer
