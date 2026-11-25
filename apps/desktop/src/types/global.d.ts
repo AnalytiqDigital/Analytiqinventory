@@ -399,6 +399,9 @@ export interface AnalytiqApi {
   printerPrint: (
     input: PrinterPrintInput
   ) => Promise<{ ok: boolean; error?: string; code?: string }>;
+  printerSavePdf: (
+    input: PrinterPrintInput & { fileName?: string }
+  ) => Promise<{ ok: boolean; error?: string; code?: string; canceled?: boolean; path?: string }>;
 
   // --- Batch 15: business pack ---
   modulesView: () => Promise<{
@@ -617,6 +620,7 @@ export interface BatchRow {
   unit: string;
   batchNo: string;
   expiryDate: string | null;
+  manufacturedDate: string | null;
   locationId: string;
   locationName: string;
   remaining: number;

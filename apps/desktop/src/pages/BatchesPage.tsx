@@ -11,7 +11,8 @@ import { Modal } from '../components/ui/modal';
 import { Stat } from '../components/ui/stat';
 import { RequirePermission } from '../components/RequirePermission';
 import { ipc } from '../lib/ipc';
-import type { BatchRow, LocationRow, ProductRow } from '../types/global';
+import { loadAllProducts } from '../lib/products';
+import type { BatchRow, LocationRow } from '../types/global';
 
 const EXPIRY_FILTERS = [
   { value: '', label: 'All batches' },
@@ -52,6 +53,7 @@ export function BatchesPage(): JSX.Element {
   const [locationId, setLocationId] = useState('');
   const [batchNo, setBatchNo] = useState('');
   const [expiryDate, setExpiryDate] = useState('');
+  const [manufacturedDate, setManufacturedDate] = useState('');
   const [qty, setQty] = useState('1');
   const [note, setNote] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
@@ -76,11 +78,7 @@ export function BatchesPage(): JSX.Element {
 
   const productsQuery = useQuery({
     queryKey: ['products', 'for-batch'],
-    queryFn: async () => {
-      const res = await ipc.products({ search: '', page: 1, pageSize: 500 });
-      if (!res.ok) throw new Error(res.error ?? 'Could not load products');
-      return (res.items ?? []) as ProductRow[];
-    },
+    queryFn: () => loadAllProducts(),
   });
 
   const locationsQuery = useQuery({
@@ -107,6 +105,9 @@ export function BatchesPage(): JSX.Element {
         locationId: locationId || null,
         batchNo: batchNo.trim(),
         expiryDate: expiryDate ? new Date(`${expiryDate}T23:59:59`).toISOString() : null,
+        manufacturedDate: manufacturedDate
+          ? new Date(`${manufacturedDate}T00:00:00`).toISOString()
+          : null,
         qty: parsedQty,
         note: note.trim(),
       });
@@ -117,6 +118,7 @@ export function BatchesPage(): JSX.Element {
       setProductId('');
       setBatchNo('');
       setExpiryDate('');
+      setManufacturedDate('');
       setQty('1');
       setNote('');
       setFormError(null);
@@ -214,6 +216,7 @@ export function BatchesPage(): JSX.Element {
             <TRow>
               <TH>Product</TH>
               <TH>Batch</TH>
+              <TH>Manufactured</TH>
               <TH>Expiry</TH>
               <TH>Branch</TH>
               <TH className="text-right">Left</TH>
@@ -229,6 +232,7 @@ export function BatchesPage(): JSX.Element {
                   {row.sku ? <span className="ml-2 text-xs text-slate-400">{row.sku}</span> : null}
                 </TD>
                 <TD className="font-mono text-xs">{row.batchNo || '—'}</TD>
+                <TD>{dateOnly(row.manufacturedDate)}</TD>
                 <TD>{dateOnly(row.expiryDate)}</TD>
                 <TD className="text-xs">{row.locationName}</TD>
                 <TD className="text-right tabular-nums">{row.remaining}</TD>
@@ -284,6 +288,14 @@ export function BatchesPage(): JSX.Element {
               value={expiryDate}
               onChange={(e) => setExpiryDate(e.target.value)}
             />
+            <Input
+              label="Manufacturing date"
+              type="date"
+              value={manufacturedDate}
+              onChange={(e) => setManufacturedDate(e.target.value)}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">
                 Branch

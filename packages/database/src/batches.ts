@@ -39,6 +39,7 @@ export interface BatchView {
   unit: string;
   batchNo: string;
   expiryDate: string | null;
+  manufacturedDate: string | null;
   locationId: string;
   locationName: string;
   remaining: number;
@@ -92,21 +93,33 @@ export function ensureBatch(
   locationId: string,
   batchNo: string,
   expiryDate: Date | null,
-  note = ''
+  note = '',
+  manufacturedDate: Date | null = null
 ): string {
   const cleanNo = batchNo.trim();
   const expiryKey = expiryDate ? expiryDate.getTime() : null;
   const rows = local.raw
     .prepare(
-      `SELECT id, expiry_date AS expiryMs FROM product_batches
+      `SELECT id, expiry_date AS expiryMs, manufactured_date AS manufacturedMs FROM product_batches
         WHERE business_id = ? AND product_id = ? AND location_id = ? AND batch_no = ?`
     )
     .all(businessId, productId, locationId, cleanNo) as Array<{
     id: string;
     expiryMs: number | null;
+    manufacturedMs: number | null;
   }>;
   const existing = rows.find((r) => (r.expiryMs ?? null) === expiryKey);
-  if (existing) return existing.id;
+  if (existing) {
+    // A later delivery may be the first to carry the pack's manufacturing date.
+    if (manufacturedDate && !existing.manufacturedMs) {
+      local.db
+        .update(productBatches)
+        .set({ manufacturedDate, updatedAt: new Date() })
+        .where(eq(productBatches.id, existing.id))
+        .run();
+    }
+    return existing.id;
+  }
 
   const id = newId('bat');
   const timestamp = new Date();
@@ -119,6 +132,7 @@ export function ensureBatch(
       locationId,
       batchNo: cleanNo,
       expiryDate: expiryDate ?? null,
+      manufacturedDate: manufacturedDate ?? null,
       note,
       version: 1,
       createdAt: timestamp,
@@ -174,6 +188,7 @@ export async function createBatchIntake(
   }
 
   const expiry = input.expiryDate ? new Date(input.expiryDate) : null;
+  const manufactured = input.manufacturedDate ? new Date(input.manufacturedDate) : null;
   const timestamp = new Date();
   let batchId = '';
   let qtyAfter = 0;
@@ -186,7 +201,8 @@ export async function createBatchIntake(
       locationId,
       input.batchNo || `B-${timestamp.toISOString().slice(0, 10)}`,
       expiry,
-      input.note
+      input.note,
+      manufactured
     );
     qtyAfter = productOnHand(local, businessId, product.id, locationId) + input.qty;
     local.db
@@ -263,6 +279,7 @@ export async function listBatches(
       `SELECT pb.id AS id, pb.product_id AS productId, p.name AS productName, p.sku AS sku,
               p.unit AS unit, p.near_expiry_days AS nearExpiryDays,
               pb.batch_no AS batchNo, pb.expiry_date AS expiryMs,
+              pb.manufactured_date AS manufacturedMs,
               pb.location_id AS locationId, l.name AS locationName,
               ${remaining} AS remaining,
               (SELECT COALESCE(SUM(m2.qty_delta), 0) FROM stock_movements m2
@@ -280,6 +297,7 @@ export async function listBatches(
     nearExpiryDays: number;
     batchNo: string;
     expiryMs: number | null;
+    manufacturedMs: number | null;
     locationId: string;
     locationName: string;
     remaining: number;
@@ -289,6 +307,7 @@ export async function listBatches(
   const now = new Date();
   const items: BatchView[] = rows.map((r) => {
     const expiry = r.expiryMs ? new Date(r.expiryMs * 1000) : null;
+    const manufactured = r.manufacturedMs ? new Date(r.manufacturedMs * 1000) : null;
     return {
       id: r.id,
       productId: r.productId,
@@ -297,6 +316,7 @@ export async function listBatches(
       unit: r.unit,
       batchNo: r.batchNo,
       expiryDate: expiry ? expiry.toISOString() : null,
+      manufacturedDate: manufactured ? manufactured.toISOString() : null,
       locationId: r.locationId,
       locationName: r.locationName,
       remaining: r.remaining,

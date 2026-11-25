@@ -34,6 +34,9 @@ interface ProductFormValues {
   openingStock: number;
   trackBatches: boolean;
   nearExpiryDays: number;
+  /** `type="date"` values (YYYY-MM-DD) for the opening stock's batch. */
+  manufacturedDate: string;
+  expiryDate: string;
 }
 
 function toForm(p?: ProductRow): ProductFormValues {
@@ -53,7 +56,17 @@ function toForm(p?: ProductRow): ProductFormValues {
     openingStock: 0,
     trackBatches: p?.trackBatches ?? false,
     nearExpiryDays: p?.nearExpiryDays ?? 30,
+    manufacturedDate: '',
+    expiryDate: '',
   };
+}
+
+/** A `<input type="date">` value as an ISO timestamp, or null when left blank. */
+function dateInputToIso(value: string): string | null {
+  const day = value.trim();
+  if (!day) return null;
+  const date = new Date(`${day}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
 /** 7.5% (750 bps) → "7.5%". Whole rates lose the decimal point. */
@@ -170,6 +183,15 @@ export function ProductsPage(): JSX.Element {
     if (!editing && (!Number.isInteger(values.openingStock) || values.openingStock < 0)) {
       return 'Opening stock must be a whole number';
     }
+    if (!editing && values.trackBatches && values.expiryDate) {
+      const expiry = new Date(`${values.expiryDate}T00:00:00`);
+      if (values.manufacturedDate) {
+        const made = new Date(`${values.manufacturedDate}T00:00:00`);
+        if (made.getTime() > expiry.getTime()) {
+          return 'Manufacturing date must be before the expiry date';
+        }
+      }
+    }
     return null;
   };
 
@@ -216,7 +238,11 @@ export function ProductsPage(): JSX.Element {
         const res = await ipc.productUpdate(values.id, patch);
         if (!res.ok) throw new Error(res.error ?? 'Update failed');
       } else {
-        const res = await ipc.productCreate(base);
+        const res = await ipc.productCreate({
+          ...base,
+          manufacturedDate: dateInputToIso(values.manufacturedDate),
+          expiryDate: dateInputToIso(values.expiryDate),
+        });
         if (!res.ok) throw new Error(res.error ?? 'Create failed');
       }
     },
@@ -688,13 +714,33 @@ export function ProductsPage(): JSX.Element {
               Track batches &amp; expiry (pharmacy, provisions, drinks)
             </label>
             {form.watch('trackBatches') ? (
-              <div className="mt-2">
+              <div className="mt-2 space-y-3">
                 <Input
                   label="Alert this many days before expiry"
                   type="number"
                   min={0}
                   {...form.register('nearExpiryDays', { valueAsNumber: true })}
                 />
+                {editing ? null : (
+                  <div className="grid grid-cols-2 gap-3">
+                    <Input
+                      label="Manufacturing date"
+                      type="date"
+                      {...form.register('manufacturedDate')}
+                    />
+                    <Input
+                      label="Expiry date"
+                      type="date"
+                      {...form.register('expiryDate')}
+                    />
+                  </div>
+                )}
+                {editing ? null : (
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Applied to the opening stock so it counts towards expiry alerts. Leave blank if
+                    the pack has no dates.
+                  </p>
+                )}
               </div>
             ) : null}
           </div>
