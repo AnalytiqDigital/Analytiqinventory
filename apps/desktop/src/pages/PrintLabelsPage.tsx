@@ -7,6 +7,8 @@ import { Input } from '../components/ui/input';
 import { EmptyState, ErrorState, LoadingState } from '../components/ui/states';
 import { TD, TH, THead, TRow, Table } from '../components/ui/table';
 import { ipc } from '../lib/ipc';
+import { describeIpcError } from '../lib/errors';
+import { loadAllProducts } from '../lib/products';
 import { ean13Modules } from '../lib/ean13';
 import { formatKobo } from '../lib/money';
 import type { BusinessProfile, ProductRow } from '../types/global';
@@ -106,11 +108,7 @@ export function PrintLabelsPage(): JSX.Element {
 
   const productsQuery = useQuery({
     queryKey: ['products', 'labels', debounced],
-    queryFn: async () => {
-      const res = await ipc.products({ search: debounced, page: 1, pageSize: 500 });
-      if (!res.ok) throw new Error(res.error ?? 'Could not load products');
-      return res.items as ProductRow[];
-    },
+    queryFn: async () => loadAllProducts(debounced),
   });
 
   const profileQuery = useQuery({
@@ -224,7 +222,7 @@ export function PrintLabelsPage(): JSX.Element {
         <LoadingState label="Loading products…" />
       ) : productsQuery.isError ? (
         <ErrorState
-          message={(productsQuery.error as Error).message}
+          message={describeIpcError(productsQuery.error, 'Could not load products')}
           onRetry={() => void productsQuery.refetch()}
         />
       ) : products.length === 0 ? (

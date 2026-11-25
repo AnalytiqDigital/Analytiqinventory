@@ -8,7 +8,8 @@ import { TD, TH, THead, TRow, Table } from '../components/ui/table';
 import { EmptyState, ErrorState, LoadingState } from '../components/ui/states';
 import { RequirePermission } from '../components/RequirePermission';
 import { ipc } from '../lib/ipc';
-import type { LocationRow, ProductRow, StockTransferRow } from '../types/global';
+import { loadAllProducts } from '../lib/products';
+import type { LocationRow, StockTransferRow } from '../types/global';
 
 interface DraftLine {
   key: string;
@@ -42,11 +43,7 @@ export function TransfersPage(): JSX.Element {
 
   const productsQuery = useQuery({
     queryKey: ['products', 'for-transfer'],
-    queryFn: async () => {
-      const res = await ipc.products({ search: '', page: 1, pageSize: 500 });
-      if (!res.ok) throw new Error(res.error ?? 'Could not load products');
-      return (res.items ?? []) as ProductRow[];
-    },
+    queryFn: () => loadAllProducts(),
   });
 
   const transfersQuery = useQuery({

@@ -7,7 +7,8 @@ import { Input } from '../components/ui/input';
 import { EmptyState, ErrorState, LoadingState } from '../components/ui/states';
 import { TD, TH, THead, TRow, Table } from '../components/ui/table';
 import { ipc } from '../lib/ipc';
-import type { LocationRow, ProductRow, StockAdjustmentRow } from '../types/global';
+import { loadAllProducts } from '../lib/products';
+import type { LocationRow, StockAdjustmentRow } from '../types/global';
 
 type Tab = 'list' | 'new';
 
@@ -45,11 +46,7 @@ export function StockAdjustmentsPage(): JSX.Element {
 
   const productsQuery = useQuery({
     queryKey: ['products', 'for-adjustment'],
-    queryFn: async () => {
-      const res = await ipc.products({ search: '', page: 1, pageSize: 500 });
-      if (!res.ok) throw new Error(res.error ?? 'Could not load products');
-      return (res.items ?? []) as ProductRow[];
-    },
+    queryFn: () => loadAllProducts(),
   });
 
   const listQuery = useQuery({
