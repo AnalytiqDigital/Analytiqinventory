@@ -148,6 +148,33 @@ describe('batch 15 business pack', () => {
     expect(alerts.map((b) => b.batchNo)).toContain('B-1');
   });
 
+  it('puts opening stock in a batch carrying the pack dates', async () => {
+    // Batch dates are stored to the second, so build them from whole seconds.
+    const nowSeconds = Math.floor(Date.now() / 1000) * 1000;
+    const expiry = new Date(nowSeconds + 10 * 86_400_000).toISOString();
+    const made = new Date(nowSeconds - 200 * 86_400_000).toISOString();
+    const { id } = await createProduct(local, businessId, userId, GRANTS, {
+      name: 'Amoxicillin 250mg',
+      unit: 'pack',
+      costPriceKobo: 40000,
+      sellingPriceKobo: 60000,
+      openingStock: 12,
+      trackBatches: true,
+      nearExpiryDays: 30,
+      manufacturedDate: made,
+      expiryDate: expiry,
+    });
+
+    const { items } = await listBatches(local, businessId, { productId: id });
+    expect(items).toHaveLength(1);
+    expect(firstRow(items).remaining).toBe(12);
+    expect(firstRow(items).manufacturedDate).toBe(made);
+    expect(firstRow(items).expiryDate).toBe(expiry);
+
+    const alerts = await listExpiryAlerts(local, businessId, 30);
+    expect(alerts.some((b) => b.productId === id && b.status === 'expiring')).toBe(true);
+  });
+
   it('sells the earliest-expiring batch first', async () => {
     await intake('SOON', '2026-12-01T00:00:00.000Z', 10);
     await intake('LATER', '2027-06-01T00:00:00.000Z', 20);

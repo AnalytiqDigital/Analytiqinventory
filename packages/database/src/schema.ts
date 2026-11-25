@@ -798,6 +798,8 @@ export const productBatches = sqliteTable(
       .notNull()
       .references(() => locations.id),
     batchNo: text('batch_no').notNull().default(''),
+    /** Date printed on the pack as the manufacturing date (optional). */
+    manufacturedDate: integer('manufactured_date', { mode: 'timestamp' }),
     expiryDate: integer('expiry_date', { mode: 'timestamp' }),
     note: text('note').notNull().default(''),
     version: integer('version').notNull().default(1),

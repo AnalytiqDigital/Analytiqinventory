@@ -147,6 +147,18 @@ export const productSchema = z.object({
   taxCategoryId: z.string().trim().min(1).nullish(),
   trackBatches: z.coerce.boolean().default(false),
   nearExpiryDays: z.coerce.number().int().min(0).max(3650).default(30),
+  // Opening stock for a batch-tracked product lands in one batch, so the form
+  // records the manufacturing and expiry dates printed on the pack.
+  manufacturedDate: z
+    .string()
+    .trim()
+    .datetime({ offset: true, message: 'Manufacturing date must be an ISO date' })
+    .nullish(),
+  expiryDate: z
+    .string()
+    .trim()
+    .datetime({ offset: true, message: 'Expiry date must be an ISO date' })
+    .nullish(),
 });
 
 export type ProductInput = z.infer<typeof productSchema>;
@@ -1169,6 +1181,11 @@ export const batchIntakeSchema = z.object({
     .string()
     .trim()
     .datetime({ offset: true, message: 'Expiry must be an ISO date' })
+    .nullish(),
+  manufacturedDate: z
+    .string()
+    .trim()
+    .datetime({ offset: true, message: 'Manufacturing date must be an ISO date' })
     .nullish(),
   qty: z.coerce.number().int().min(1, 'Quantity must be at least 1').max(1_000_000),
   note: z.string().trim().max(300).default(''),

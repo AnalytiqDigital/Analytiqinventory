@@ -18,6 +18,7 @@ import {
 import { and, count, eq, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import { newId } from './auth';
+import { ensureBatch } from './batches';
 import type { LocalDb } from './connection';
 import { requirePermission } from './permissions';
 import { writeAuditSync } from './service';
@@ -552,6 +553,20 @@ export async function createProduct(
       updatedAt: timestamp,
     }).run();
     if (input.openingStock > 0) {
+      // Batch-tracked products put their opening stock in one batch carrying the
+      // pack dates, so expiry alerts have something to count down from.
+      const batchId = input.trackBatches
+        ? ensureBatch(
+            local,
+            businessId,
+            id,
+            locationId,
+            `OPEN-${timestamp.toISOString().slice(0, 10)}`,
+            input.expiryDate ? new Date(input.expiryDate) : null,
+            'Opening stock',
+            input.manufacturedDate ? new Date(input.manufacturedDate) : null,
+          )
+        : null;
       local.db.insert(stockMovements).values({
         id: newId('mov'),
         businessId,
@@ -561,6 +576,7 @@ export async function createProduct(
         qtyDelta: input.openingStock,
         qtyAfter: input.openingStock,
         reason: 'Opening stock',
+        batchId,
         userId,
         version: 1,
         createdAt: timestamp,
