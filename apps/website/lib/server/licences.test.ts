@@ -186,13 +186,14 @@ describe('licences derived from a paid transaction', () => {
     });
   });
 
-  it('refuses underpayment, overpayment, bad codes and tampered discounts', () => {
+  it('accepts a Paystack fee top-up but refuses underpayment, bad codes and tampered discounts', () => {
     expect(() =>
       issueFromTransaction(discountedTransaction({ amount: 5_999_999 }), privateKeyPem)
     ).toThrowError(/does not match/);
-    expect(() =>
-      issueFromTransaction(discountedTransaction({ amount: 6_000_001 }), privateKeyPem)
-    ).toThrowError(/does not match/);
+    expect(
+      issueFromTransaction(discountedTransaction({ amount: 6_099_750 }), privateKeyPem).order
+        .amountKobo
+    ).toBe(6_000_000);
     expect(() =>
       issueFromTransaction(
         discountedTransaction({
