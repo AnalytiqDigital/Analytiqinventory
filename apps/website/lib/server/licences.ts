@@ -90,7 +90,10 @@ function assertPaidAmount(transaction: PaystackTransaction, plan: LicensePlan): 
     throw new PaymentError('This order is priced in NGN', 400, 'CURRENCY_MISMATCH');
   }
   const breakdown = amountBreakdown(transaction, plan);
-  if (transaction.amount !== breakdown.amountKobo) {
+  // Paystack may add its processing fee on top when the account passes fees to
+  // the customer, so the transaction can be higher than the price we charged.
+  // Anything below the price we computed is still a mismatch.
+  if (transaction.amount < breakdown.amountKobo) {
     throw new PaymentError(
       `The paid amount does not match the order (paid ${transaction.amount} kobo, expected ${breakdown.amountKobo} kobo)`,
       400,
