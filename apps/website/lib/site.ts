@@ -8,7 +8,7 @@ export const COMPANY_SITE_LABEL = 'www.analytiq.ng';
 export const DOWNLOAD_FALLBACK_PATH = '/download';
 export const INSTALLER_VERSION = '1.2.2';
 export const DEFAULT_INSTALLER_URL = `https://github.com/AnalytiqDigital/analytiq-downloads/releases/download/v${INSTALLER_VERSION}/AnalytIQ-Inventory-${INSTALLER_VERSION}-Windows.zip`;
-export const INSTALLER_SHA256 = 'e5cab4798b5b4047a0868571d0761baa9e72502d940bae7372fc648666ac5086';
+export const INSTALLER_SHA256 = 'ddbfcbfadf3bcf086fcec5832cdd0cf6953bc4c9e64ac48cbe28b3cfabc8361c';
 export const INSTALLER_SIZE_LABEL = '95 MB';
 
 /** Starting anchor for the multi-location cloud version, per location per year. */
