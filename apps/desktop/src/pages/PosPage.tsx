@@ -6,6 +6,7 @@ import {
   Banknote,
   CheckCircle2,
   CreditCard,
+  Download,
   History,
   Landmark,
   Minus,
@@ -30,7 +31,7 @@ import { RequirePermission } from '../components/RequirePermission';
 import { hasModule } from '../components/layout/nav';
 import { ipc } from '../lib/ipc';
 import { formatKobo, parseNairaToKobo } from '../lib/money';
-import { printKitchenTicket, printSale } from '../lib/printing';
+import { printKitchenTicket, printSale, saveSalePdf } from '../lib/printing';
 import { usePosPageSize } from '../hooks/usePosPageSize';
 import { useBarcodeScanner } from '../lib/use-barcode-scanner';
 import { cn } from '../lib/cn';
@@ -1341,6 +1342,7 @@ function ReceiptView({
   onClose: () => void;
 }): JSX.Element {
   const [printing, setPrinting] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
   async function printReceipt(): Promise<void> {
@@ -1355,6 +1357,22 @@ function ReceiptView({
           : 'Receipt sent to the printer.'
         : (outcome.error ?? 'Could not print the receipt')
     );
+  }
+
+  async function savePdf(): Promise<void> {
+    setSaving(true);
+    setNotice(null);
+    const outcome = await saveSalePdf(sale, business);
+    setSaving(false);
+    if (!outcome.ok) {
+      setNotice(outcome.error ?? 'Could not save the receipt PDF');
+      return;
+    }
+    if (outcome.canceled) {
+      setNotice('Receipt not saved.');
+      return;
+    }
+    setNotice(outcome.path ? `Receipt saved to ${outcome.path}` : 'Receipt saved.');
   }
 
   return (
@@ -1457,16 +1475,30 @@ function ReceiptView({
           <p className="text-center">*** {sale.status.toUpperCase()} ***</p>
         )}
       </div>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button variant="secondary" className="flex-1" onClick={onClose}>
           <Receipt className="h-4 w-4" />
-          New sale
+          Close
         </Button>
-        <Button className="flex-1" onClick={() => void printReceipt()} disabled={printing}>
+        <Button
+          variant="secondary"
+          className="flex-1"
+          onClick={() => void savePdf()}
+          disabled={saving}
+        >
+          <Download className="h-4 w-4" />
+          {saving ? 'Saving…' : 'Save PDF'}
+        </Button>
+        <Button
+          className="flex-1"
+          onClick={() => void printReceipt()}
+          disabled={printing}
+        >
           <Printer className="h-4 w-4" />
-          {printing ? 'Printing…' : 'Print receipt'}
+          {printing ? 'Printing…' : 'Print'}
         </Button>
       </div>
+      <p className="text-center text-xs text-slate-500">Saving a copy is optional.</p>
       {notice ? (
         <p className="text-center text-sm text-slate-600 dark:text-slate-300">{notice}</p>
       ) : null}

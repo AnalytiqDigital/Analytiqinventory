@@ -198,6 +198,7 @@ function fallbackApi(): AnalytiqApi {
     printerList: () =>
       Promise.resolve({ ok: false, printers: [], error: 'Unavailable in browser preview' }),
     printerPrint: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
+    printerSavePdf: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
     modulesView: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
     modulesSet: () => Promise.resolve({ ok: false, error: 'Unavailable in browser preview' }),
     batches: () =>

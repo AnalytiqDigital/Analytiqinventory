@@ -492,6 +492,10 @@ const api = {
   }> => ipcRenderer.invoke('printer:list'),
   printerPrint: (input: unknown): Promise<{ ok: boolean; error?: string; code?: string }> =>
     ipcRenderer.invoke('printer:print', input),
+  printerSavePdf: (
+    input: unknown
+  ): Promise<{ ok: boolean; error?: string; code?: string; canceled?: boolean; path?: string }> =>
+    ipcRenderer.invoke('printer:save-pdf', input),
 
   // --- Batch 15: business pack ---
   modulesView: (): Promise<{ ok: boolean; [key: string]: unknown }> =>
