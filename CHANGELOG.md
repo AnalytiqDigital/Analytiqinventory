@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.3.1 — 26 November 2026
+
+Expiry dates now work on products that are not kept in batches, and the
+dashboard warns you before stock runs out of date.
+
+- **Expiry alerts for every product**: a product's own expiry date raises an
+  alert even when no batch was recorded for it. Until now only batched stock
+  could expire, so a product added with a date but sold without picking a batch
+  never warned anyone. Existing databases gain the column through migration
+  `0018`.
+- **Expiring soon on the dashboard**: a card lists everything inside its alert
+  window, and **View all** opens Branch → Batches already filtered to that
+  window.
+- **Correct a date after the fact**: opening a product now shows the
+  manufacturing and expiry fields, not just the create form. Changing the date
+  also updates the product's earliest in-stock batch, so first-expired-first-out
+  selling follows the corrected date. Leaving a field blank keeps the value
+  stored.
+- **Landing page screenshots**: the website shows the current dashboard and POS
+  instead of the older ones.
+
 ## 1.3.0 — 25 November 2026
 
 Adds pack dates to products, fixes an error on Print Labels, and makes saving a
