@@ -299,6 +299,13 @@ export const products = sqliteTable(
     trackBatches: integer('track_batches').notNull().default(0),
     /** Expiry alert window; 0 means "only alert once expired". */
     nearExpiryDays: integer('near_expiry_days').notNull().default(30),
+    /**
+     * Pack dates as entered on the product itself. Batches carry their own copy
+     * for first-expiry-first-out; these cover stock that is not batched, so a
+     * shop that never opens the Batches page still gets expiry alerts.
+     */
+    manufacturedDate: integer('manufactured_date', { mode: 'timestamp' }),
+    expiryDate: integer('expiry_date', { mode: 'timestamp' }),
     isActive: integer('is_active').notNull().default(1),
     version: integer('version').notNull().default(1),
     ...timestamps(),

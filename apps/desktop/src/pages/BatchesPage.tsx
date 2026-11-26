@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CalendarClock, PackagePlus, TriangleAlert } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
 import { Input } from '../components/ui/input';
@@ -44,9 +45,14 @@ function dateOnly(value: string | null): string {
 
 export function BatchesPage(): JSX.Element {
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
   const [search, setSearch] = useState('');
   const [debounced, setDebounced] = useState('');
-  const [expiringDays, setExpiringDays] = useState('');
+  // Dashboard alerts link here with ?expiry=30, so the list opens pre-filtered.
+  const [expiringDays, setExpiringDays] = useState(() => {
+    const requested = searchParams.get('expiry');
+    return requested && EXPIRY_FILTERS.some((f) => f.value === requested) ? requested : '';
+  });
   const [includeEmpty, setIncludeEmpty] = useState(false);
   const [intakeOpen, setIntakeOpen] = useState(false);
   const [productId, setProductId] = useState('');

@@ -333,7 +333,15 @@ export async function listBatches(
   };
 }
 
-/** Batches that are expired or inside their product's alert window. */
+/**
+ * Everything expiring or expired within the window.
+ *
+ * Two sources feed it: batches (first-expiry-first-out stock, per batch) and
+ * products that carry a pack date but have no batches at all — most shops sell
+ * unbatched stock, and the date they type on the product must still raise an
+ * alert. A batched product is reported from its batches only, so nothing is
+ * counted twice.
+ */
 export async function listExpiryAlerts(
   local: LocalDb,
   businessId: string,
@@ -343,7 +351,105 @@ export async function listExpiryAlerts(
     expiringDays: withinDays,
     includeEmpty: false,
   });
-  return all.items.filter((b) => b.status === 'expiring' || b.status === 'expired');
+  const batchAlerts = all.items.filter((b) => b.status === 'expiring' || b.status === 'expired');
+
+  const batched = new Set(
+    (
+      local.raw
+        .prepare('SELECT DISTINCT product_id AS productId FROM product_batches WHERE business_id = ?')
+        .all(businessId) as Array<{ productId: string }>
+    ).map((r) => r.productId)
+  );
+
+  const now = new Date();
+  const cutoff = now.getTime() + withinDays * 86_400_000;
+  const productRows = local.raw
+    .prepare(
+      `SELECT p.id AS productId, p.name AS productName, p.sku AS sku, p.unit AS unit,
+              p.expiry_date AS expiryMs, p.manufactured_date AS manufacturedMs,
+              p.near_expiry_days AS nearExpiryDays,
+              (SELECT COALESCE(SUM(m.qty_delta), 0) FROM stock_movements m
+                WHERE m.business_id = p.business_id AND m.product_id = p.id) AS onHand
+         FROM products p
+        WHERE p.business_id = ? AND p.is_active = 1 AND p.expiry_date IS NOT NULL`
+    )
+    .all(businessId) as Array<{
+    productId: string;
+    productName: string;
+    sku: string | null;
+    unit: string;
+    expiryMs: number;
+    manufacturedMs: number | null;
+    nearExpiryDays: number;
+    onHand: number;
+  }>;
+
+  const productAlerts: BatchView[] = [];
+  for (const row of productRows) {
+    if (row.onHand <= 0 || batched.has(row.productId)) continue;
+    const expiry = new Date(row.expiryMs * 1000);
+    if (expiry.getTime() > cutoff) continue;
+    const status = batchStatus(expiry, row.onHand, row.nearExpiryDays, now);
+    if (status !== 'expiring' && status !== 'expired') continue;
+    productAlerts.push({
+      id: `prd:${row.productId}`,
+      productId: row.productId,
+      productName: row.productName,
+      sku: row.sku,
+      unit: row.unit,
+      batchNo: '',
+      expiryDate: expiry.toISOString(),
+      manufacturedDate: row.manufacturedMs ? new Date(row.manufacturedMs * 1000).toISOString() : null,
+      locationId: '',
+      locationName: '',
+      remaining: row.onHand,
+      onHand: row.onHand,
+      nearExpiryDays: row.nearExpiryDays,
+      status,
+    });
+  }
+
+  return [...batchAlerts, ...productAlerts].sort((a, b) =>
+    (a.expiryDate ?? '').localeCompare(b.expiryDate ?? '')
+  );
+}
+
+/**
+ * Copy a corrected pack date onto the batch the stock is actually in.
+ *
+ * Products carry their own pack dates (see `products.expiry_date`) and those
+ * drive the alerts for unbatched stock. When the product is batch-tracked the
+ * dates must also land on a batch, or first-expiry-first-out selling and the
+ * per-batch alerts would disagree. The batch chosen is the one sales consume
+ * first: in-stock before empty, then earliest expiry. Returns the batch id, or
+ * null when the product has no batches yet.
+ */
+export function applyProductPackDates(
+  local: LocalDb,
+  businessId: string,
+  productId: string,
+  dates: { expiryDate?: Date | null; manufacturedDate?: Date | null }
+): string | null {
+  const remaining =
+    '(SELECT COALESCE(SUM(m.qty_delta), 0) FROM stock_movements m WHERE m.batch_id = pb.id)';
+  const existing = local.raw
+    .prepare(
+      `SELECT pb.id AS id FROM product_batches pb
+        WHERE pb.business_id = ? AND pb.product_id = ?
+        ORDER BY CASE WHEN ${remaining} > 0 THEN 0 ELSE 1 END,
+                 (pb.expiry_date IS NULL), pb.expiry_date ASC, pb.created_at ASC, pb.id ASC
+        LIMIT 1`
+    )
+    .get(businessId, productId) as { id: string } | undefined;
+  if (!existing) return null;
+
+  const patch: Record<string, unknown> = { updatedAt: new Date() };
+  if (dates.expiryDate !== undefined) patch.expiryDate = dates.expiryDate ?? null;
+  if (dates.manufacturedDate !== undefined) {
+    patch.manufacturedDate = dates.manufacturedDate ?? null;
+  }
+  local.db.update(productBatches).set(patch).where(eq(productBatches.id, existing.id)).run();
+  return existing.id;
 }
 
 export function expiryDateOf(value: unknown): Date | null {

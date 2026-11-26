@@ -183,13 +183,11 @@ export function ProductsPage(): JSX.Element {
     if (!editing && (!Number.isInteger(values.openingStock) || values.openingStock < 0)) {
       return 'Opening stock must be a whole number';
     }
-    if (!editing && values.trackBatches && values.expiryDate) {
+    if (values.trackBatches && values.expiryDate && values.manufacturedDate) {
       const expiry = new Date(`${values.expiryDate}T00:00:00`);
-      if (values.manufacturedDate) {
-        const made = new Date(`${values.manufacturedDate}T00:00:00`);
-        if (made.getTime() > expiry.getTime()) {
-          return 'Manufacturing date must be before the expiry date';
-        }
+      const made = new Date(`${values.manufacturedDate}T00:00:00`);
+      if (made.getTime() > expiry.getTime()) {
+        return 'Manufacturing date must be before the expiry date';
       }
     }
     return null;
@@ -235,7 +233,12 @@ export function ProductsPage(): JSX.Element {
       if (values.isEdit && values.id) {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { openingStock, ...patch } = base;
-        const res = await ipc.productUpdate(values.id, patch);
+        // Blank dates mean "keep what is already on file", not "clear it".
+        const packDates = {
+          ...(values.manufacturedDate ? { manufacturedDate: dateInputToIso(values.manufacturedDate) } : {}),
+          ...(values.expiryDate ? { expiryDate: dateInputToIso(values.expiryDate) } : {}),
+        };
+        const res = await ipc.productUpdate(values.id, { ...patch, ...packDates });
         if (!res.ok) throw new Error(res.error ?? 'Update failed');
       } else {
         const res = await ipc.productCreate({
@@ -721,26 +724,19 @@ export function ProductsPage(): JSX.Element {
                   min={0}
                   {...form.register('nearExpiryDays', { valueAsNumber: true })}
                 />
-                {editing ? null : (
-                  <div className="grid grid-cols-2 gap-3">
-                    <Input
-                      label="Manufacturing date"
-                      type="date"
-                      {...form.register('manufacturedDate')}
-                    />
-                    <Input
-                      label="Expiry date"
-                      type="date"
-                      {...form.register('expiryDate')}
-                    />
-                  </div>
-                )}
-                {editing ? null : (
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Applied to the opening stock so it counts towards expiry alerts. Leave blank if
-                    the pack has no dates.
-                  </p>
-                )}
+                <div className="grid grid-cols-2 gap-3">
+                  <Input
+                    label="Manufacturing date"
+                    type="date"
+                    {...form.register('manufacturedDate')}
+                  />
+                  <Input label="Expiry date" type="date" {...form.register('expiryDate')} />
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {editing
+                    ? 'Saved against this product’s stock, so it shows up in expiry alerts. Leave blank to keep the dates already on file.'
+                    : 'Applied to the opening stock so it counts towards expiry alerts. Leave blank if the pack has no dates.'}
+                </p>
               </div>
             ) : null}
           </div>

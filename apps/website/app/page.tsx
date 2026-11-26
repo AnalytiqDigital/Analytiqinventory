@@ -368,13 +368,13 @@ export default function HomePage() {
                 <i />
                 <i />
               </span>
-              <span>AnalytIQ — reports dashboard</span>
+              <span>AnalytIQ — dashboard</span>
             </div>
             <Image
-              src="/app-reports-dashboard.png"
-              alt="AnalytIQ dashboard with tiles for gross sales, gross profit, tax, stock value, low stock and credit"
-              width={2656}
-              height={1643}
+              src="/app-dashboard.webp"
+              alt="AnalytIQ dashboard with today's sales, monthly gross and net profit, outstanding credit, low stock alerts, a 7-day sales chart and payment mix"
+              width={2000}
+              height={1279}
               sizes="(max-width: 1040px) 100vw, 600px"
               priority
             />
@@ -518,16 +518,31 @@ export default function HomePage() {
             <figure className="shot shot-wide">
               <div className="shot-media">
                 <Image
-                  src="/app-reports-dashboard.png"
-                  alt="AnalytIQ Reports screen with tiles for gross sales, profit, tax, stock value, low stock and credit"
-                  width={2656}
-                  height={1643}
+                  src="/app-dashboard.webp"
+                  alt="AnalytIQ dashboard with today's sales, monthly profit, outstanding credit, low stock alerts, a 7-day sales chart and payment mix"
+                  width={2000}
+                  height={1279}
                   sizes="(max-width: 1040px) 100vw, 1160px"
                 />
               </div>
               <figcaption>
-                <strong>Reports</strong> — sales, profit, tax, stock and credit on one screen, with
-                CSV export. Captured on a fresh install before the first sale.
+                <strong>Dashboard</strong> — sales, profit, credit and stock for the day and the
+                month, with the last 7 days and your payment mix.
+              </figcaption>
+            </figure>
+            <figure className="shot shot-wide">
+              <div className="shot-media">
+                <Image
+                  src="/app-pos.webp"
+                  alt="AnalytIQ Point of Sale screen with a product grid, category tabs, the current cart, discount and the charge button"
+                  width={2000}
+                  height={1281}
+                  sizes="(max-width: 1040px) 100vw, 1160px"
+                />
+              </div>
+              <figcaption>
+                <strong>Point of Sale</strong> — tap or scan to build the cart, take a discount,
+                then charge. F9 opens payment and Alt+Shift+C clears the cart.
               </figcaption>
             </figure>
             <figure className="shot">

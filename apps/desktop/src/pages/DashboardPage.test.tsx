@@ -10,9 +10,12 @@ import { DashboardPage } from './DashboardPage';
 
 afterEach(cleanup);
 
-const { reportsSummary } = vi.hoisted(() => ({ reportsSummary: vi.fn() }));
+const { reportsSummary, expiryAlerts } = vi.hoisted(() => ({
+  reportsSummary: vi.fn(),
+  expiryAlerts: vi.fn(),
+}));
 
-vi.mock('../lib/ipc', () => ({ ipc: { reportsSummary } }));
+vi.mock('../lib/ipc', () => ({ ipc: { reportsSummary, expiryAlerts } }));
 
 const summary: ReportsSummary = {
   range: { from: '2026-11-01T00:00:00.000Z', to: '2026-11-23T12:00:00.000Z', locationId: null },
@@ -87,13 +90,15 @@ describe('DashboardPage analytics', () => {
   beforeEach(() => {
     reportsSummary.mockReset();
     reportsSummary.mockResolvedValue({ ok: true, summary });
+    expiryAlerts.mockReset();
+    expiryAlerts.mockResolvedValue({ ok: true, items: [] });
     useSession.setState({
       user: {
         id: 'user-1',
         businessId: 'business-1',
         name: 'Owner',
         email: 'owner@example.com',
-        permissions: ['reports.view'],
+        permissions: ['reports.view', 'inventory.view'],
         businessType: 'retail',
         modules: ['products', 'inventory', 'reports'],
       },
@@ -113,6 +118,54 @@ describe('DashboardPage analytics', () => {
 
     await waitFor(() => expect(reportsSummary).toHaveBeenCalledTimes(2));
     expect(reportsSummary.mock.calls.map((call) => call[0])).toEqual(initialArgs);
+  });
+
+  it('lists expiring batches and links to the filtered batches page', async () => {
+    expiryAlerts.mockResolvedValue({
+      ok: true,
+      items: [
+        {
+          id: 'bat-1',
+          productId: 'p1',
+          productName: 'Yoghurt 500ml',
+          sku: 'YOG-500',
+          unit: 'pcs',
+          batchNo: 'B-12',
+          expiryDate: new Date(Date.now() + 4 * 86_400_000).toISOString(),
+          manufacturedDate: null,
+          locationId: 'loc-1',
+          locationName: 'Main shop',
+          remaining: 6,
+          onHand: 6,
+          nearExpiryDays: 30,
+          status: 'expiring',
+        },
+        {
+          id: 'bat-2',
+          productId: 'p2',
+          productName: 'Painkiller 20s',
+          sku: null,
+          unit: 'pack',
+          batchNo: 'B-03',
+          expiryDate: new Date(Date.now() - 2 * 86_400_000).toISOString(),
+          manufacturedDate: null,
+          locationId: 'loc-1',
+          locationName: 'Main shop',
+          remaining: 3,
+          onHand: 3,
+          nearExpiryDays: 30,
+          status: 'expired',
+        },
+      ],
+    });
+    renderPage();
+
+    expect(await screen.findByText('Expiring soon')).toBeInTheDocument();
+    expect(await screen.findByText('Yoghurt 500ml')).toBeInTheDocument();
+    expect(screen.getByText('4d left')).toBeInTheDocument();
+    expect(screen.getByText('Expired')).toBeInTheDocument();
+    const links = screen.getAllByRole('link', { name: /View all/ });
+    expect(links.some((link) => link.getAttribute('href') === '/batches?expiry=30')).toBe(true);
   });
 
   it('shows a retryable error instead of an endless loader', async () => {

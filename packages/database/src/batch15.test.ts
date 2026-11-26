@@ -7,7 +7,7 @@ import { decryptBuffer, runEncryptedCloudBackup, setCloudBackupSettings } from '
 import { closeLocalDb, openLocalDb, type LocalDb } from './connection';
 import { createCustomer } from './customers';
 import { listDebtors, sendDebtorReminders } from './debtors';
-import { createProduct } from './inventory';
+import { createProduct, updateProduct } from './inventory';
 import { createLocation } from './locations';
 import { getLoyaltySettings, listLoyaltyEntries, setLoyaltySettings } from './loyalty';
 import { runMigrations } from './migrate';
@@ -173,6 +173,38 @@ describe('batch 15 business pack', () => {
 
     const alerts = await listExpiryAlerts(local, businessId, 30);
     expect(alerts.some((b) => b.productId === id && b.status === 'expiring')).toBe(true);
+  });
+
+  it('adds pack dates to a product that was entered without them', async () => {
+    const nowSeconds = Math.floor(Date.now() / 1000) * 1000;
+    const expiry = new Date(nowSeconds + 5 * 86_400_000).toISOString();
+    const made = new Date(nowSeconds - 100 * 86_400_000).toISOString();
+    const { id } = await createProduct(local, businessId, userId, GRANTS, {
+      name: 'Yoghurt 500ml',
+      unit: 'pcs',
+      costPriceKobo: 20000,
+      sellingPriceKobo: 30000,
+      openingStock: 4,
+      trackBatches: false,
+      nearExpiryDays: 30,
+    });
+    expect((await listBatches(local, businessId, { productId: id })).items).toHaveLength(0);
+    expect((await listExpiryAlerts(local, businessId, 30)).some((b) => b.productId === id)).toBe(
+      false
+    );
+
+    await updateProduct(local, businessId, userId, GRANTS, id, {
+      manufacturedDate: made,
+      expiryDate: expiry,
+    });
+
+    // Unbatched stock still alerts, straight from the product's own dates.
+    const alert = (await listExpiryAlerts(local, businessId, 30)).find((b) => b.productId === id);
+    expect(alert).toBeDefined();
+    expect(alert?.status).toBe('expiring');
+    expect(alert?.expiryDate).toBe(expiry);
+    expect(alert?.manufacturedDate).toBe(made);
+    expect(alert?.remaining).toBe(4);
   });
 
   it('sells the earliest-expiring batch first', async () => {
