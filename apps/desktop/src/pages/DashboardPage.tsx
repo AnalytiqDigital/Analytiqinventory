@@ -25,7 +25,7 @@ import { useSession } from '../stores/session';
 import { ipc } from '../lib/ipc';
 import { formatKobo } from '../lib/money';
 import { percentOf } from '../lib/statements';
-import type { ReportsSummary } from '../types/global';
+import type { BatchRow, ReportsSummary } from '../types/global';
 
 function startOfTodayIso(from: Date = new Date()): string {
   const d = new Date(from);
@@ -171,6 +171,80 @@ function RestockCard({ summary }: { summary: ReportsSummary }): JSX.Element {
   );
 }
 
+function daysUntil(value: string | null): number | null {
+  if (!value) return null;
+  const expiry = new Date(value).getTime();
+  if (Number.isNaN(expiry)) return null;
+  return Math.ceil((expiry - Date.now()) / 86_400_000);
+}
+
+function ExpiryCard({ items }: { items: BatchRow[] }): JSX.Element {
+  const can = useSession((s) => s.can);
+  return (
+    <Card className="shadow-card">
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base">Expiring soon</CardTitle>
+          {can('inventory.view') ? (
+            <Link
+              to="/batches?expiry=30"
+              className="flex items-center gap-1 text-xs font-semibold text-brand-600 hover:text-brand-500"
+            >
+              View all <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          ) : null}
+        </div>
+      </CardHeader>
+      <CardContent>
+        {items.length === 0 ? (
+          <EmptyState
+            title="No expiry alerts"
+            hint="Batches nearing their expiry date will show up here once products carry pack dates."
+          />
+        ) : (
+          <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+            {items.slice(0, 5).map((batch) => {
+              const days = daysUntil(batch.expiryDate);
+              const expired = batch.status === 'expired';
+              return (
+                <li key={batch.id} className="flex items-center justify-between gap-2 py-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{batch.productName}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      {[
+                        batch.batchNo || null,
+                        `${batch.remaining} ${batch.unit}`,
+                        batch.locationName || null,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </p>
+                  </div>
+                  <span
+                    className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold tabular-nums ${
+                      expired
+                        ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+                        : 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
+                    }`}
+                  >
+                    {expired
+                      ? 'Expired'
+                      : days == null
+                        ? 'Soon'
+                        : days <= 0
+                          ? 'Today'
+                          : `${days}d left`}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function DashboardSkeleton(): JSX.Element {
   return (
     <div className="space-y-6">
@@ -200,6 +274,18 @@ function AnalyticsDashboard(): JSX.Element {
 
   const todayQuery = useSummary('today', todayFrom, nowIso);
   const monthQuery = useSummary('month', monthFrom, nowIso);
+
+  // Expiry counts down on its own, so this refreshes with the rest of the page
+  // rather than going stale behind a cached reports payload.
+  const expiryQuery = useQuery({
+    queryKey: ['dashboard-expiry-alerts'],
+    refetchInterval: 300_000,
+    queryFn: async (): Promise<BatchRow[]> => {
+      const res = await ipc.expiryAlerts(30);
+      if (!res.ok) throw new Error(res.error ?? 'Could not load expiry alerts');
+      return res.items ?? [];
+    },
+  });
 
   const loading = todayQuery.isLoading || monthQuery.isLoading;
   const error = (todayQuery.error as Error | null) ?? (monthQuery.error as Error | null);
@@ -443,7 +529,10 @@ function AnalyticsDashboard(): JSX.Element {
           </CardContent>
         </Card>
 
-        <RestockCard summary={month} />
+        <div className="grid gap-4">
+          <RestockCard summary={month} />
+          <ExpiryCard items={expiryQuery.data ?? []} />
+        </div>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">

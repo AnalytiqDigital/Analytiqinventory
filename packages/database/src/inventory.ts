@@ -18,7 +18,7 @@ import {
 import { and, count, eq, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import { newId } from './auth';
-import { ensureBatch } from './batches';
+import { applyProductPackDates, ensureBatch } from './batches';
 import type { LocalDb } from './connection';
 import { requirePermission } from './permissions';
 import { writeAuditSync } from './service';
@@ -547,6 +547,10 @@ export async function createProduct(
       taxCategoryId: input.taxCategoryId ?? null,
       trackBatches: input.trackBatches ? 1 : 0,
       nearExpiryDays: input.nearExpiryDays,
+      // Kept on the product too: expiry alerts must work for stock that is not
+      // in a batch, which is most shops that only enter a date per product.
+      manufacturedDate: input.manufacturedDate ? new Date(input.manufacturedDate) : null,
+      expiryDate: input.expiryDate ? new Date(input.expiryDate) : null,
       isActive: 1,
       version: 1,
       createdAt: timestamp,
@@ -624,8 +628,26 @@ export async function updateProduct(
     await assertUniqueCode(local, businessId, 'barcode', input.barcode, productId);
   }
 
+  // Pack dates go on the product row (that is what expiry alerts read for
+  // unbatched stock) and onto the batch the stock sits in, when there is one.
+  const packDates =
+    input.expiryDate !== undefined || input.manufacturedDate !== undefined
+      ? {
+          ...(input.expiryDate !== undefined
+            ? { expiryDate: input.expiryDate ? new Date(input.expiryDate) : null }
+            : {}),
+          ...(input.manufacturedDate !== undefined
+            ? { manufacturedDate: input.manufacturedDate ? new Date(input.manufacturedDate) : null }
+            : {}),
+        }
+      : null;
+
   const patch = {
     updatedAt: new Date(),
+    ...(packDates?.expiryDate !== undefined ? { expiryDate: packDates.expiryDate } : {}),
+    ...(packDates?.manufacturedDate !== undefined
+      ? { manufacturedDate: packDates.manufacturedDate }
+      : {}),
     ...(input.name !== undefined ? { name: input.name.trim() } : {}),
     ...(input.sku !== undefined ? { sku: input.sku } : {}),
     ...(input.barcode !== undefined ? { barcode: input.barcode } : {}),
@@ -644,13 +666,16 @@ export async function updateProduct(
 
   const apply = local.raw.transaction(() => {
     local.db.update(products).set(patch).where(eq(products.id, productId)).run();
+    if (packDates) applyProductPackDates(local, businessId, productId, packDates);
     writeAuditSync(local, {
       businessId,
       userId,
       action: 'product.update',
       entity: 'product',
       entityId: productId,
-      details: { fields: Object.keys(patch).filter((k) => k !== 'updatedAt' && k !== 'version') },
+      details: {
+        fields: Object.keys(patch).filter((k) => k !== 'updatedAt' && k !== 'version'),
+      },
     });
   });
   apply();
