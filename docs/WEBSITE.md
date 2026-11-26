@@ -60,7 +60,7 @@ buyers because the source repository is private. Override
   rate-limited when the link is shared.
 
 A ready-to-upload bundle is produced at
-`apps/desktop/release/AnalytIQ-Inventory-1.3.0-Windows.zip`. Zip uploads are
+`apps/desktop/release/AnalytIQ-Inventory-1.3.1-Windows.zip`. Zip uploads are
 friendlier to browsers and antivirus scans than a bare `.exe`.
 
 Setting `NEXT_PUBLIC_DOWNLOAD_URL=/download` restores the WhatsApp fallback
@@ -109,7 +109,7 @@ browser; browsing the landing page and docs works without it.
 - [ ] `/legal/terms`, `/legal/privacy` and `/legal/refund` render and are linked
       from the footer.
 - [ ] The SHA-256 on `/download` matches the hosted ZIP
-      (`sha256sum AnalytIQ-Inventory-1.3.0-Windows.zip`).
+      (`sha256sum AnalytIQ-Inventory-1.3.1-Windows.zip`).
 - [ ] A Paystack test payment returns to `/checkout/success?reference=…` and shows
       the key, the installer download and the WhatsApp help button.
 - [ ] `/retrieve-key` returns the key for that reference + email and refuses a
