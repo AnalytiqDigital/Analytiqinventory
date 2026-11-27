@@ -30,3 +30,7 @@ apps/desktop/release/
 .ebcache/
 .DS_Store
 Thumbs.db
+
+.vercel
+.env.local
+.env.*.pull
